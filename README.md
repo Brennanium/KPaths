@@ -21,5 +21,22 @@ export JAVA_HOME="$(brew --prefix openjdk@17)"
 ./gradlew check
 ```
 
-The first scaffold intentionally generates only marker objects. The next implementation step is
-to generate `WritableKeyPath` values for annotated data-class constructor properties.
+## First vertical slice
+
+For an annotated data class, KSP currently emits one stable immutable `WritableKeyPath` singleton
+per accessible primary-constructor property:
+
+```kotlin
+@Pathable
+data class Person(val name: String, val age: Int)
+
+PersonPaths.name.get(Person("Blob", 100))
+// "Blob"
+
+PersonPaths.name.set(Person("Blob", 100), "Blob Jr.")
+// Person(name = "Blob Jr.", age = 100)
+```
+
+The generated path's equality and hash code are based on its `PathId`, rather than closure or
+object identity. Sealed and enum types currently receive their generated namespace; case-path
+generation is the next vertical slice.

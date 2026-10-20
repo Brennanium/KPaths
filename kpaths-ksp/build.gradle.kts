@@ -14,5 +14,6 @@ tasks.withType<JavaCompile>().configureEach {
 
 dependencies {
   implementation(project(":kpaths-annotations"))
+  implementation(project(":kpaths-core"))
   implementation(libs.ksp.api)
 }

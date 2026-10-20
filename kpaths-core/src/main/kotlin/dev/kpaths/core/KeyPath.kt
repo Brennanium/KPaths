@@ -18,6 +18,22 @@ public interface KeyPath<Root, Value> : PartialKeyPath<Root> {
   override fun matchAny(root: Root): Match<Any?> = Match.Found(get(root))
 }
 
+/**
+ * Base class for generated key paths.
+ *
+ * It makes equality structural: two independently-created path objects compare equal when they
+ * describe the same root, segments, and focused type. Generated paths are normally singleton
+ * objects, but this also keeps equality correct for composed paths and test-created paths.
+ */
+public abstract class KeyPathBase<Root, Value> : KeyPath<Root, Value> {
+  final override fun equals(other: Any?): Boolean =
+    other is AnyKeyPath && id == other.id && valueType == other.valueType
+
+  final override fun hashCode(): Int = 31 * id.hashCode() + valueType.hashCode()
+
+  override fun toString(): String = "KeyPath(id=$id, valueType=$valueType)"
+}
+
 /** A typed property path that replaces a focus and returns the resulting root. */
 public interface WritableKeyPath<Root, Value> : KeyPath<Root, Value> {
   public fun set(root: Root, value: Value): Root
@@ -25,6 +41,11 @@ public interface WritableKeyPath<Root, Value> : KeyPath<Root, Value> {
   public fun modify(root: Root, update: (Value) -> Value): Root =
     set(root, update(get(root)))
 }
+
+/** Base class for generated immutable-write key paths. */
+public abstract class WritableKeyPathBase<Root, Value> :
+  KeyPathBase<Root, Value>(),
+  WritableKeyPath<Root, Value>
 
 /**
  * A writable key path whose replacement mutates the same root instance.
