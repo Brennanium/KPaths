@@ -1,38 +1,43 @@
 package dev.kpaths.core
 
-/** Type-erased metadata common to all property key paths. */
-public interface AnyKeyPath {
+/** Metadata shared by all generated paths, independent of their focusing capability. */
+public interface AnyPath {
   public val id: PathId
   public val valueType: String
 }
 
-/** A key path with a known root type and an erased focused value. */
+/** Type-erased metadata common to all property key paths. */
+public interface AnyKeyPath : AnyPath
+
+/** A key path with a known root type and an erased, but always-present, focused value. */
 public interface PartialKeyPath<Root> : AnyKeyPath {
-  public fun matchAny(root: Root): Match<Any?>
+  public fun getAny(root: Root): Any?
 }
 
 /** A total, typed read path. */
 public interface KeyPath<Root, Value> : PartialKeyPath<Root> {
   public fun get(root: Root): Value
 
-  override fun matchAny(root: Root): Match<Any?> = Match.Found(get(root))
+  override fun getAny(root: Root): Any? = get(root)
 }
 
 /**
- * Base class for generated key paths.
+ * Base class for generated paths.
  *
- * It makes equality structural: two independently-created path objects compare equal when they
- * describe the same root, segments, and focused type. Generated paths are normally singleton
- * objects, but this also keeps equality correct for composed paths and test-created paths.
+ * A [PathId] includes property-versus-case segments, so structural identity remains distinct for
+ * a property route and a case route even when their spelling happens to be the same.
  */
-public abstract class KeyPathBase<Root, Value> : KeyPath<Root, Value> {
+public abstract class PathBase : AnyPath {
   final override fun equals(other: Any?): Boolean =
-    other is AnyKeyPath && id == other.id && valueType == other.valueType
+    other is AnyPath && id == other.id && valueType == other.valueType
 
   final override fun hashCode(): Int = 31 * id.hashCode() + valueType.hashCode()
 
-  override fun toString(): String = "KeyPath(id=$id, valueType=$valueType)"
+  override fun toString(): String = "${this::class.simpleName}(id=$id, valueType=$valueType)"
 }
+
+/** Base class for generated total property key paths. */
+public abstract class KeyPathBase<Root, Value> : PathBase(), KeyPath<Root, Value>
 
 /** A typed property path that replaces a focus and returns the resulting root. */
 public interface WritableKeyPath<Root, Value> : KeyPath<Root, Value> {
