@@ -6,6 +6,12 @@ import dev.kpaths.annotations.Pathable
 data class Person(
   val name: String,
   val age: Int,
+  val address: Address,
+)
+
+@Pathable
+data class Address(
+  val city: String,
 )
 
 @Pathable

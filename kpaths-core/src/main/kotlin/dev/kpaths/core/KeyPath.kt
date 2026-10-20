@@ -53,6 +53,54 @@ public abstract class WritableKeyPathBase<Root, Value> :
   WritableKeyPath<Root, Value>
 
 /**
+ * Appends a total read path.
+ *
+ * This is equivalent to Swift's `appending(path:)`. It is read-only unless both component paths
+ * are writable; see the more-specific overload below.
+ */
+public fun <Root, Middle, Value> KeyPath<Root, Middle>.appending(
+  next: KeyPath<Middle, Value>,
+): KeyPath<Root, Value> = AppendedKeyPath(this, next)
+
+/** Kotlin-friendly spelling of [appending]. */
+public fun <Root, Middle, Value> KeyPath<Root, Middle>.then(
+  next: KeyPath<Middle, Value>,
+): KeyPath<Root, Value> = appending(next)
+
+/** Appends two writable paths, retaining immutable replacement capability. */
+public fun <Root, Middle, Value> WritableKeyPath<Root, Middle>.appending(
+  next: WritableKeyPath<Middle, Value>,
+): WritableKeyPath<Root, Value> = AppendedWritableKeyPath(this, next)
+
+/** Kotlin-friendly spelling of writable [appending]. */
+public fun <Root, Middle, Value> WritableKeyPath<Root, Middle>.then(
+  next: WritableKeyPath<Middle, Value>,
+): WritableKeyPath<Root, Value> = appending(next)
+
+private class AppendedKeyPath<Root, Middle, Value>(
+  private val outer: KeyPath<Root, Middle>,
+  private val inner: KeyPath<Middle, Value>,
+) : KeyPathBase<Root, Value>() {
+  override val id: PathId = outer.id.appending(inner.id)
+  override val valueType: String = inner.valueType
+
+  override fun get(root: Root): Value = inner.get(outer.get(root))
+}
+
+private class AppendedWritableKeyPath<Root, Middle, Value>(
+  private val outer: WritableKeyPath<Root, Middle>,
+  private val inner: WritableKeyPath<Middle, Value>,
+) : WritableKeyPathBase<Root, Value>() {
+  override val id: PathId = outer.id.appending(inner.id)
+  override val valueType: String = inner.valueType
+
+  override fun get(root: Root): Value = inner.get(outer.get(root))
+
+  override fun set(root: Root, value: Value): Root =
+    outer.set(root, inner.set(outer.get(root), value))
+}
+
+/**
  * A writable key path whose replacement mutates the same root instance.
  *
  * It intentionally inherits [WritableKeyPath], as Swift's ReferenceWritableKeyPath inherits
@@ -65,5 +113,37 @@ public interface ReferenceWritableKeyPath<Root : Any, Value> : WritableKeyPath<R
   override fun set(root: Root, value: Value): Root {
     setInPlace(root, value)
     return root
+  }
+}
+
+/** Base class for generated paths that mutate a property on the same root instance. */
+public abstract class ReferenceWritableKeyPathBase<Root : Any, Value> :
+  KeyPathBase<Root, Value>(),
+  ReferenceWritableKeyPath<Root, Value>
+
+/**
+ * Composition rooted in a reference-writable path remains reference-writable: setting the final
+ * focus updates the same outer root instance.
+ */
+public fun <Root : Any, Middle, Value> ReferenceWritableKeyPath<Root, Middle>.appending(
+  next: WritableKeyPath<Middle, Value>,
+): ReferenceWritableKeyPath<Root, Value> = AppendedReferenceWritableKeyPath(this, next)
+
+/** Kotlin-friendly spelling of reference-writable [appending]. */
+public fun <Root : Any, Middle, Value> ReferenceWritableKeyPath<Root, Middle>.then(
+  next: WritableKeyPath<Middle, Value>,
+): ReferenceWritableKeyPath<Root, Value> = appending(next)
+
+private class AppendedReferenceWritableKeyPath<Root : Any, Middle, Value>(
+  private val outer: ReferenceWritableKeyPath<Root, Middle>,
+  private val inner: WritableKeyPath<Middle, Value>,
+) : ReferenceWritableKeyPathBase<Root, Value>() {
+  override val id: PathId = outer.id.appending(inner.id)
+  override val valueType: String = inner.valueType
+
+  override fun get(root: Root): Value = inner.get(outer.get(root))
+
+  override fun setInPlace(root: Root, value: Value) {
+    outer.setInPlace(root, inner.set(outer.get(root), value))
   }
 }

@@ -3,15 +3,46 @@ package dev.kpaths.sample
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import dev.kpaths.core.WritableKeyPathBase
+import dev.kpaths.core.then
 
 class GeneratedPathsTest {
   @Test
   fun `KSP generates immutable writable key paths for data class properties`() {
-    val original = Person(name = "Blob", age = 100)
+    val original = Person(name = "Blob", age = 100, address = Address(city = "Paris"))
 
     assertEquals("Blob", PersonPaths.name.get(original))
-    assertEquals(Person(name = "Blob Jr.", age = 100), PersonPaths.name.set(original, "Blob Jr."))
-    assertEquals(original, Person(name = "Blob Jr.", age = 100).let { PersonPaths.name.set(it, "Blob") })
+    assertEquals(
+      Person(name = "Blob Jr.", age = 100, address = Address(city = "Paris")),
+      PersonPaths.name.set(original, "Blob Jr."),
+    )
+    assertEquals(
+      original,
+      Person(name = "Blob Jr.", age = 100, address = Address(city = "Paris"))
+        .let { PersonPaths.name.set(it, "Blob") },
+    )
+  }
+
+  @Test
+  fun `generated writable paths compose into a writable path`() {
+    val city = PersonPaths.address.then(AddressPaths.city)
+    val original = Person(name = "Blob", age = 100, address = Address(city = "Paris"))
+
+    assertEquals("Paris", city.get(original))
+    assertEquals(
+      Person(name = "Blob", age = 100, address = Address(city = "Toronto")),
+      city.set(original, "Toronto"),
+    )
+    assertEquals(city, PersonPaths.address.then(AddressPaths.city))
+    assertEquals(
+      dev.kpaths.core.PathId(
+        rootType = "dev.kpaths.sample.Person",
+        segments = listOf(
+          dev.kpaths.core.PathSegment.Property("address"),
+          dev.kpaths.core.PathSegment.Property("city"),
+        ),
+      ),
+      city.id,
+    )
   }
 
   @Test

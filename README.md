@@ -28,13 +28,26 @@ per accessible primary-constructor property:
 
 ```kotlin
 @Pathable
-data class Person(val name: String, val age: Int)
+data class Person(val name: String, val age: Int, val address: Address)
 
-PersonPaths.name.get(Person("Blob", 100))
+@Pathable
+data class Address(val city: String)
+
+PersonPaths.name.get(Person("Blob", 100, Address("Paris")))
 // "Blob"
 
-PersonPaths.name.set(Person("Blob", 100), "Blob Jr.")
-// Person(name = "Blob Jr.", age = 100)
+PersonPaths.name.set(Person("Blob", 100, Address("Paris")), "Blob Jr.")
+// Person(name = "Blob Jr.", age = 100, address = Address(city = "Paris"))
+```
+
+Paths compose without losing their capabilities. Two writable paths produce another writable
+path, so nested immutable updates stay concise:
+
+```kotlin
+import dev.kpaths.core.then
+
+val city = PersonPaths.address.then(AddressPaths.city)
+val updated = city.set(person, "Toronto")
 ```
 
 The generated path's equality and hash code are based on its `PathId`, rather than closure or

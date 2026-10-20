@@ -20,4 +20,16 @@ class PathIdTest {
       PathId.case("dev.kpaths.CounterState", "count"),
     )
   }
+
+  @Test
+  fun `identity copies input segments to remain hash stable`() {
+    val sourceSegments = mutableListOf(PathSegment.Property("address"))
+    val identity = PathId("example.Person", sourceSegments)
+    val originalHashCode = identity.hashCode()
+
+    sourceSegments += PathSegment.Property("city")
+
+    assertEquals(listOf(PathSegment.Property("address")), identity.segments)
+    assertEquals(originalHashCode, identity.hashCode())
+  }
 }
