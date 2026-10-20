@@ -62,6 +62,14 @@ val integerValue = BoxPaths.of<Int>(TypeId.int).value
 integerValue.id.rootType // TypeId("your.package.Box", [TypeArgument.invariant(TypeId.int)])
 ```
 
-The explicit `TypeId` is required when instantiating a generic path factory because JVM generic
-types are erased. Sealed and enum types currently receive their generated namespace; case-path
-generation is the next vertical slice.
+The preferred generic syntax uses an inline-reified factory, which captures the full type token:
+
+```kotlin
+val integerValue = BoxPaths<Int>().value
+val stringListValue = BoxPaths<List<String>>().value
+```
+
+`BoxPaths.of(Int::class)` is available for simple, non-null types, while
+`BoxPaths.of<List<String>>(TypeId.list(TypeId.string))` remains the exact no-reflection escape
+hatch. Sealed and enum types currently receive their generated namespace; case-path generation is
+the next vertical slice.

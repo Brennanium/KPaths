@@ -93,6 +93,14 @@ private class KPathsProcessor(
         writer.appendLine("  public companion object {")
         writer.appendLine("    public fun <$typeParameters> of($tokenParameters): $generatedName<$typeParameters> =")
         writer.appendLine("      $generatedName(${typeTokenNames.values.joinToString()})")
+        val classTokenParameters = declaration.typeParameters.joinToString(", ") { parameter ->
+          "${typeTokenName(parameter.name.asString())}: kotlin.reflect.KClass<${parameter.name.asString()}>"
+        }
+        val nonNullTypeParameters = declaration.typeParameters.joinToString(", ") { parameter ->
+          "${parameter.name.asString()} : Any"
+        }
+        writer.appendLine("    public fun <$nonNullTypeParameters> of($classTokenParameters): $generatedName<$typeParameters> =")
+        writer.appendLine("      $generatedName(${typeTokenNames.values.joinToString { "dev.kpaths.core.TypeId.from($it)" }})")
         writer.appendLine("  }")
       }
       writer.appendLine("  public val rootType: dev.kpaths.core.TypeId = $rootTypeId")
@@ -107,6 +115,12 @@ private class KPathsProcessor(
         )
       }
       writer.appendLine("}")
+      if (declaration.typeParameters.isNotEmpty()) {
+        val typeParameters = declaration.typeParameters.joinToString { it.name.asString() }
+        writer.appendLine()
+        writer.appendLine("public inline fun <reified $typeParameters> $generatedName(): $generatedName<$typeParameters> =")
+        writer.appendLine("  $generatedName.of(${declaration.typeParameters.joinToString { "dev.kpaths.core.TypeId.of<${it.name.asString()}>()" }})")
+      }
     }
   }
 

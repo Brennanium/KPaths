@@ -13,6 +13,8 @@ tasks.withType<JavaCompile>().configureEach {
 }
 
 dependencies {
+  implementation(kotlin("reflect"))
+
   testImplementation(kotlin("test"))
   testImplementation(libs.junit.jupiter)
   testRuntimeOnly("org.junit.platform:junit-platform-launcher")

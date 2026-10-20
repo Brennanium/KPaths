@@ -56,11 +56,17 @@ class GeneratedPathsTest {
 
   @Test
   fun `generic path factories retain concrete type arguments in their identities`() {
-    val integerValue = BoxPaths.of<Int>(TypeId.int).value
-    val stringValue = BoxPaths.of<String>(TypeId.string).value
+    val integerValue = BoxPaths<Int>().value
+    val stringValue = BoxPaths<String>().value
+    val nullableStringsValue = BoxPaths<List<String?>>().value
+    val classTokenValue = BoxPaths.of(Int::class).value
+    val explicitTokenValue = BoxPaths.of<Int>(TypeId.int).value
 
     assertEquals(1, integerValue.get(Box(1)))
     assertEquals("one", stringValue.get(Box("one")))
+    assertEquals(listOf("one", null), nullableStringsValue.get(Box(listOf("one", null))))
+    assertEquals(integerValue, classTokenValue)
+    assertEquals(integerValue, explicitTokenValue)
     assertEquals(
       TypeId(
         "dev.kpaths.sample.Box",
@@ -69,6 +75,13 @@ class GeneratedPathsTest {
       integerValue.id.rootType,
     )
     assertNotEquals(integerValue.id, stringValue.id)
+    assertEquals(
+      TypeId(
+        "dev.kpaths.sample.Box",
+        listOf(TypeArgument.invariant(TypeId.list(TypeId.string.withNullability(true)))),
+      ),
+      nullableStringsValue.id.rootType,
+    )
   }
 
   @Test

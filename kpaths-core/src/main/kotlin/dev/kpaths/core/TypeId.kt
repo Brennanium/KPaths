@@ -1,5 +1,11 @@
 package dev.kpaths.core
 
+import kotlin.reflect.KClass
+import kotlin.reflect.KType
+import kotlin.reflect.KTypeParameter
+import kotlin.reflect.KVariance
+import kotlin.reflect.typeOf
+
 /**
  * A generated, structural description of a Kotlin type.
  *
@@ -37,6 +43,36 @@ public class TypeId(
         "kotlin.collections.Map",
         listOf(TypeArgument.invariant(key), TypeArgument.invariant(value)),
       )
+
+    /** Creates a non-generic token from a Kotlin class reference such as `Int::class`. */
+    public fun from(type: KClass<*>): TypeId =
+      TypeId(type.qualifiedName ?: error("Local and anonymous classes cannot form stable TypeIds."))
+
+    /**
+     * Captures a complete Kotlin type at an inline call site, including generic arguments and
+     * nullability. This powers generated syntax such as `BoxPaths<List<String>>()`.
+     */
+    @OptIn(ExperimentalStdlibApi::class)
+    public inline fun <reified T> of(): TypeId = from(typeOf<T>())
+
+    /** Converts Kotlin reflection metadata into the stable representation used by paths. */
+    public fun from(type: KType): TypeId {
+      val classifier = when (val classifier = type.classifier) {
+        is KClass<*> -> classifier.qualifiedName
+        is KTypeParameter -> classifier.name
+        else -> null
+      } ?: error("Local and anonymous types cannot form stable TypeIds.")
+      val arguments = type.arguments.map { argument ->
+        val argumentType = argument.type
+        when (argument.variance) {
+          null -> TypeArgument.star
+          KVariance.INVARIANT -> TypeArgument.invariant(from(requireNotNull(argumentType)))
+          KVariance.IN -> TypeArgument.`in`(from(requireNotNull(argumentType)))
+          KVariance.OUT -> TypeArgument.out(from(requireNotNull(argumentType)))
+        }
+      }
+      return TypeId(classifier, arguments, type.isMarkedNullable)
+    }
   }
 
   /** Retains generic arguments while changing only nullability. */
