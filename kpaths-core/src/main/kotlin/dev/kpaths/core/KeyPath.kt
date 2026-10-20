@@ -3,7 +3,7 @@ package dev.kpaths.core
 /** Metadata shared by all generated paths, independent of their focusing capability. */
 public interface AnyPath {
   public val id: PathId
-  public val valueType: String
+  public val valueType: TypeId
 }
 
 /** Type-erased metadata common to all property key paths. */
@@ -82,7 +82,7 @@ private class AppendedKeyPath<Root, Middle, Value>(
   private val inner: KeyPath<Middle, Value>,
 ) : KeyPathBase<Root, Value>() {
   override val id: PathId = outer.id.appending(inner.id)
-  override val valueType: String = inner.valueType
+  override val valueType: TypeId = inner.valueType
 
   override fun get(root: Root): Value = inner.get(outer.get(root))
 }
@@ -92,7 +92,7 @@ private class AppendedWritableKeyPath<Root, Middle, Value>(
   private val inner: WritableKeyPath<Middle, Value>,
 ) : WritableKeyPathBase<Root, Value>() {
   override val id: PathId = outer.id.appending(inner.id)
-  override val valueType: String = inner.valueType
+  override val valueType: TypeId = inner.valueType
 
   override fun get(root: Root): Value = inner.get(outer.get(root))
 
@@ -139,7 +139,7 @@ private class AppendedReferenceWritableKeyPath<Root : Any, Middle, Value>(
   private val inner: WritableKeyPath<Middle, Value>,
 ) : ReferenceWritableKeyPathBase<Root, Value>() {
   override val id: PathId = outer.id.appending(inner.id)
-  override val valueType: String = inner.valueType
+  override val valueType: TypeId = inner.valueType
 
   override fun get(root: Root): Value = inner.get(outer.get(root))
 

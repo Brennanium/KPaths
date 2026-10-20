@@ -1,9 +1,9 @@
 # KPaths
 
-KPaths is a Kotlin path library for immutable state and sealed hierarchies. It will provide
-generated, stable, typed property and case paths designed for reducer-based architectures. Apply
-one `@Pathable` annotation: data/class properties generate key paths, while sealed and enum
-variants generate case key paths.
+KPaths is a Kotlin path library inspired by Swift key paths and case paths. It provides generated,
+stable, typed property and case paths for ordinary Kotlin models; reducer-based architectures are
+one future use case, not the library's framing. Apply one `@Pathable` annotation: data/class
+properties generate key paths, while sealed and enum variants generate case key paths.
 
 ## Modules
 
@@ -23,8 +23,8 @@ export JAVA_HOME="$(brew --prefix openjdk@17)"
 
 ## First vertical slice
 
-For an annotated data class, KSP currently emits one stable immutable `WritableKeyPath` singleton
-per accessible primary-constructor property:
+For an annotated non-generic data class, KSP emits one stable immutable `WritableKeyPath`
+singleton per accessible primary-constructor property:
 
 ```kotlin
 @Pathable
@@ -51,5 +51,17 @@ val updated = city.set(person, "Toronto")
 ```
 
 The generated path's equality and hash code are based on its `PathId`, rather than closure or
-object identity. Sealed and enum types currently receive their generated namespace; case-path
+object identity. `PathId` contains structural `TypeId` tokens, preserving a classifier, generic
+arguments, variance, and nullability without reflection:
+
+```kotlin
+@Pathable
+data class Box<T>(val value: T)
+
+val integerValue = BoxPaths.of<Int>(TypeId.int).value
+integerValue.id.rootType // TypeId("your.package.Box", [TypeArgument.invariant(TypeId.int)])
+```
+
+The explicit `TypeId` is required when instantiating a generic path factory because JVM generic
+types are erased. Sealed and enum types currently receive their generated namespace; case-path
 generation is the next vertical slice.

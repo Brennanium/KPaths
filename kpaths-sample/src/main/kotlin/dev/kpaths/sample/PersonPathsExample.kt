@@ -7,11 +7,18 @@ data class Person(
   val name: String,
   val age: Int,
   val address: Address,
+  val tags: List<String> = emptyList(),
+  val nickname: String? = null,
 )
 
 @Pathable
 data class Address(
   val city: String,
+)
+
+@Pathable
+data class Box<T>(
+  val value: T,
 )
 
 @Pathable

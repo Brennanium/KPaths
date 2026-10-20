@@ -2,6 +2,9 @@ package dev.kpaths.sample
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNotEquals
+import dev.kpaths.core.TypeArgument
+import dev.kpaths.core.TypeId
 import dev.kpaths.core.WritableKeyPathBase
 import dev.kpaths.core.then
 
@@ -35,7 +38,7 @@ class GeneratedPathsTest {
     assertEquals(city, PersonPaths.address.then(AddressPaths.city))
     assertEquals(
       dev.kpaths.core.PathId(
-        rootType = "dev.kpaths.sample.Person",
+        rootType = TypeId("dev.kpaths.sample.Person"),
         segments = listOf(
           dev.kpaths.core.PathSegment.Property("address"),
           dev.kpaths.core.PathSegment.Property("city"),
@@ -52,14 +55,37 @@ class GeneratedPathsTest {
   }
 
   @Test
+  fun `generic path factories retain concrete type arguments in their identities`() {
+    val integerValue = BoxPaths.of<Int>(TypeId.int).value
+    val stringValue = BoxPaths.of<String>(TypeId.string).value
+
+    assertEquals(1, integerValue.get(Box(1)))
+    assertEquals("one", stringValue.get(Box("one")))
+    assertEquals(
+      TypeId(
+        "dev.kpaths.sample.Box",
+        listOf(TypeArgument.invariant(TypeId.int)),
+      ),
+      integerValue.id.rootType,
+    )
+    assertNotEquals(integerValue.id, stringValue.id)
+  }
+
+  @Test
+  fun `generated tokens preserve nested generic arguments and nullability`() {
+    assertEquals(TypeId.list(TypeId.string), PersonPaths.tags.valueType)
+    assertEquals(TypeId.string.withNullability(true), PersonPaths.nickname.valueType)
+  }
+
+  @Test
   fun `KSP still generates a namespace for case-path types`() {
-    assertEquals("dev.kpaths.sample.Connection", ConnectionPaths.sourceType)
+    assertEquals(TypeId("dev.kpaths.sample.Connection"), ConnectionPaths.rootType)
   }
 }
 
 private object EquivalentNamePath : WritableKeyPathBase<Person, String>() {
-  override val id = dev.kpaths.core.PathId.property("dev.kpaths.sample.Person", "name")
-  override val valueType = "kotlin.String"
+  override val id = dev.kpaths.core.PathId.property(TypeId("dev.kpaths.sample.Person"), "name")
+  override val valueType = TypeId.string
 
   override fun get(root: Person): String = root.name
 

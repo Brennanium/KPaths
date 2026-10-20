@@ -11,9 +11,11 @@ import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSPropertyDeclaration
 import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.KSTypeParameter
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.Modifier
+import com.google.devtools.ksp.symbol.Variance
 import com.google.devtools.ksp.validate
 import dev.kpaths.annotations.Pathable
 
@@ -52,8 +54,16 @@ private class KPathsProcessor(
       return
     }
     val packageName = declaration.packageName.asString()
-    val generatedName = generatedObjectName(declaration, qualifiedName, packageName)
+    val generatedName = generatedObjectName(qualifiedName, packageName)
     val writableProperties = writableProperties(declaration)
+    val typeTokenNames = declaration.typeParameters.associate { parameter ->
+      parameter.name.asString() to typeTokenName(parameter.name.asString())
+    }
+    val rootKotlinType = qualifiedName + declaration.typeParameters
+      .takeIf { it.isNotEmpty() }
+      ?.joinToString(prefix = "<", postfix = ">") { it.name.asString() }
+      .orEmpty()
+    val rootTypeId = renderDeclaredTypeId(qualifiedName, declaration.typeParameters, typeTokenNames)
     val containingFile = declaration.containingFile ?: run {
       logger.error("@Pathable types must originate from a source file.", declaration)
       return
@@ -67,17 +77,40 @@ private class KPathsProcessor(
       writer.appendLine("package $packageName")
       writer.appendLine()
       writer.appendLine("/** Generated paths for $qualifiedName. */")
-      writer.appendLine("public object $generatedName {")
-      writer.appendLine("  public const val sourceType: String = \"$qualifiedName\"")
+      if (declaration.typeParameters.isEmpty()) {
+        writer.appendLine("public object $generatedName {")
+      } else {
+        val typeParameters = declaration.typeParameters.joinToString { it.name.asString() }
+        val tokenParameters = typeTokenNames.values.joinToString(", ") { name ->
+          "$name: dev.kpaths.core.TypeId"
+        }
+        val constructorParameters = typeTokenNames.values.joinToString(", ") { name ->
+          "private val $name: dev.kpaths.core.TypeId"
+        }
+        writer.appendLine("public class $generatedName<$typeParameters> private constructor(")
+        writer.appendLine("  $constructorParameters,")
+        writer.appendLine(") {")
+        writer.appendLine("  public companion object {")
+        writer.appendLine("    public fun <$typeParameters> of($tokenParameters): $generatedName<$typeParameters> =")
+        writer.appendLine("      $generatedName(${typeTokenNames.values.joinToString()})")
+        writer.appendLine("  }")
+      }
+      writer.appendLine("  public val rootType: dev.kpaths.core.TypeId = $rootTypeId")
       writableProperties.forEach { property ->
-        writeDataClassPropertyPath(writer, qualifiedName, property)
+        writeDataClassPropertyPath(
+          writer = writer,
+          rootKotlinType = rootKotlinType,
+          rootTypeId = rootTypeId,
+          property = property,
+          typeTokenNames = typeTokenNames,
+          capturesTypeTokens = declaration.typeParameters.isNotEmpty(),
+        )
       }
       writer.appendLine("}")
     }
   }
 
   private fun generatedObjectName(
-    declaration: KSClassDeclaration,
     qualifiedName: String,
     packageName: String,
   ): String {
@@ -112,31 +145,103 @@ private class KPathsProcessor(
 
   private fun writeDataClassPropertyPath(
     writer: java.io.BufferedWriter,
-    rootType: String,
+    rootKotlinType: String,
+    rootTypeId: String,
     property: KSPropertyDeclaration,
+    typeTokenNames: Map<String, String>,
+    capturesTypeTokens: Boolean,
   ) {
     val name = property.simpleName.asString()
     val identifier = escapeIdentifier(name)
-    val valueType = property.type.resolve().renderKotlinType()
+    val valueKotlinType = property.type.resolve().renderKotlinType()
+    val valueTypeId = property.type.resolve().renderTypeId(typeTokenNames)
     writer.appendLine()
-    writer.appendLine("  public object $identifier : dev.kpaths.core.WritableKeyPathBase<$rootType, $valueType>() {")
-    writer.appendLine("    override val id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property(\"$rootType\", \"$name\")")
-    writer.appendLine("    override val valueType: String = \"$valueType\"")
-    writer.appendLine("    override fun get(root: $rootType): $valueType = root.$identifier")
-    writer.appendLine("    override fun set(root: $rootType, value: $valueType): $rootType = root.copy($identifier = value)")
-    writer.appendLine("  }")
+    if (capturesTypeTokens) {
+      writer.appendLine("  public val $identifier: dev.kpaths.core.WritableKeyPath<$rootKotlinType, $valueKotlinType> =")
+      writer.appendLine("    object : dev.kpaths.core.WritableKeyPathBase<$rootKotlinType, $valueKotlinType>() {")
+      writer.appendLine("      override val id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property($rootTypeId, \"$name\")")
+      writer.appendLine("      override val valueType: dev.kpaths.core.TypeId = $valueTypeId")
+      writer.appendLine("      override fun get(root: $rootKotlinType): $valueKotlinType = root.$identifier")
+      writer.appendLine("      override fun set(root: $rootKotlinType, value: $valueKotlinType): $rootKotlinType = root.copy($identifier = value)")
+      writer.appendLine("    }")
+    } else {
+      writer.appendLine("  public object $identifier : dev.kpaths.core.WritableKeyPathBase<$rootKotlinType, $valueKotlinType>() {")
+      writer.appendLine("    override val id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property($rootTypeId, \"$name\")")
+      writer.appendLine("    override val valueType: dev.kpaths.core.TypeId = $valueTypeId")
+      writer.appendLine("    override fun get(root: $rootKotlinType): $valueKotlinType = root.$identifier")
+      writer.appendLine("    override fun set(root: $rootKotlinType, value: $valueKotlinType): $rootKotlinType = root.copy($identifier = value)")
+      writer.appendLine("  }")
+    }
+  }
+
+  private fun renderDeclaredTypeId(
+    qualifiedName: String,
+    parameters: List<com.google.devtools.ksp.symbol.KSTypeParameter>,
+    typeTokenNames: Map<String, String>,
+  ): String {
+    val arguments = parameters.joinToString { parameter ->
+      "dev.kpaths.core.TypeArgument.invariant(${typeTokenNames.getValue(parameter.name.asString())})"
+    }
+    return if (arguments.isEmpty()) {
+      "dev.kpaths.core.TypeId(\"$qualifiedName\")"
+    } else {
+      "dev.kpaths.core.TypeId(\"$qualifiedName\", listOf($arguments))"
+    }
   }
 
   private fun KSType.renderKotlinType(): String {
-    val declarationName = declaration.qualifiedName?.asString() ?: declaration.simpleName.asString()
+    val typeDeclaration = declaration
+    if (typeDeclaration is KSTypeParameter) {
+      return typeDeclaration.name.asString() + if (isMarkedNullable) "?" else ""
+    }
+    val declarationName = typeDeclaration.qualifiedName?.asString() ?: typeDeclaration.simpleName.asString()
     val arguments = arguments
       .takeIf { it.isNotEmpty() }
       ?.joinToString(prefix = "<", postfix = ">") { argument ->
-        argument.type?.resolve()?.renderKotlinType() ?: "*"
+        val type = argument.type?.resolve()?.renderKotlinType() ?: return@joinToString "*"
+        when (argument.variance) {
+          Variance.COVARIANT -> "out $type"
+          Variance.CONTRAVARIANT -> "in $type"
+          else -> type
+        }
       }
       .orEmpty()
     return declarationName + arguments + if (isMarkedNullable) "?" else ""
   }
+
+  private fun KSType.renderTypeId(typeTokenNames: Map<String, String>): String {
+    val typeDeclaration = declaration
+    if (typeDeclaration is KSTypeParameter) {
+      val token = typeTokenNames[typeDeclaration.name.asString()]
+        ?: error("No generated type token for ${typeDeclaration.name.asString()}.")
+      return if (isMarkedNullable) "$token.withNullability(true)" else token
+    }
+    val qualifiedName = typeDeclaration.qualifiedName?.asString()
+    if (qualifiedName == null) {
+      val token = typeTokenNames[typeDeclaration.simpleName.asString()]
+        ?: error("No generated type token for ${typeDeclaration.simpleName.asString()}.")
+      return if (isMarkedNullable) "$token.withNullability(true)" else token
+    }
+
+    val arguments = arguments.joinToString { argument ->
+      val type = argument.type?.resolve()?.renderTypeId(typeTokenNames)
+      when (argument.variance) {
+        Variance.STAR -> "dev.kpaths.core.TypeArgument.star"
+        Variance.COVARIANT -> "dev.kpaths.core.TypeArgument.out($type)"
+        Variance.CONTRAVARIANT -> "dev.kpaths.core.TypeArgument.`in`($type)"
+        else -> "dev.kpaths.core.TypeArgument.invariant($type)"
+      }
+    }
+    val nullable = if (isMarkedNullable) ", nullable = true" else ""
+    return if (arguments.isEmpty()) {
+      "dev.kpaths.core.TypeId(\"$qualifiedName\"$nullable)"
+    } else {
+      "dev.kpaths.core.TypeId(\"$qualifiedName\", listOf($arguments)$nullable)"
+    }
+  }
+
+  private fun typeTokenName(parameterName: String): String =
+    escapeIdentifier(parameterName.replaceFirstChar { it.lowercaseChar() } + "Type")
 
   private fun escapeIdentifier(identifier: String): String =
     if (identifier in kotlinKeywords) "`$identifier`" else identifier

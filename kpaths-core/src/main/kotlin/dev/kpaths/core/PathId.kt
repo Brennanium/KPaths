@@ -7,17 +7,17 @@ package dev.kpaths.core
  * to implement it. Generated paths use stable fully-qualified type names and ordered segments.
  */
 public class PathId(
-  public val rootType: String,
+  public val rootType: TypeId,
   segments: List<PathSegment>,
 ) {
   /** A defensive copy keeps this hashable identity stable after construction. */
   public val segments: List<PathSegment> = segments.toList()
 
   public companion object {
-    public fun property(rootType: String, name: String): PathId =
+    public fun property(rootType: TypeId, name: String): PathId =
       PathId(rootType, listOf(PathSegment.Property(name)))
 
-    public fun case(rootType: String, name: String): PathId =
+    public fun case(rootType: TypeId, name: String): PathId =
       PathId(rootType, listOf(PathSegment.Case(name)))
   }
 
