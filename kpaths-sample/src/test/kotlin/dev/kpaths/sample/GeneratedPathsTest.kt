@@ -130,6 +130,13 @@ class GeneratedPathsTest {
   }
 
   @Test
+  fun `Pathable may choose a custom generated namespace`() {
+    val record = Record(identifier = "record-1")
+
+    assertEquals("record-1", record[CustomRecordPaths.identifier])
+  }
+
+  @Test
   fun `plain-class mutable properties generate reference-writable paths`() {
     val token: ReferenceWritableKeyPath<Session, String> = SessionPaths.token
     val session = Session(token = "first", identifier = "session-1")

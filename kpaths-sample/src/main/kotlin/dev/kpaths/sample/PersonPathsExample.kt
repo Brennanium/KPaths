@@ -31,6 +31,11 @@ data class RootTypeModel(
   val rootType: String,
 )
 
+@Pathable("CustomRecordPaths")
+data class Record(
+  val identifier: String,
+)
+
 @Pathable
 class Session(
   var token: String,

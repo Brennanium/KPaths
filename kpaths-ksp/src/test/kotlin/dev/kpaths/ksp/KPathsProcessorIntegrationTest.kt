@@ -83,6 +83,58 @@ class KPathsProcessorIntegrationTest {
     assertContains(output, "the key path for property 'Connected' and the case path for 'Connected'")
   }
 
+  @Test
+  fun `reports top level generated namespace collisions at Pathable`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "TopLevelCollision.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.Pathable
+
+        @Pathable
+        data class Person(val name: String)
+
+        object PersonPaths
+      """.trimIndent(),
+    )
+
+    assertContains(output, "TopLevelCollision.kt:")
+    assertContains(output, "[KPaths] Cannot generate 'PersonPaths' because it conflicts with existing top-level")
+    assertContains(output, "type 'fixture.PersonPaths'")
+  }
+
+  @Test
+  fun `reports duplicate custom generated namespaces at Pathable`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "DuplicateCustomNames.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.Pathable
+
+        @Pathable("SharedPaths")
+        data class First(val value: String)
+
+        @Pathable("SharedPaths")
+        data class Second(val value: Int)
+      """.trimIndent(),
+    )
+
+    assertContains(output, "DuplicateCustomNames.kt:")
+    assertContains(output, "[KPaths] Cannot generate 'SharedPaths' because @Pathable also requests that name")
+    assertContains(output, "'fixture.First'")
+    assertContains(output, "'fixture.Second'")
+  }
+
   private fun compileFailure(
     fixtureDirectory: Path,
     fileName: String,

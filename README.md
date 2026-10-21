@@ -194,3 +194,17 @@ KPaths preserves declared property and case names rather than silently renaming 
 two generated members would share a namespace—for example, a `Connected` property and a
 `Connected` sealed case—KSP reports an error at `@Pathable` explaining both members. Names
 beginning with `__kpaths_` are reserved for generator implementation details.
+
+By default, `@Pathable` generates `TypeNamePaths`. Supply a name to use an explicit top-level
+namespace instead:
+
+```kotlin
+@Pathable("CustomRecordPaths")
+data class Record(val identifier: String)
+
+CustomRecordPaths.identifier
+```
+
+KSP diagnoses a collision with an existing top-level type, property, or function of the generated
+name and points to `@Pathable`; it also diagnoses two `@Pathable` types that request the same
+name. Choose a different explicit name in either case.

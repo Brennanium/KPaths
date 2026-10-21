@@ -33,28 +33,62 @@ private class KPathsProcessor(
 ) : SymbolProcessor {
   override fun process(resolver: Resolver): List<KSAnnotated> {
     val deferred = mutableListOf<KSAnnotated>()
+    val targets = mutableListOf<GenerationTarget>()
     val declarations = resolver.getSymbolsWithAnnotation(pathableAnnotation)
       .asSequence()
       .filterIsInstance<KSClassDeclaration>()
+      .toList()
 
     declarations.forEach { declaration ->
       if (!declaration.validate(enableNewFeatures = true)) {
         deferred += declaration
         return@forEach
       }
-      generatePaths(declaration)
+      val qualifiedName = declaration.qualifiedName?.asString() ?: run {
+        logger.error("@Pathable types must have a qualified name.", declaration)
+        return@forEach
+      }
+      val packageName = declaration.packageName.asString()
+      val defaultName = generatedObjectName(qualifiedName, packageName)
+      val generatedName = configuredGeneratedName(declaration, defaultName) ?: return@forEach
+      targets += GenerationTarget(declaration, generatedName)
+    }
+
+    val duplicateNames = targets.groupBy { target ->
+      generatedQualifiedName(target.declaration.packageName.asString(), target.generatedName)
+    }.filterValues { it.size > 1 }
+    duplicateNames.values.flatten().forEach { target ->
+      val others = duplicateNames.getValue(
+        generatedQualifiedName(target.declaration.packageName.asString(), target.generatedName),
+      ).filterNot { it.declaration == target.declaration }
+      reportPathableError(
+        target.declaration,
+        "Cannot generate '${target.generatedName}' because @Pathable also requests that name for " +
+          others.joinToString(" and ") { "'${it.declaration.qualifiedName?.asString()}'" } + ". " +
+          "Choose distinct @Pathable names.",
+      )
+    }
+    targets.filter { target ->
+      generatedQualifiedName(target.declaration.packageName.asString(), target.generatedName) !in duplicateNames
+    }.forEach { target ->
+      val packageName = target.declaration.packageName.asString()
+      if (validateTopLevelGeneratedName(target.declaration, resolver, packageName, target.generatedName)) {
+        generatePaths(target.declaration, target.generatedName)
+      }
     }
 
     return deferred
   }
 
-  private fun generatePaths(declaration: KSClassDeclaration) {
+  private fun generatePaths(
+    declaration: KSClassDeclaration,
+    generatedName: String,
+  ) {
     val qualifiedName = declaration.qualifiedName?.asString() ?: run {
       logger.error("@Pathable types must have a qualified name.", declaration)
       return
     }
     val packageName = declaration.packageName.asString()
-    val generatedName = generatedObjectName(qualifiedName, packageName)
     val generatedIdentifier = escapeIdentifier(generatedName)
     val pathProperties = pathProperties(declaration)
     val casePaths = casePaths(declaration)
@@ -156,6 +190,61 @@ private class KPathsProcessor(
     val typePath = qualifiedName.removePrefix("$packageName.")
     return typePath.replace('.', '_') + "Paths"
   }
+
+  private fun configuredGeneratedName(
+    declaration: KSClassDeclaration,
+    defaultName: String,
+  ): String? {
+    val annotation = declaration.annotations.firstOrNull { candidate ->
+      candidate.annotationType.resolve().declaration.qualifiedName?.asString() == pathableAnnotation
+    } ?: return defaultName
+    val configuredName = annotation.arguments
+      .firstOrNull { it.name?.asString() == "name" }
+      ?.value as? String
+      ?: ""
+    if (configuredName.isEmpty()) {
+      return defaultName
+    }
+    if (!configuredName.isKotlinIdentifier()) {
+      reportPathableError(
+        declaration,
+        "@Pathable name '$configuredName' must be a single Kotlin identifier, without a package or dot.",
+      )
+      return null
+    }
+    return configuredName
+  }
+
+  private fun validateTopLevelGeneratedName(
+    declaration: KSClassDeclaration,
+    resolver: Resolver,
+    packageName: String,
+    generatedName: String,
+  ): Boolean {
+    val qualifiedGeneratedName = generatedQualifiedName(packageName, generatedName)
+    val name = resolver.getKSNameFromString(qualifiedGeneratedName)
+    val conflicts = buildList {
+      resolver.getClassDeclarationByName(name)?.let { add("type '${it.qualifiedName?.asString()}'") }
+      resolver.getPropertyDeclarationByName(name, includeTopLevel = true)
+        ?.takeIf { it.parentDeclaration == null }
+        ?.let { add("property '${it.qualifiedName?.asString()}'") }
+      resolver.getFunctionDeclarationsByName(name, includeTopLevel = true)
+        .filter { it.parentDeclaration == null }
+        .forEach { add("function '${it.qualifiedName?.asString()}'") }
+    }
+    if (conflicts.isEmpty()) {
+      return true
+    }
+    reportPathableError(
+      declaration,
+      "Cannot generate '$generatedName' because it conflicts with existing top-level " +
+        conflicts.joinToString(" and ") + ". Choose another @Pathable name.",
+    )
+    return false
+  }
+
+  private fun generatedQualifiedName(packageName: String, generatedName: String): String =
+    "$packageName.$generatedName"
 
   /** Returns direct sealed variants or payload-less enum entries. */
   private fun casePaths(declaration: KSClassDeclaration): List<CasePath> {
@@ -662,6 +751,11 @@ private class KPathsProcessor(
   private data class GeneratedMember(
     val name: String,
     val description: String,
+  )
+
+  private data class GenerationTarget(
+    val declaration: KSClassDeclaration,
+    val generatedName: String,
   )
 
   private enum class CaseKind {
