@@ -25,25 +25,6 @@ public class TypeId(
   }
 
   public companion object {
-    public val any: TypeId = TypeId("kotlin.Any")
-    public val boolean: TypeId = TypeId("kotlin.Boolean")
-    public val int: TypeId = TypeId("kotlin.Int")
-    public val long: TypeId = TypeId("kotlin.Long")
-    public val string: TypeId = TypeId("kotlin.String")
-    public val unit: TypeId = TypeId("kotlin.Unit")
-
-    public fun list(element: TypeId): TypeId =
-      TypeId("kotlin.collections.List", listOf(TypeArgument.invariant(element)))
-
-    public fun set(element: TypeId): TypeId =
-      TypeId("kotlin.collections.Set", listOf(TypeArgument.invariant(element)))
-
-    public fun map(key: TypeId, value: TypeId): TypeId =
-      TypeId(
-        "kotlin.collections.Map",
-        listOf(TypeArgument.invariant(key), TypeArgument.invariant(value)),
-      )
-
     /** Creates a non-generic token from a Kotlin class reference such as `Int::class`. */
     public fun from(type: KClass<*>): TypeId =
       TypeId(type.qualifiedName ?: error("Local and anonymous classes cannot form stable TypeIds."))

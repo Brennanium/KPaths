@@ -87,8 +87,8 @@ arguments, variance, and nullability without reflection:
 @Pathable
 data class Box<T>(val value: T)
 
-val integerValue = BoxPaths.of<Int>(TypeId.int).value
-integerValue.id.rootType // TypeId("your.package.Box", [TypeArgument.invariant(TypeId.int)])
+val integerValue = BoxPaths.of<Int>(TypeId.of<Int>()).value
+integerValue.id.rootType // TypeId("your.package.Box", [TypeArgument.invariant(TypeId.of<Int>())])
 ```
 
 The preferred generic syntax uses an inline-reified factory, which captures the full type token:
@@ -99,6 +99,7 @@ val stringListValue = BoxPaths<List<String>>().value
 ```
 
 `BoxPaths.of(Int::class)` is available for simple, non-null types, while
-`BoxPaths.of<List<String>>(TypeId.list(TypeId.string))` remains the exact no-reflection escape
-hatch. Sealed and enum types currently receive their generated namespace; case-path generation is
-the next vertical slice.
+`BoxPaths.of<List<String>>(TypeId.of<List<String>>())` remains the exact no-reflection escape
+hatch. `TypeId.of<T>()` is the standard API for creating a complete type token when one is
+needed. Sealed and enum types currently receive their generated namespace; case-path generation
+is the next vertical slice.

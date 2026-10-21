@@ -35,13 +35,13 @@ class PathIdTest {
 
   @Test
   fun `type tokens copy input arguments to remain hash stable`() {
-    val sourceArguments = mutableListOf(TypeArgument.invariant(TypeId.string))
+    val sourceArguments = mutableListOf(TypeArgument.invariant(TypeId.of<String>()))
     val type = TypeId("example.Box", sourceArguments)
     val originalHashCode = type.hashCode()
 
-    sourceArguments += TypeArgument.invariant(TypeId.int)
+    sourceArguments += TypeArgument.invariant(TypeId.of<Int>())
 
-    assertEquals(listOf(TypeArgument.invariant(TypeId.string)), type.arguments)
+    assertEquals(listOf(TypeArgument.invariant(TypeId.of<String>())), type.arguments)
     assertEquals(originalHashCode, type.hashCode())
   }
 }

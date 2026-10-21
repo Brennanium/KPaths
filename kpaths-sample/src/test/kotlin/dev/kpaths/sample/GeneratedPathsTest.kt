@@ -67,7 +67,7 @@ class GeneratedPathsTest {
     val stringValue = BoxPaths<String>().value
     val nullableStringsValue = BoxPaths<List<String?>>().value
     val classTokenValue = BoxPaths.of(Int::class).value
-    val explicitTokenValue = BoxPaths.of<Int>(TypeId.int).value
+    val explicitTokenValue = BoxPaths.of<Int>(TypeId.of<Int>()).value
 
     assertEquals(1, integerValue.get(Box(1)))
     assertEquals("one", stringValue.get(Box("one")))
@@ -77,7 +77,7 @@ class GeneratedPathsTest {
     assertEquals(
       TypeId(
         "dev.kpaths.sample.Box",
-        listOf(TypeArgument.invariant(TypeId.int)),
+        listOf(TypeArgument.invariant(TypeId.of<Int>())),
       ),
       integerValue.id.rootType,
     )
@@ -85,7 +85,7 @@ class GeneratedPathsTest {
     assertEquals(
       TypeId(
         "dev.kpaths.sample.Box",
-        listOf(TypeArgument.invariant(TypeId.list(TypeId.string.withNullability(true)))),
+        listOf(TypeArgument.invariant(TypeId.of<List<String?>>())),
       ),
       nullableStringsValue.id.rootType,
     )
@@ -93,8 +93,8 @@ class GeneratedPathsTest {
 
   @Test
   fun `generated tokens preserve nested generic arguments and nullability`() {
-    assertEquals(TypeId.list(TypeId.string), PersonPaths.tags.valueType)
-    assertEquals(TypeId.string.withNullability(true), PersonPaths.nickname.valueType)
+    assertEquals(TypeId.of<List<String>>(), PersonPaths.tags.valueType)
+    assertEquals(TypeId.of<String?>(), PersonPaths.nickname.valueType)
   }
 
   @Test
@@ -145,7 +145,7 @@ class GeneratedPathsTest {
 
 private object EquivalentNamePath : WritableKeyPathBase<Person, String>() {
   override val id = dev.kpaths.core.PathId.property(TypeId("dev.kpaths.sample.Person"), "name")
-  override val valueType = TypeId.string
+  override val valueType = TypeId.of<String>()
 
   override fun get(root: Person): String = root.name
 

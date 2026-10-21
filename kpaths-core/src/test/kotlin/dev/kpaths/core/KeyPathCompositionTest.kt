@@ -57,7 +57,7 @@ private object PersonAddressPath : WritableKeyPathBase<Person, Address>() {
 
 private object AddressCityPath : WritableKeyPathBase<Address, String>() {
   override val id: PathId = PathId.property(TypeId("dev.kpaths.core.Address"), "city")
-  override val valueType: TypeId = TypeId.string
+  override val valueType: TypeId = TypeId.of<String>()
 
   override fun get(root: Address): String = root.city
 
@@ -66,7 +66,7 @@ private object AddressCityPath : WritableKeyPathBase<Address, String>() {
 
 private object CityLengthPath : KeyPathBase<Address, Int>() {
   override val id: PathId = PathId.property(TypeId("dev.kpaths.core.Address"), "cityLength")
-  override val valueType: TypeId = TypeId.int
+  override val valueType: TypeId = TypeId.of<Int>()
 
   override fun get(root: Address): Int = root.city.length
 }
