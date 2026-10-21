@@ -195,6 +195,25 @@ connection[ConnectionPaths.Connected]
 // null, because the matched case's host is null
 ```
 
+For a single ordinary sealed case, generation is optional. The concrete case type provides enough
+information for KPaths to synthesize the safe cast and upcast:
+
+```kotlin
+val connected = caseKeyPath<Connection, Connection.Connected>()
+
+connection[connected] // Connection.Connected(host = null)
+```
+
+An enum entry has no distinct Kotlin type, so pass its singleton value instead:
+
+```kotlin
+val north = caseKeyPath(Direction.NORTH)
+```
+
+For custom matching behavior, use `caseKeyPath(id = ..., valueType = ..., extract = ..., embed =
+...)`. The focus must be non-null: `null` always denotes a failed match, while nullable fields
+remain inside a matched case object.
+
 Case-path names retain their Kotlin declaration spelling: class-like sealed cases use `Connected`,
 while enum entries use `NORTH`. The nested `ConnectedPaths` namespace is generated inside the
 KSP-owned `ConnectionPaths` object; an eventual compiler-plugin façade may offer

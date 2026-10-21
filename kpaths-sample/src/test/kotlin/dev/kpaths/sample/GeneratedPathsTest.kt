@@ -15,6 +15,7 @@ import dev.kpaths.core.TypeId
 import dev.kpaths.core.WritableKeyPath
 import dev.kpaths.core.KeyPathBase
 import dev.kpaths.core.get
+import dev.kpaths.core.caseKeyPath
 import dev.kpaths.core.keyPath
 import dev.kpaths.core.modifying
 import dev.kpaths.core.set
@@ -203,6 +204,10 @@ class GeneratedPathsTest {
       dev.kpaths.core.PathId.case(TypeId("dev.kpaths.sample.Connection"), "Connected"),
       ConnectionPaths.Connected.id,
     )
+    assertEquals(
+      ConnectionPaths.Connected,
+      caseKeyPath<Connection, Connection.Connected>(),
+    )
     assertNull(
       connectedWithNullHost[ConnectionPaths.Connected]
         ?.get(keyPath = ConnectionPaths.ConnectedPaths.host),
@@ -228,6 +233,7 @@ class GeneratedPathsTest {
       DirectionPaths.NORTH.id,
     )
     assertEquals(TypeId.of<Unit>(), DirectionPaths.NORTH.valueType)
+    assertEquals(DirectionPaths.NORTH, caseKeyPath(Direction.NORTH))
   }
 
   @Test
@@ -259,6 +265,10 @@ class GeneratedPathsTest {
     assertNull(Loadable.Idle[stringPaths.Loaded])
     assertEquals(Loadable.Idle, Loadable.Idle[stringPaths.Idle])
     assertEquals(Loadable.Loaded("Blob Jr."), loaded.embed(Loadable.Loaded("Blob Jr.")))
+    assertEquals(
+      stringPaths.Loaded,
+      caseKeyPath<Loadable<String>, Loadable.Loaded<String>>(),
+    )
     assertNotEquals(stringPaths.Loaded.id, integerPaths.Loaded.id)
     assertEquals(
       TypeId(
