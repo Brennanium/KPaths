@@ -5,9 +5,9 @@ public interface AnyCaseKeyPath : AnyPath
 
 /** A type-erased-value case path with a known root. */
 public interface PartialCaseKeyPath<Root> : AnyCaseKeyPath {
-  public fun extractAny(root: Root): Match<Any?>
+  public fun extractAny(root: Root): Any?
 
-  public fun matches(root: Root): Boolean = extractAny(root) is Match.Found
+  public fun matches(root: Root): Boolean = extractAny(root) != null
 }
 
 /**
@@ -17,22 +17,17 @@ public interface PartialCaseKeyPath<Root> : AnyCaseKeyPath {
  * root unchanged; callers choose explicitly between construction and replacement.
  */
 public interface CaseKeyPath<Root, Value> : PartialCaseKeyPath<Root> {
-  public fun extract(root: Root): Match<Value>
+  /** Returns this path's concrete case value, or `null` when [root] is another case. */
+  public fun extract(root: Root): Value?
   public fun embed(value: Value): Root
 
-  override fun extractAny(root: Root): Match<Any?> = extract(root)
+  override fun extractAny(root: Root): Any? = extract(root)
 
   public fun replaceIfMatching(root: Root, value: Value): Root =
-    when (extract(root)) {
-      Match.Missing -> root
-      is Match.Found -> embed(value)
-    }
+    if (extract(root) == null) root else embed(value)
 
   public fun modify(root: Root, update: (Value) -> Value): Root =
-    when (val match = extract(root)) {
-      Match.Missing -> root
-      is Match.Found -> embed(update(match.value))
-    }
+    extract(root)?.let { embed(update(it)) } ?: root
 }
 
 /** Base class for generated case paths with the same structural identity rules as key paths. */

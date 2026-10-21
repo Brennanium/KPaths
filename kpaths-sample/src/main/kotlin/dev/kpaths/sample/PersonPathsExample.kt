@@ -35,5 +35,5 @@ class Session(
 @Pathable
 sealed interface Connection {
   data object Disconnected : Connection
-  data class Connected(val host: String) : Connection
+  data class Connected(val host: String?) : Connection
 }

@@ -56,6 +56,11 @@ private class KPathsProcessor(
     val packageName = declaration.packageName.asString()
     val generatedName = generatedObjectName(qualifiedName, packageName)
     val pathProperties = pathProperties(declaration)
+    val casePaths = casePaths(declaration)
+    if (casePaths.isNotEmpty() && declaration.typeParameters.isNotEmpty()) {
+      logger.error("@Pathable sealed hierarchies with type parameters are not supported yet.", declaration)
+      return
+    }
     val typeTokenNames = declaration.typeParameters.associate { parameter ->
       parameter.name.asString() to typeTokenName(parameter.name.asString())
     }
@@ -69,8 +74,11 @@ private class KPathsProcessor(
       return
     }
 
+    val sourceFiles = (listOf(containingFile) + casePaths.mapNotNull { it.declaration.containingFile })
+      .distinct()
+      .toTypedArray()
     codeGenerator.createNewFile(
-      dependencies = Dependencies(false, containingFile),
+      dependencies = Dependencies(false, *sourceFiles),
       packageName = packageName,
       fileName = generatedName,
     ).bufferedWriter().use { writer ->
@@ -112,6 +120,15 @@ private class KPathsProcessor(
           pathProperty = property,
           typeTokenNames = typeTokenNames,
           capturesTypeTokens = declaration.typeParameters.isNotEmpty(),
+          declarationIndent = "  ",
+        )
+      }
+      casePaths.forEach { casePath ->
+        writeCasePath(
+          writer = writer,
+          rootKotlinType = rootKotlinType,
+          rootTypeId = rootTypeId,
+          casePath = casePath,
         )
       }
       writer.appendLine("}")
@@ -130,6 +147,39 @@ private class KPathsProcessor(
   ): String {
     val typePath = qualifiedName.removePrefix("$packageName.")
     return typePath.replace('.', '_') + "Paths"
+  }
+
+  /** Returns direct concrete variants for the first sealed-hierarchy generation slice. */
+  private fun casePaths(declaration: KSClassDeclaration): List<CasePath> {
+    if (Modifier.SEALED !in declaration.modifiers) {
+      return emptyList()
+    }
+
+    return declaration.getSealedSubclasses().mapNotNull { caseDeclaration ->
+      if (caseDeclaration.classKind !in setOf(ClassKind.CLASS, ClassKind.OBJECT)) {
+        logger.error(
+          "@Pathable sealed variant '${caseDeclaration.simpleName.asString()}' must be a class or object.",
+          caseDeclaration,
+        )
+        return@mapNotNull null
+      }
+      if (caseDeclaration.typeParameters.isNotEmpty()) {
+        logger.error(
+          "@Pathable sealed variant '${caseDeclaration.simpleName.asString()}' cannot declare type parameters yet.",
+          caseDeclaration,
+        )
+        return@mapNotNull null
+      }
+      val qualifiedName = caseDeclaration.qualifiedName?.asString() ?: run {
+        logger.error("Sealed variants must have qualified names.", caseDeclaration)
+        return@mapNotNull null
+      }
+      CasePath(
+        declaration = caseDeclaration,
+        name = caseDeclaration.simpleName.asString(),
+        qualifiedName = qualifiedName,
+      )
+    }.toList()
   }
 
   /** Classifies Kotlin properties into the library's explicit value-style and reference-style APIs. */
@@ -193,6 +243,7 @@ private class KPathsProcessor(
     pathProperty: PathProperty,
     typeTokenNames: Map<String, String>,
     capturesTypeTokens: Boolean,
+    declarationIndent: String,
   ) {
     val property = pathProperty.declaration
     val name = property.simpleName.asString()
@@ -211,21 +262,60 @@ private class KPathsProcessor(
     }
     writer.appendLine()
     if (capturesTypeTokens) {
-      writer.appendLine("  public val $identifier: $pathInterface<$rootKotlinType, $valueKotlinType> =")
-      writer.appendLine("    object : $pathBase<$rootKotlinType, $valueKotlinType>() {")
-      writer.appendLine("      override val id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property($rootTypeId, \"$name\")")
-      writer.appendLine("      override val valueType: dev.kpaths.core.TypeId = $valueTypeId")
-      writer.appendLine("      override fun get(root: $rootKotlinType): $valueKotlinType = root.$identifier")
-      writeSetter(writer, pathProperty.kind, rootKotlinType, valueKotlinType, identifier, indent = "      ")
-      writer.appendLine("    }")
+      writer.appendLine("${declarationIndent}public val $identifier: $pathInterface<$rootKotlinType, $valueKotlinType> =")
+      writer.appendLine("${declarationIndent}  object : $pathBase<$rootKotlinType, $valueKotlinType>() {")
+      writer.appendLine("${declarationIndent}    override val id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property($rootTypeId, \"$name\")")
+      writer.appendLine("${declarationIndent}    override val valueType: dev.kpaths.core.TypeId = $valueTypeId")
+      writer.appendLine("${declarationIndent}    override fun get(root: $rootKotlinType): $valueKotlinType = root.$identifier")
+      writeSetter(writer, pathProperty.kind, rootKotlinType, valueKotlinType, identifier, indent = "${declarationIndent}    ")
+      writer.appendLine("${declarationIndent}  }")
     } else {
-      writer.appendLine("  public object $identifier : $pathBase<$rootKotlinType, $valueKotlinType>() {")
-      writer.appendLine("    override val id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property($rootTypeId, \"$name\")")
-      writer.appendLine("    override val valueType: dev.kpaths.core.TypeId = $valueTypeId")
-      writer.appendLine("    override fun get(root: $rootKotlinType): $valueKotlinType = root.$identifier")
-      writeSetter(writer, pathProperty.kind, rootKotlinType, valueKotlinType, identifier, indent = "    ")
-      writer.appendLine("  }")
+      writer.appendLine("${declarationIndent}public object $identifier : $pathBase<$rootKotlinType, $valueKotlinType>() {")
+      writer.appendLine("${declarationIndent}  override val id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property($rootTypeId, \"$name\")")
+      writer.appendLine("${declarationIndent}  override val valueType: dev.kpaths.core.TypeId = $valueTypeId")
+      writer.appendLine("${declarationIndent}  override fun get(root: $rootKotlinType): $valueKotlinType = root.$identifier")
+      writeSetter(writer, pathProperty.kind, rootKotlinType, valueKotlinType, identifier, indent = "${declarationIndent}  ")
+      writer.appendLine("${declarationIndent}}")
     }
+  }
+
+  private fun writeCasePath(
+    writer: java.io.BufferedWriter,
+    rootKotlinType: String,
+    rootTypeId: String,
+    casePath: CasePath,
+  ) {
+    val caseIdentifier = escapeIdentifier(casePath.name.replaceFirstChar { it.lowercaseChar() })
+    val caseTypeId = renderDeclaredTypeId(casePath.qualifiedName, emptyList(), emptyMap())
+
+    writer.appendLine()
+    writer.appendLine("  public object $caseIdentifier : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, ${casePath.qualifiedName}>() {")
+    writer.appendLine("    override val id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.case($rootTypeId, \"${casePath.name}\")")
+    writer.appendLine("    override val valueType: dev.kpaths.core.TypeId = $caseTypeId")
+    writer.appendLine("    override fun extract(root: $rootKotlinType): ${casePath.qualifiedName}? = root as? ${casePath.qualifiedName}")
+    writer.appendLine("    override fun embed(value: ${casePath.qualifiedName}): $rootKotlinType = value")
+    writer.appendLine("  }")
+
+    val caseProperties = pathProperties(casePath.declaration)
+    if (caseProperties.isEmpty()) {
+      return
+    }
+
+    writer.appendLine()
+    writer.appendLine("  public object ${escapeIdentifier(casePath.name + "Paths")} {")
+    val caseRootTypeId = renderDeclaredTypeId(casePath.qualifiedName, emptyList(), emptyMap())
+    caseProperties.forEach { property ->
+      writePropertyPath(
+        writer = writer,
+        rootKotlinType = casePath.qualifiedName,
+        rootTypeId = caseRootTypeId,
+        pathProperty = property,
+        typeTokenNames = emptyMap(),
+        capturesTypeTokens = false,
+        declarationIndent = "    ",
+      )
+    }
+    writer.appendLine("  }")
   }
 
   private fun writeSetter(
@@ -251,6 +341,12 @@ private class KPathsProcessor(
   private data class PathProperty(
     val declaration: KSPropertyDeclaration,
     val kind: PathKind,
+  )
+
+  private data class CasePath(
+    val declaration: KSClassDeclaration,
+    val name: String,
+    val qualifiedName: String,
   )
 
   private enum class PathKind {

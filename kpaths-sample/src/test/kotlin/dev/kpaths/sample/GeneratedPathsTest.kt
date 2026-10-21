@@ -3,7 +3,9 @@ package dev.kpaths.sample
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertNull
 import kotlin.test.assertSame
+import dev.kpaths.core.CaseKeyPath
 import dev.kpaths.core.KeyPath
 import dev.kpaths.core.ReferenceWritableKeyPath
 import dev.kpaths.core.TypeArgument
@@ -138,8 +140,40 @@ class GeneratedPathsTest {
   }
 
   @Test
-  fun `KSP still generates a namespace for case-path types`() {
+  fun `KSP generates concrete sealed case paths and nested case-property namespaces`() {
+    val connected: CaseKeyPath<Connection, Connection.Connected> = ConnectionPaths.connected
+    val connectedWithNullHost = Connection.Connected(host = null)
+
     assertEquals(TypeId("dev.kpaths.sample.Connection"), ConnectionPaths.rootType)
+    assertEquals(connectedWithNullHost, connectedWithNullHost[ConnectionPaths.connected])
+    assertEquals(
+      connectedWithNullHost,
+      connectedWithNullHost.get(caseKeyPath = ConnectionPaths.connected),
+    )
+    assertNull(Connection.Disconnected[ConnectionPaths.connected])
+    assertEquals(connectedWithNullHost, connected.embed(connectedWithNullHost))
+    assertEquals(Connection.Disconnected, Connection.Disconnected[ConnectionPaths.disconnected])
+    assertEquals(
+      Connection.Disconnected,
+      connected.replaceIfMatching(Connection.Disconnected, connectedWithNullHost),
+    )
+    assertEquals(
+      Connection.Connected(host = "updated.example"),
+      connected.modify(connectedWithNullHost) { it.copy(host = "updated.example") },
+    )
+    assertEquals(
+      dev.kpaths.core.PathId.case(TypeId("dev.kpaths.sample.Connection"), "Connected"),
+      ConnectionPaths.connected.id,
+    )
+    assertNull(
+      connectedWithNullHost[ConnectionPaths.connected]
+        ?.get(keyPath = ConnectionPaths.ConnectedPaths.host),
+    )
+    assertEquals(
+      Connection.Connected(host = "example.com"),
+      connectedWithNullHost[ConnectionPaths.connected]
+        ?.setting(ConnectionPaths.ConnectedPaths.host, "example.com"),
+    )
   }
 }
 

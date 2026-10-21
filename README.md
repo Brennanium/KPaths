@@ -3,7 +3,7 @@
 KPaths is a Kotlin path library inspired by Swift key paths and case paths. It provides generated,
 stable, typed property and case paths for ordinary Kotlin models; reducer-based architectures are
 one future use case, not the library's framing. Apply one `@Pathable` annotation: data/class
-properties generate key paths, while sealed and enum variants generate case key paths.
+properties generate key paths, while sealed variants generate case key paths.
 
 ## Modules
 
@@ -101,5 +101,35 @@ val stringListValue = BoxPaths<List<String>>().value
 `BoxPaths.of(Int::class)` is available for simple, non-null types, while
 `BoxPaths.of<List<String>>(TypeId.of<List<String>>())` remains the exact no-reflection escape
 hatch. `TypeId.of<T>()` is the standard API for creating a complete type token when one is
-needed. Sealed and enum types currently receive their generated namespace; case-path generation
-is the next vertical slice.
+needed.
+
+## Sealed case paths
+
+Sealed variants generate `CaseKeyPath`s that focus the concrete Kotlin case object, rather than a
+tuple-like payload. A failed extraction is `null`; nullable fields remain safely inside the
+non-null matched case object.
+
+```kotlin
+@Pathable
+sealed interface Connection {
+  data object Disconnected : Connection
+  data class Connected(val host: String?) : Connection
+}
+
+val connection: Connection = Connection.Connected(host = null)
+
+connection[ConnectionPaths.connected]
+// Connection.Connected(host = null)
+
+Connection.Disconnected[ConnectionPaths.connected]
+// null
+
+connection[ConnectionPaths.connected]
+  ?.get(keyPath = ConnectionPaths.ConnectedPaths.host)
+// null, because the matched case's host is null
+```
+
+The nested `ConnectedPaths` namespace is generated inside the KSP-owned `ConnectionPaths` object;
+an eventual compiler-plugin façade may offer `Connection.Paths` as an additional spelling.
+The first case-path slice supports non-generic sealed classes and interfaces; enum and generic
+sealed-hierarchy support follow in later work.

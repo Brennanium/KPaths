@@ -11,6 +11,15 @@ public operator fun <Root, Value> Root.get(keyPath: KeyPath<Root, Value>): Value
   keyPath.get(this)
 
 /**
+ * Extracts [caseKeyPath]'s concrete case value from this root.
+ *
+ * The `operator` modifier also makes `root[caseKeyPath]` available. Generated case paths focus
+ * non-null concrete case objects, so `null` unambiguously means that this root is another case.
+ */
+public operator fun <Root, Value> Root.get(caseKeyPath: CaseKeyPath<Root, Value>): Value? =
+  caseKeyPath.extract(this)
+
+/**
  * Replaces [keyPath]'s focus and returns the resulting root.
  *
  * For a value-style data-class path, the result is a copy and must be assigned by the caller.
