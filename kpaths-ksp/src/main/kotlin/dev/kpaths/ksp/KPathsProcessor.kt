@@ -356,7 +356,7 @@ private class KPathsProcessor(
       ?: emptySet()
 
     return accessibleProperties.mapNotNull { property ->
-      if (property.simpleName.asString() in constructorPropertyNames) {
+      if (property.isMutable && property.simpleName.asString() in constructorPropertyNames) {
         PathProperty(property, PathKind.COPY_WRITABLE)
       } else if (property.isMutable) {
         logger.error(

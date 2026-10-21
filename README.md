@@ -23,24 +23,25 @@ export JAVA_HOME="$(brew --prefix openjdk@17)"
 
 ## First vertical slice
 
-For an annotated non-generic data class, KSP emits one stable immutable `WritableKeyPath`
-singleton per accessible primary-constructor property:
+For an annotated non-generic data class, KSP emits one stable singleton per accessible property:
+`val` properties produce read-only `KeyPath`s, while primary-constructor `var` properties produce
+copy-based `WritableKeyPath`s.
 
 ```kotlin
 @Pathable
-data class Person(val name: String, val age: Int, val address: Address)
+data class Person(val name: String, val age: Int, var address: Address)
 
 @Pathable
-data class Address(val city: String)
+data class Address(var city: String)
 
 Person("Blob", 100, Address("Paris"))[PersonPaths.name]
 // "Blob"
 
 Person("Blob", 100, Address("Paris")).set(
-  keyPath = PersonPaths.name,
-  value = "Blob Jr.",
+  keyPath = PersonPaths.address,
+  value = Address("Toronto"),
 )
-// Person(name = "Blob Jr.", age = 100, address = Address(city = "Paris"))
+// Person(name = "Blob", age = 100, address = Address(city = "Toronto"))
 ```
 
 Paths compose without losing their capabilities. Two writable paths produce another writable
@@ -56,7 +57,8 @@ val updated = person.setting(city, "Toronto")
 ## Value-style and reference-style roots
 
 Kotlin data classes are reference objects, but KPaths deliberately treats an annotated data class
-as a value-style model: primary-constructor properties receive copy-based `WritableKeyPath`s.
+as a value-style model: primary-constructor `var` properties receive copy-based
+`WritableKeyPath`s. `val` properties always remain read-only `KeyPath`s.
 
 ```kotlin
 @Pathable

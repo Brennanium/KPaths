@@ -12,7 +12,8 @@ import dev.kpaths.core.KeyPath
 import dev.kpaths.core.ReferenceWritableKeyPath
 import dev.kpaths.core.TypeArgument
 import dev.kpaths.core.TypeId
-import dev.kpaths.core.WritableKeyPathBase
+import dev.kpaths.core.WritableKeyPath
+import dev.kpaths.core.KeyPathBase
 import dev.kpaths.core.get
 import dev.kpaths.core.modifying
 import dev.kpaths.core.set
@@ -21,18 +22,20 @@ import dev.kpaths.core.then
 
 class GeneratedPathsTest {
   @Test
-  fun `KSP generates immutable writable key paths for data class properties`() {
+  fun `data-class vals generate read-only paths and vars generate copy-writable paths`() {
     val original = Person(name = "Blob", age = 100, address = Address(city = "Paris"))
+    val name: KeyPath<Person, String> = PersonPaths.name
+    val address: WritableKeyPath<Person, Address> = PersonPaths.address
 
-    assertEquals("Blob", PersonPaths.name.get(original))
+    assertEquals("Blob", name.get(original))
+    assertFalse((PersonPaths.name as Any) is WritableKeyPath<*, *>)
     assertEquals(
-      Person(name = "Blob Jr.", age = 100, address = Address(city = "Paris")),
-      PersonPaths.name.set(original, "Blob Jr."),
+      Person(name = "Blob", age = 100, address = Address(city = "Toronto")),
+      address.set(original, Address(city = "Toronto")),
     )
     assertEquals(
       original,
-      Person(name = "Blob Jr.", age = 100, address = Address(city = "Paris"))
-        .let { PersonPaths.name.set(it, "Blob") },
+      address.set(Person(name = "Blob", age = 100, address = Address(city = "Toronto")), Address(city = "Paris")),
     )
   }
 
@@ -121,12 +124,10 @@ class GeneratedPathsTest {
   @Test
   fun `model properties may be named rootType`() {
     val original = RootTypeModel(rootType = "document")
+    val rootType: KeyPath<RootTypeModel, String> = RootTypeModelPaths.rootType
 
-    assertEquals("document", original[RootTypeModelPaths.rootType])
-    assertEquals(
-      RootTypeModel(rootType = "folder"),
-      original.setting(RootTypeModelPaths.rootType, "folder"),
-    )
+    assertEquals("document", original[rootType])
+    assertFalse((RootTypeModelPaths.rootType as Any) is WritableKeyPath<*, *>)
   }
 
   @Test
@@ -200,7 +201,7 @@ class GeneratedPathsTest {
     assertEquals(
       Connection.Connected(host = "example.com"),
       connectedWithNullHost[ConnectionPaths.Connected]
-        ?.setting(ConnectionPaths.ConnectedPaths.host, "example.com"),
+        ?.copy(host = "example.com"),
     )
   }
 
@@ -245,10 +246,7 @@ class GeneratedPathsTest {
 
     assertEquals(Loadable.Loaded("Blob"), value[stringPaths.Loaded])
     assertEquals("Blob", value[stringPaths.Loaded]?.get(keyPath = stringPaths.LoadedPaths.value))
-    assertEquals(
-      Loadable.Loaded("Blob Jr."),
-      value[stringPaths.Loaded]?.setting(stringPaths.LoadedPaths.value, "Blob Jr."),
-    )
+    assertFalse((stringPaths.LoadedPaths.value as Any) is WritableKeyPath<*, *>)
     assertNull(Loadable.Idle[stringPaths.Loaded])
     assertEquals(Loadable.Idle, Loadable.Idle[stringPaths.Idle])
     assertEquals(Loadable.Loaded("Blob Jr."), loaded.embed(Loadable.Loaded("Blob Jr.")))
@@ -298,11 +296,9 @@ class GeneratedPathsTest {
   }
 }
 
-private object EquivalentNamePath : WritableKeyPathBase<Person, String>() {
+private object EquivalentNamePath : KeyPathBase<Person, String>() {
   override val id = dev.kpaths.core.PathId.property(TypeId("dev.kpaths.sample.Person"), "name")
   override val valueType = TypeId.of<String>()
 
   override fun get(root: Person): String = root.name
-
-  override fun set(root: Person, value: String): Person = root.copy(name = value)
 }
