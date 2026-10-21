@@ -57,10 +57,6 @@ private class KPathsProcessor(
     val generatedName = generatedObjectName(qualifiedName, packageName)
     val pathProperties = pathProperties(declaration)
     val casePaths = casePaths(declaration)
-    if (casePaths.isNotEmpty() && declaration.typeParameters.isNotEmpty()) {
-      logger.error("@Pathable sealed hierarchies with type parameters are not supported yet.", declaration)
-      return
-    }
     val typeTokenNames = declaration.typeParameters.associate { parameter ->
       parameter.name.asString() to typeTokenName(parameter.name.asString())
     }
@@ -128,14 +124,18 @@ private class KPathsProcessor(
           writer = writer,
           rootKotlinType = rootKotlinType,
           rootTypeId = rootTypeId,
+          rootDeclaration = declaration,
+          rootTypeTokenNames = typeTokenNames,
+          capturesTypeTokens = declaration.typeParameters.isNotEmpty(),
           casePath = casePath,
         )
       }
       writer.appendLine("}")
       if (declaration.typeParameters.isNotEmpty()) {
-        val typeParameters = declaration.typeParameters.joinToString { it.name.asString() }
+        val typeParameters = declaration.typeParameters.joinToString { "reified ${it.name.asString()}" }
         writer.appendLine()
-        writer.appendLine("public inline fun <reified $typeParameters> $generatedName(): $generatedName<$typeParameters> =")
+        val returnTypeParameters = declaration.typeParameters.joinToString { it.name.asString() }
+        writer.appendLine("public inline fun <$typeParameters> $generatedName(): $generatedName<$returnTypeParameters> =")
         writer.appendLine("  $generatedName.of(${declaration.typeParameters.joinToString { "dev.kpaths.core.TypeId.of<${it.name.asString()}>()" }})")
       }
     }
@@ -156,13 +156,6 @@ private class KPathsProcessor(
         if (caseDeclaration.classKind !in setOf(ClassKind.CLASS, ClassKind.OBJECT)) {
           logger.error(
             "@Pathable sealed variant '${caseDeclaration.simpleName.asString()}' must be a class or object.",
-            caseDeclaration,
-          )
-          return@mapNotNull null
-        }
-        if (caseDeclaration.typeParameters.isNotEmpty()) {
-          logger.error(
-            "@Pathable sealed variant '${caseDeclaration.simpleName.asString()}' cannot declare type parameters yet.",
             caseDeclaration,
           )
           return@mapNotNull null
@@ -258,13 +251,14 @@ private class KPathsProcessor(
     rootTypeId: String,
     pathProperty: PathProperty,
     typeTokenNames: Map<String, String>,
+    typeParameterSubstitutions: Map<String, String> = emptyMap(),
     capturesTypeTokens: Boolean,
     declarationIndent: String,
   ) {
     val property = pathProperty.declaration
     val name = property.simpleName.asString()
     val identifier = escapeIdentifier(name)
-    val valueKotlinType = property.type.resolve().renderKotlinType()
+    val valueKotlinType = property.type.resolve().renderKotlinType(typeParameterSubstitutions)
     val valueTypeId = property.type.resolve().renderTypeId(typeTokenNames)
     val pathInterface = when (pathProperty.kind) {
       PathKind.READ_ONLY -> "dev.kpaths.core.KeyPath"
@@ -299,35 +293,43 @@ private class KPathsProcessor(
     writer: java.io.BufferedWriter,
     rootKotlinType: String,
     rootTypeId: String,
+    rootDeclaration: KSClassDeclaration,
+    rootTypeTokenNames: Map<String, String>,
+    capturesTypeTokens: Boolean,
     casePath: CasePath,
   ) {
     val caseIdentifier = escapeIdentifier(casePath.name.pathIdentifier())
-    val valueKotlinType = when (casePath.kind) {
-      CaseKind.SEALED_VARIANT -> requireNotNull(casePath.qualifiedName)
-      CaseKind.ENUM_ENTRY -> "kotlin.Unit"
-    }
-    val valueTypeId = when (casePath.kind) {
-      CaseKind.SEALED_VARIANT ->
-        renderDeclaredTypeId(requireNotNull(casePath.qualifiedName), emptyList(), emptyMap())
-      CaseKind.ENUM_ENTRY -> "dev.kpaths.core.TypeId.of<kotlin.Unit>()"
-    }
+    val resolvedCaseType = resolveCaseType(
+      rootDeclaration = rootDeclaration,
+      rootTypeTokenNames = rootTypeTokenNames,
+      casePath = casePath,
+    ) ?: return
 
     writer.appendLine()
-    writer.appendLine("  public object $caseIdentifier : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, $valueKotlinType>() {")
-    writer.appendLine("    override val id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.case($rootTypeId, \"${casePath.name}\")")
-    writer.appendLine("    override val valueType: dev.kpaths.core.TypeId = $valueTypeId")
-    when (casePath.kind) {
-      CaseKind.SEALED_VARIANT -> {
-        val qualifiedName = requireNotNull(casePath.qualifiedName)
-        writer.appendLine("    override fun extract(root: $rootKotlinType): $qualifiedName? = root as? $qualifiedName")
-        writer.appendLine("    override fun embed(value: $qualifiedName): $rootKotlinType = value")
-      }
-      CaseKind.ENUM_ENTRY -> {
-        writer.appendLine("    override fun extract(root: $rootKotlinType): kotlin.Unit? = if (root == $rootKotlinType.${casePath.name}) kotlin.Unit else null")
-        writer.appendLine("    override fun embed(value: kotlin.Unit): $rootKotlinType = $rootKotlinType.${casePath.name}")
-      }
+    if (capturesTypeTokens) {
+      writer.appendLine("  public val $caseIdentifier: dev.kpaths.core.CaseKeyPath<$rootKotlinType, ${resolvedCaseType.kotlinType}> =")
+      writer.appendLine("    object : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, ${resolvedCaseType.kotlinType}>() {")
+      writeCasePathBody(
+        writer = writer,
+        indent = "      ",
+        rootKotlinType = rootKotlinType,
+        rootTypeId = rootTypeId,
+        casePath = casePath,
+        resolvedCaseType = resolvedCaseType,
+      )
+      writer.appendLine("    }")
+    } else {
+      writer.appendLine("  public object $caseIdentifier : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, ${resolvedCaseType.kotlinType}>() {")
+      writeCasePathBody(
+        writer = writer,
+        indent = "    ",
+        rootKotlinType = rootKotlinType,
+        rootTypeId = rootTypeId,
+        casePath = casePath,
+        resolvedCaseType = resolvedCaseType,
+      )
+      writer.appendLine("  }")
     }
-    writer.appendLine("  }")
 
     if (casePath.kind != CaseKind.SEALED_VARIANT) {
       return
@@ -339,21 +341,212 @@ private class KPathsProcessor(
     }
 
     writer.appendLine()
-    writer.appendLine("  public object ${escapeIdentifier(casePath.name + "Paths")} {")
-    val caseQualifiedName = requireNotNull(casePath.qualifiedName)
-    val caseRootTypeId = renderDeclaredTypeId(caseQualifiedName, emptyList(), emptyMap())
+    if (capturesTypeTokens) {
+      writeGenericCasePropertyPaths(
+        writer = writer,
+        rootDeclaration = rootDeclaration,
+        rootTypeTokenNames = rootTypeTokenNames,
+        casePath = casePath,
+        resolvedCaseType = resolvedCaseType,
+        caseProperties = caseProperties,
+      )
+    } else {
+      writer.appendLine("  public object ${escapeIdentifier(casePath.name + "Paths")} {")
+      caseProperties.forEach { property ->
+        writePropertyPath(
+          writer = writer,
+          rootKotlinType = resolvedCaseType.kotlinType,
+          rootTypeId = resolvedCaseType.typeId,
+          pathProperty = property,
+          typeTokenNames = resolvedCaseType.typeTokenSubstitutions,
+          typeParameterSubstitutions = resolvedCaseType.typeParameterSubstitutions,
+          capturesTypeTokens = false,
+          declarationIndent = "    ",
+        )
+      }
+      writer.appendLine("  }")
+    }
+  }
+
+  private fun writeCasePathBody(
+    writer: java.io.BufferedWriter,
+    indent: String,
+    rootKotlinType: String,
+    rootTypeId: String,
+    casePath: CasePath,
+    resolvedCaseType: ResolvedCaseType,
+  ) {
+    writer.appendLine("${indent}override val id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.case($rootTypeId, \"${casePath.name}\")")
+    writer.appendLine("${indent}override val valueType: dev.kpaths.core.TypeId = ${resolvedCaseType.typeId}")
+    when (casePath.kind) {
+      CaseKind.SEALED_VARIANT -> {
+        writer.appendLine("${indent}@Suppress(\"UNCHECKED_CAST\")")
+        writer.appendLine("${indent}override fun extract(root: $rootKotlinType): ${resolvedCaseType.kotlinType}? = root as? ${resolvedCaseType.kotlinType}")
+        writer.appendLine("${indent}override fun embed(value: ${resolvedCaseType.kotlinType}): $rootKotlinType = value")
+      }
+      CaseKind.ENUM_ENTRY -> {
+        writer.appendLine("${indent}override fun extract(root: $rootKotlinType): kotlin.Unit? = if (root == $rootKotlinType.${casePath.name}) kotlin.Unit else null")
+        writer.appendLine("${indent}override fun embed(value: kotlin.Unit): $rootKotlinType = $rootKotlinType.${casePath.name}")
+      }
+    }
+  }
+
+  private fun writeGenericCasePropertyPaths(
+    writer: java.io.BufferedWriter,
+    rootDeclaration: KSClassDeclaration,
+    rootTypeTokenNames: Map<String, String>,
+    casePath: CasePath,
+    resolvedCaseType: ResolvedCaseType,
+    caseProperties: List<PathProperty>,
+  ) {
+    val rootTypeParameters = rootDeclaration.typeParameters.joinToString { it.name.asString() }
+    val tokenParameters = rootDeclaration.typeParameters.joinToString(", ") { parameter ->
+      "private val ${rootTypeTokenNames.getValue(parameter.name.asString())}: dev.kpaths.core.TypeId"
+    }
+    val nestedClassName = escapeIdentifier(casePath.name + "PropertyPaths")
+    val namespaceName = escapeIdentifier(casePath.name + "Paths")
+    val tokenArguments = rootDeclaration.typeParameters.joinToString { parameter ->
+      rootTypeTokenNames.getValue(parameter.name.asString())
+    }
+
+    writer.appendLine("  public val $namespaceName: $nestedClassName<$rootTypeParameters> =")
+    writer.appendLine("    $nestedClassName($tokenArguments)")
+    writer.appendLine()
+    writer.appendLine("  public class $nestedClassName<$rootTypeParameters> internal constructor(")
+    writer.appendLine("    $tokenParameters,")
+    writer.appendLine("  ) {")
     caseProperties.forEach { property ->
       writePropertyPath(
         writer = writer,
-        rootKotlinType = caseQualifiedName,
-        rootTypeId = caseRootTypeId,
+        rootKotlinType = resolvedCaseType.kotlinType,
+        rootTypeId = resolvedCaseType.typeId,
         pathProperty = property,
-        typeTokenNames = emptyMap(),
-        capturesTypeTokens = false,
+        typeTokenNames = resolvedCaseType.typeTokenSubstitutions,
+        typeParameterSubstitutions = resolvedCaseType.typeParameterSubstitutions,
+        capturesTypeTokens = true,
         declarationIndent = "    ",
       )
     }
     writer.appendLine("  }")
+  }
+
+  /** Resolves a sealed variant's type parameters against the annotated generic root. */
+  private fun resolveCaseType(
+    rootDeclaration: KSClassDeclaration,
+    rootTypeTokenNames: Map<String, String>,
+    casePath: CasePath,
+  ): ResolvedCaseType? {
+    if (casePath.kind == CaseKind.ENUM_ENTRY) {
+      return ResolvedCaseType(
+        kotlinType = "kotlin.Unit",
+        typeId = "dev.kpaths.core.TypeId.of<kotlin.Unit>()",
+        typeParameterSubstitutions = emptyMap(),
+        typeTokenSubstitutions = emptyMap(),
+      )
+    }
+
+    val caseDeclaration = casePath.declaration
+    val caseQualifiedName = requireNotNull(casePath.qualifiedName)
+    if (rootDeclaration.typeParameters.isEmpty()) {
+      if (caseDeclaration.typeParameters.isNotEmpty()) {
+        reportPathableError(
+          rootDeclaration,
+          "Cannot generate '${casePath.name}' because this non-generic sealed root has a generic variant. " +
+            "Make the variant non-generic or use a generic sealed root.",
+        )
+        return null
+      }
+      return ResolvedCaseType(
+        kotlinType = caseQualifiedName,
+        typeId = renderDeclaredTypeId(caseQualifiedName, emptyList(), emptyMap()),
+        typeParameterSubstitutions = emptyMap(),
+        typeTokenSubstitutions = emptyMap(),
+      )
+    }
+
+    val rootQualifiedName = requireNotNull(rootDeclaration.qualifiedName?.asString())
+    val caseRootSupertype = caseDeclaration.superTypes
+      .map { it.resolve() }
+      .firstOrNull { it.declaration.qualifiedName?.asString() == rootQualifiedName }
+    if (caseRootSupertype == null) {
+      reportPathableError(
+        rootDeclaration,
+        "Cannot generate '${casePath.name}' because KPaths could not resolve its direct $rootQualifiedName supertype.",
+      )
+      return null
+    }
+
+    val caseParameterNames = caseDeclaration.typeParameters.map { it.name.asString() }.toSet()
+    val kotlinSubstitutions = mutableMapOf<String, String>()
+    val tokenSubstitutions = mutableMapOf<String, String>()
+    for ((index, rootParameter) in rootDeclaration.typeParameters.withIndex()) {
+      val caseArgument = caseRootSupertype.arguments.getOrNull(index)?.type?.resolve()
+      val caseParameter = caseArgument?.declaration as? KSTypeParameter
+      val caseParameterName = caseParameter?.name?.asString()
+      if (
+        caseParameterName != null &&
+        caseParameterName in caseParameterNames &&
+        !caseArgument.isMarkedNullable
+      ) {
+        val rootParameterName = rootParameter.name.asString()
+        val existingSubstitution = kotlinSubstitutions[caseParameterName]
+        if (existingSubstitution != null && existingSubstitution != rootParameterName) {
+          reportPathableError(
+            rootDeclaration,
+            "Cannot generate '${casePath.name}' because its type parameter '$caseParameterName' " +
+              "would need to represent both '$existingSubstitution' and '$rootParameterName'.",
+          )
+          return null
+        }
+        kotlinSubstitutions[caseParameterName] = rootParameterName
+        tokenSubstitutions[caseParameterName] = rootTypeTokenNames.getValue(rootParameterName)
+      } else if (rootParameter.variance == Variance.COVARIANT && caseArgument?.isNothing() == true) {
+        // A covariant `Root<Nothing>` can be embedded as `Root<T>` for every T.
+      } else {
+        val renderedArgument = caseArgument?.renderKotlinType() ?: "<unresolved>"
+        reportPathableError(
+          rootDeclaration,
+          "Cannot generate '${casePath.name}' because it implements $rootQualifiedName<$renderedArgument> " +
+            "where the generic root requires '${rootParameter.name.asString()}'. " +
+            "The variant must forward that type parameter, or refine it to Nothing through an `out` parameter.",
+        )
+        return null
+      }
+    }
+
+    val missingParameters = caseDeclaration.typeParameters
+      .map { it.name.asString() }
+      .filterNot(kotlinSubstitutions::containsKey)
+    if (missingParameters.isNotEmpty()) {
+      reportPathableError(
+        rootDeclaration,
+        "Cannot generate '${casePath.name}' because its type parameter(s) " +
+          "${missingParameters.joinToString()} cannot be determined from the sealed root.",
+      )
+      return null
+    }
+
+    val caseTypeArguments = caseDeclaration.typeParameters.joinToString { parameter ->
+      kotlinSubstitutions.getValue(parameter.name.asString())
+    }
+    return ResolvedCaseType(
+      kotlinType = caseQualifiedName + caseTypeArguments.takeIf { it.isNotEmpty() }
+        ?.let { "<$it>" }
+        .orEmpty(),
+      typeId = renderDeclaredTypeId(caseQualifiedName, caseDeclaration.typeParameters, tokenSubstitutions),
+      typeParameterSubstitutions = kotlinSubstitutions,
+      typeTokenSubstitutions = tokenSubstitutions,
+    )
+  }
+
+  private fun KSType.isNothing(): Boolean =
+    declaration.qualifiedName?.asString() == "kotlin.Nothing" && !isMarkedNullable
+
+  private fun reportPathableError(rootDeclaration: KSClassDeclaration, message: String) {
+    val annotation = rootDeclaration.annotations.firstOrNull { candidate ->
+      candidate.annotationType.resolve().declaration.qualifiedName?.asString() == pathableAnnotation
+    }
+    logger.error("[KPaths] $message", annotation ?: rootDeclaration)
   }
 
   private fun writeSetter(
@@ -388,6 +581,13 @@ private class KPathsProcessor(
     val qualifiedName: String?,
   )
 
+  private data class ResolvedCaseType(
+    val kotlinType: String,
+    val typeId: String,
+    val typeParameterSubstitutions: Map<String, String>,
+    val typeTokenSubstitutions: Map<String, String>,
+  )
+
   private enum class CaseKind {
     SEALED_VARIANT,
     ENUM_ENTRY,
@@ -414,16 +614,19 @@ private class KPathsProcessor(
     }
   }
 
-  private fun KSType.renderKotlinType(): String {
+  private fun KSType.renderKotlinType(typeParameterSubstitutions: Map<String, String> = emptyMap()): String {
     val typeDeclaration = declaration
     if (typeDeclaration is KSTypeParameter) {
-      return typeDeclaration.name.asString() + if (isMarkedNullable) "?" else ""
+      val name = typeParameterSubstitutions[typeDeclaration.name.asString()]
+        ?: typeDeclaration.name.asString()
+      return name + if (isMarkedNullable) "?" else ""
     }
     val declarationName = typeDeclaration.qualifiedName?.asString() ?: typeDeclaration.simpleName.asString()
     val arguments = arguments
       .takeIf { it.isNotEmpty() }
       ?.joinToString(prefix = "<", postfix = ">") { argument ->
-        val type = argument.type?.resolve()?.renderKotlinType() ?: return@joinToString "*"
+        val type = argument.type?.resolve()?.renderKotlinType(typeParameterSubstitutions)
+          ?: return@joinToString "*"
         when (argument.variance) {
           Variance.COVARIANT -> "out $type"
           Variance.CONTRAVARIANT -> "in $type"
@@ -466,7 +669,7 @@ private class KPathsProcessor(
   }
 
   private fun typeTokenName(parameterName: String): String =
-    escapeIdentifier(parameterName.replaceFirstChar { it.lowercaseChar() } + "Type")
+    escapeIdentifier(parameterName.replaceFirstChar { it.lowercaseChar() } + "TypeId")
 
   private fun String.pathIdentifier(): String =
     if (this == uppercase()) lowercase() else replaceFirstChar { it.lowercaseChar() }

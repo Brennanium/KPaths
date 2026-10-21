@@ -43,3 +43,15 @@ enum class Direction {
   NORTH,
   SOUTH,
 }
+
+@Pathable
+sealed interface Loadable<out Value> {
+  data object Idle : Loadable<Nothing>
+  data class Loaded<T>(val value: T) : Loadable<T>
+}
+
+@Pathable
+sealed interface ApiResult<out Value, out Failure> {
+  data class Success<T>(val value: T) : ApiResult<T, Nothing>
+  data class Error<E>(val error: E) : ApiResult<Nothing, E>
+}

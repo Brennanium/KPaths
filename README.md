@@ -146,4 +146,25 @@ DirectionPaths.north.embed(Unit)      // Direction.NORTH
 ```
 
 The first case-path slice supports non-generic sealed classes, sealed interfaces, and enums.
-Generic sealed-hierarchy support follows in later work.
+
+## Generic sealed case paths
+
+Generic sealed roots preserve their concrete type arguments in their generated path identities:
+
+```kotlin
+@Pathable
+sealed interface Loadable<out Value> {
+  data object Idle : Loadable<Nothing>
+  data class Loaded<T>(val value: T) : Loadable<T>
+}
+
+val paths = LoadablePaths<String>()
+val state: Loadable<String> = Loadable.Loaded("Blob")
+
+state[paths.loaded]?.get(keyPath = paths.LoadedPaths.value)
+// "Blob"
+```
+
+For a generic root, every variant must either forward a root type parameter or safely refine a
+covariant parameter to `Nothing`. KPaths reports an error at `@Pathable` when Kotlin cannot embed
+a variant as every specialization of the root.

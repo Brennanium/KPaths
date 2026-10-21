@@ -193,6 +193,67 @@ class GeneratedPathsTest {
     )
     assertEquals(TypeId.of<Unit>(), DirectionPaths.north.valueType)
   }
+
+  @Test
+  fun `KSP generates generic sealed case paths with substituted type identities`() {
+    val stringPaths = LoadablePaths<String>()
+    val integerPaths = LoadablePaths<Int>()
+    val loaded: CaseKeyPath<Loadable<String>, Loadable.Loaded<String>> = stringPaths.loaded
+    val value: Loadable<String> = Loadable.Loaded("Blob")
+
+    assertEquals(Loadable.Loaded("Blob"), value[stringPaths.loaded])
+    assertEquals("Blob", value[stringPaths.loaded]?.get(keyPath = stringPaths.LoadedPaths.value))
+    assertEquals(
+      Loadable.Loaded("Blob Jr."),
+      value[stringPaths.loaded]?.setting(stringPaths.LoadedPaths.value, "Blob Jr."),
+    )
+    assertNull(Loadable.Idle[stringPaths.loaded])
+    assertEquals(Loadable.Idle, Loadable.Idle[stringPaths.idle])
+    assertEquals(Loadable.Loaded("Blob Jr."), loaded.embed(Loadable.Loaded("Blob Jr.")))
+    assertNotEquals(stringPaths.loaded.id, integerPaths.loaded.id)
+    assertEquals(
+      TypeId(
+        "dev.kpaths.sample.Loadable",
+        listOf(TypeArgument.invariant(TypeId.of<String>())),
+      ),
+      stringPaths.loaded.id.rootType,
+    )
+    assertEquals(
+      TypeId(
+        "dev.kpaths.sample.Loadable.Loaded",
+        listOf(TypeArgument.invariant(TypeId.of<String>())),
+      ),
+      stringPaths.loaded.valueType,
+    )
+  }
+
+  @Test
+  fun `KSP substitutes each generic root parameter through its matching case`() {
+    val paths = ApiResultPaths<String, Int>()
+    val success: CaseKeyPath<ApiResult<String, Int>, ApiResult.Success<String>> = paths.success
+    val error: CaseKeyPath<ApiResult<String, Int>, ApiResult.Error<Int>> = paths.error
+    val successState: ApiResult<String, Int> = ApiResult.Success("Blob")
+    val errorState: ApiResult<String, Int> = ApiResult.Error(404)
+
+    assertEquals("Blob", successState[success]?.get(keyPath = paths.SuccessPaths.value))
+    assertNull(errorState[success])
+    assertEquals(404, errorState[error]?.get(keyPath = paths.ErrorPaths.error))
+    assertNull(successState[error])
+    assertEquals(
+      TypeId(
+        "dev.kpaths.sample.ApiResult.Success",
+        listOf(TypeArgument.invariant(TypeId.of<String>())),
+      ),
+      paths.success.valueType,
+    )
+    assertEquals(
+      TypeId(
+        "dev.kpaths.sample.ApiResult.Error",
+        listOf(TypeArgument.invariant(TypeId.of<Int>())),
+      ),
+      paths.error.valueType,
+    )
+  }
 }
 
 private object EquivalentNamePath : WritableKeyPathBase<Person, String>() {
