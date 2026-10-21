@@ -2,6 +2,7 @@ package dev.kpaths.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertContains
 import kotlin.test.assertNotEquals
 import kotlin.test.assertSame
 import kotlin.reflect.KProperty1
@@ -171,6 +172,29 @@ class StandardKeyPathsTest {
     assertEquals(StandardMutablePerson("Jr."), name.set(original, "Jr."))
     assertEquals(StandardMutablePerson("Jr."), normalizedName.set(original, " Jr. "))
     assertEquals(StandardMutablePerson(" Blob "), original)
+  }
+
+  @Test
+  fun `reference-writable paths warn for data-class roots without rejecting them`() {
+    val originalHandler = KPathsRuntimeWarnings.handler
+    val warnings = mutableListOf<KPathsRuntimeWarning>()
+    KPathsRuntimeWarnings.handler = warnings::add
+    try {
+      val path = referenceWritableKeyPath(
+        name = "dataClassWarning.name",
+        get = StandardMutablePerson::name,
+        set = { person, value -> person.name = value },
+      )
+      val person = StandardMutablePerson("Blob")
+
+      assertSame(person, path.set(person, "Jr."))
+      assertEquals("Jr.", person.name)
+      assertEquals(1, warnings.size)
+      assertContains(warnings.single().message, "data-class root")
+      assertContains(warnings.single().message, "WritableKeyPath")
+    } finally {
+      KPathsRuntimeWarnings.handler = originalHandler
+    }
   }
 }
 

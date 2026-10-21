@@ -70,6 +70,11 @@ val token = referenceWritableKeyPath(ThirdPartySession::token)
 token.set(session, "new-token") // mutates this class instance
 ```
 
+Using `referenceWritableKeyPath` with a data-class root remains allowed, but emits a runtime
+warning once per path identity. This catches an accidental in-place mutation of a type normally
+used with value semantics. Configure `KPathsRuntimeWarnings.handler` to route or silence those
+non-fatal warnings in an application.
+
 The `keyPath` property-reference adapter deliberately returns a read-only `KeyPath`, even for a
 `var`. Choose reference mutation explicitly with `referenceWritableKeyPath`. For value-style
 replacement, a property reference can infer the route while the caller supplies reconstruction:

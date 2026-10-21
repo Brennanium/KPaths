@@ -2,6 +2,7 @@ package dev.kpaths.core
 
 import kotlin.reflect.KMutableProperty1
 import kotlin.reflect.KProperty1
+import kotlin.reflect.KClass
 
 /** Creates a total read path with an explicitly supplied structural identity and type token. */
 public fun <Root, Value> keyPath(
@@ -158,7 +159,9 @@ public fun <Root : Any, Value> referenceWritableKeyPath(
   valueType: TypeId,
   get: (Root) -> Value,
   set: (Root, Value) -> Unit,
+  rootClass: KClass<*>? = null,
 ): ReferenceWritableKeyPath<Root, Value> {
+  KPathsRuntimeWarnings.warnIfDataClassRoot(rootClass, id)
   val getter = get
   val setter = set
   return object : ReferenceWritableKeyPathBase<Root, Value>() {
@@ -182,7 +185,7 @@ public inline fun <reified Root : Any, reified Value> referenceWritableKeyPath(
   noinline get: (Root) -> Value,
   noinline set: (Root, Value) -> Unit,
 ): ReferenceWritableKeyPath<Root, Value> =
-  referenceWritableKeyPath(id, TypeId.of<Value>(), get, set)
+  referenceWritableKeyPath(id, TypeId.of<Value>(), get, set, Root::class)
 
 /**
  * Creates a custom in-place writable path with a root-local stable [name].
@@ -199,6 +202,7 @@ public inline fun <reified Root : Any, reified Value> referenceWritableKeyPath(
   valueType = TypeId.of<Value>(),
   get = get,
   set = set,
+  rootClass = Root::class,
 )
 
 /**
@@ -232,8 +236,9 @@ public fun <Root : Any, Value> referenceWritableKeyPath(
   property: KMutableProperty1<Root, Value>,
   id: PathId,
   valueType: TypeId,
+  rootClass: KClass<*>? = null,
 ): ReferenceWritableKeyPath<Root, Value> =
-  referenceWritableKeyPath(id, valueType, property::get, property::set)
+  referenceWritableKeyPath(id, valueType, property::get, property::set, rootClass)
 
 /**
  * Adapts a mutable property reference while capturing its complete root and focus type tokens.
@@ -244,6 +249,7 @@ public inline fun <reified Root : Any, reified Value> referenceWritableKeyPath(
   property = property,
   id = PathId.property(TypeId.of<Root>(), property.name),
   valueType = TypeId.of<Value>(),
+  rootClass = Root::class,
 )
 
 /** Kotlin-friendly property-reference spelling of [referenceWritableKeyPath]. */
