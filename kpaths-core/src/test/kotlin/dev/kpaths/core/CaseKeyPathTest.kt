@@ -68,11 +68,98 @@ class CaseKeyPathTest {
       selected.id,
     )
   }
+
+  @Test
+  fun `constructor-reference factory creates a unary case payload path`() {
+    val selected = caseKeyPath<ManualEvent, ManualSelected, _>(
+      extract = ManualSelected::name,
+      embed = ::ManualSelected,
+    )
+
+    assertEquals("Blob", selected.extract(ManualSelected("Blob")))
+    assertNull(selected.extract(ManualEvent.Dismissed))
+    assertEquals(ManualSelected("Jr."), selected.embed("Jr."))
+    assertEquals(
+      PathId(
+        rootType = TypeId.of<ManualEvent>(),
+        segments = listOf(
+          PathSegment.Case("ManualSelected"),
+          PathSegment.Property("name"),
+        ),
+      ),
+      selected.id,
+    )
+  }
+
+  @Test
+  fun `constructor-reference factory creates a two-value case payload path`() {
+    val navigate = caseKeyPath<ManualEvent, ManualNavigate, _, _>(
+      extract1 = ManualNavigate::id,
+      extract2 = ManualNavigate::action,
+      embed = ::ManualNavigate,
+    )
+
+    assertEquals(
+      "id-1" to ManualChildAction.Refresh,
+      navigate.extract(ManualNavigate("id-1", ManualChildAction.Refresh)),
+    )
+    assertNull(navigate.extract(ManualEvent.Dismissed))
+    assertEquals(
+      ManualNavigate("id-2", ManualChildAction.Save),
+      navigate.embed("id-2" to ManualChildAction.Save),
+    )
+    assertEquals(
+      TypeId.of<Pair<String, ManualChildAction>>(),
+      navigate.valueType,
+    )
+  }
+
+  @Test
+  fun `constructor-reference factory creates a three-value case payload path`() {
+    val navigate = caseKeyPath<ManualEvent, ManualRoute, _, _, _>(
+      extract1 = ManualRoute::id,
+      extract2 = ManualRoute::destination,
+      extract3 = ManualRoute::action,
+      embed = ::ManualRoute,
+    )
+
+    assertEquals(
+      Triple("id-1", "settings", ManualChildAction.Refresh),
+      navigate.extract(ManualRoute("id-1", "settings", ManualChildAction.Refresh)),
+    )
+    assertNull(navigate.extract(ManualEvent.Dismissed))
+    assertEquals(
+      ManualRoute("id-2", "profile", ManualChildAction.Save),
+      navigate.embed(Triple("id-2", "profile", ManualChildAction.Save)),
+    )
+    assertEquals(
+      TypeId.of<Triple<String, String, ManualChildAction>>(),
+      navigate.valueType,
+    )
+  }
 }
 
 private sealed interface ManualEvent {
   data object Dismissed : ManualEvent
   data class Selected(val name: String) : ManualEvent
+}
+
+private data class ManualSelected(val name: String) : ManualEvent
+
+private data class ManualNavigate(
+  val id: String,
+  val action: ManualChildAction,
+) : ManualEvent
+
+private data class ManualRoute(
+  val id: String,
+  val destination: String,
+  val action: ManualChildAction,
+) : ManualEvent
+
+private enum class ManualChildAction {
+  Refresh,
+  Save,
 }
 
 private enum class ManualDirection {

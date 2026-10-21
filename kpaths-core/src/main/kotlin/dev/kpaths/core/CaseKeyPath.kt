@@ -1,5 +1,7 @@
 package dev.kpaths.core
 
+import kotlin.reflect.KProperty1
+
 /** Type-erased metadata common to all case key paths. */
 public interface AnyCaseKeyPath : AnyPath
 
@@ -49,6 +51,33 @@ public fun <Root, Middle : Any, Value : Any> CaseKeyPath<Root, Middle>.appending
 public fun <Root, Middle : Any, Value : Any> CaseKeyPath<Root, Middle>.then(
   next: CaseKeyPath<Middle, Value>,
 ): CaseKeyPath<Root, Value> = appending(next)
+
+/**
+ * Appends a property to a case path while supplying the inverse construction for that property.
+ *
+ * A [KeyPath] alone can read a value from a matched case, but cannot generally reconstruct that
+ * case from a replacement value. [embed] supplies that missing construction, which keeps the
+ * resulting route a full [CaseKeyPath].
+ */
+public fun <Root, Case : Any, Value : Any> CaseKeyPath<Root, Case>.appending(
+  next: KeyPath<Case, Value>,
+  embed: (Value) -> Case,
+): CaseKeyPath<Root, Value> {
+  val outer = this
+  val constructCase = embed
+  return caseKeyPath(
+    id = outer.id.appending(next.id),
+    valueType = next.valueType,
+    extract = { root -> outer.extract(root)?.let(next::get) },
+    embed = { value -> outer.embed(constructCase(value)) },
+  )
+}
+
+/** Kotlin-friendly spelling of property [appending]. */
+public fun <Root, Case : Any, Value : Any> CaseKeyPath<Root, Case>.then(
+  next: KeyPath<Case, Value>,
+  embed: (Value) -> Case,
+): CaseKeyPath<Root, Value> = appending(next, embed)
 
 /** Base class for generated case paths with the same structural identity rules as key paths. */
 public abstract class CaseKeyPathBase<Root, Value : Any> : PathBase(), CaseKeyPath<Root, Value>
@@ -104,6 +133,73 @@ public inline fun <reified Root : Any, reified Case : Root> caseKeyPath(): CaseK
     valueType = TypeId.of<Case>(),
     extract = { root -> root as? Case },
     embed = { case -> case },
+  )
+}
+
+/**
+ * Creates a case path from one case payload property and its constructor reference.
+ *
+ * [extract] reads the concrete case's payload, while [embed] reconstructs the concrete case
+ * before it is embedded into [Root].
+ */
+public inline fun <reified Root : Any, reified Case : Root, reified Value : Any> caseKeyPath(
+  extract: KProperty1<Case, Value>,
+  noinline embed: (Value) -> Case,
+): CaseKeyPath<Root, Value> = caseKeyPath<Root, Case>().then(keyPath(extract), embed)
+
+/**
+ * Creates a lossless case path for a two-value case payload.
+ *
+ * The focus is an ordered [Pair], whose first and second values are read by [extract1] and
+ * [extract2]. [embed] receives those values in the same order to reconstruct the case.
+ */
+public inline fun <reified Root : Any, reified Case : Root, reified First, reified Second> caseKeyPath(
+  extract1: KProperty1<Case, First>,
+  extract2: KProperty1<Case, Second>,
+  noinline embed: (First, Second) -> Case,
+): CaseKeyPath<Root, Pair<First, Second>> {
+  val casePath = caseKeyPath<Root, Case>()
+  val firstPath = keyPath(extract1)
+  val secondPath = keyPath(extract2)
+  val constructCase = embed
+  return caseKeyPath(
+    id = casePath.id.appending(firstPath.id).appending(secondPath.id),
+    valueType = TypeId.of<Pair<First, Second>>(),
+    extract = { root ->
+      casePath.extract(root)?.let { case -> Pair(firstPath.get(case), secondPath.get(case)) }
+    },
+    embed = { values -> casePath.embed(constructCase(values.first, values.second)) },
+  )
+}
+
+/**
+ * Creates a lossless case path for a three-value case payload.
+ *
+ * The focus is an ordered [Triple], whose values are read by [extract1], [extract2], and
+ * [extract3]. [embed] receives those values in the same order to reconstruct the case.
+ */
+public inline fun <reified Root : Any, reified Case : Root, reified First, reified Second, reified Third> caseKeyPath(
+  extract1: KProperty1<Case, First>,
+  extract2: KProperty1<Case, Second>,
+  extract3: KProperty1<Case, Third>,
+  noinline embed: (First, Second, Third) -> Case,
+): CaseKeyPath<Root, Triple<First, Second, Third>> {
+  val casePath = caseKeyPath<Root, Case>()
+  val firstPath = keyPath(extract1)
+  val secondPath = keyPath(extract2)
+  val thirdPath = keyPath(extract3)
+  val constructCase = embed
+  return caseKeyPath(
+    id = casePath.id.appending(firstPath.id).appending(secondPath.id).appending(thirdPath.id),
+    valueType = TypeId.of<Triple<First, Second, Third>>(),
+    extract = { root ->
+      casePath.extract(root)?.let { case ->
+        Triple(firstPath.get(case), secondPath.get(case), thirdPath.get(case))
+      }
+    },
+    embed = { values ->
+      casePath.embed(constructCase(values.first, values.second, values.third))
+    },
   )
 }
 

@@ -218,6 +218,51 @@ For custom matching behavior, use `caseKeyPath(id = ..., valueType = ..., extrac
 ...)`. The focus must be non-null: `null` always denotes a failed match, while nullable fields
 remain inside a matched case object.
 
+For an ordinary data-class case, constructor references provide a concise manual path factory.
+The property references read the case payload and the constructor reference proves that the case
+can be reconstructed:
+
+```kotlin
+sealed interface Navigation
+
+data class Document(val title: String)
+
+data class OpenDocument(val document: Document) : Navigation
+
+val openDocument = caseKeyPath<Navigation, OpenDocument, _>(
+  extract = OpenDocument::document,
+  embed = ::OpenDocument,
+)
+// CaseKeyPath<Navigation, Document>
+```
+
+Two and three payloads are represented losslessly as `Pair` and `Triple`, respectively. The
+property order must match the constructor-reference parameter order:
+
+```kotlin
+data class Navigate(val id: String, val destination: String) : Navigation
+
+val navigate = caseKeyPath<Navigation, Navigate, _, _>(
+  extract1 = Navigate::id,
+  extract2 = Navigate::destination,
+  embed = ::Navigate,
+)
+// CaseKeyPath<Navigation, Pair<String, String>>
+
+data class Route(val id: String, val destination: String, val replace: Boolean) : Navigation
+
+val route = caseKeyPath<Navigation, Route, _, _, _>(
+  extract1 = Route::id,
+  extract2 = Route::destination,
+  extract3 = Route::replace,
+  embed = ::Route,
+)
+// CaseKeyPath<Navigation, Triple<String, String, Boolean>>
+```
+
+There are deliberately no higher-arity overloads. Prefer a dedicated payload data class when a
+case has four or more independently meaningful values.
+
 Case-path names retain their Kotlin declaration spelling: class-like sealed cases use `Connected`,
 while enum entries use `NORTH`. The nested `ConnectedPaths` namespace is generated inside the
 KSP-owned `ConnectionPaths` object; an eventual compiler-plugin façade may offer
