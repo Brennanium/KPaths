@@ -106,6 +106,7 @@ class KPathsProcessorIntegrationTest {
     assertContains(output, "TopLevelCollision.kt:")
     assertContains(output, "[KPaths] Cannot generate 'PersonPaths' because it conflicts with existing top-level")
     assertContains(output, "type 'fixture.PersonPaths'")
+    assertContains(output, "@Pathable(\"CustomPersonPaths\")")
   }
 
   @Test

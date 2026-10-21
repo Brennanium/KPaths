@@ -238,7 +238,8 @@ private class KPathsProcessor(
     reportPathableError(
       declaration,
       "Cannot generate '$generatedName' because it conflicts with existing top-level " +
-        conflicts.joinToString(" and ") + ". Choose another @Pathable name.",
+        conflicts.joinToString(" and ") + ". Use an unused explicit name, such as " +
+        "@Pathable(\"Custom$generatedName\"), or rename the existing declaration.",
     )
     return false
   }
