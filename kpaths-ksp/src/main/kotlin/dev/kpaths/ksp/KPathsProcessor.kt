@@ -1,6 +1,7 @@
 package dev.kpaths.ksp
 
 import com.google.devtools.ksp.getDeclaredProperties
+import com.google.devtools.ksp.KspExperimental
 import com.google.devtools.ksp.processing.CodeGenerator
 import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.KSPLogger
@@ -11,6 +12,7 @@ import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSClassDeclaration
 import com.google.devtools.ksp.symbol.KSPropertyDeclaration
 import com.google.devtools.ksp.symbol.KSType
+import com.google.devtools.ksp.symbol.KSTypeAlias
 import com.google.devtools.ksp.symbol.KSTypeParameter
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.ClassKind
@@ -205,6 +207,14 @@ private class KPathsProcessor(
     if (configuredName.isEmpty()) {
       return defaultName
     }
+    if (configuredName.startsWith(generatedInternalPrefix)) {
+      reportPathableError(
+        declaration,
+        "@Pathable name '$configuredName' uses the reserved '$generatedInternalPrefix' prefix for " +
+          "KPaths-generated implementation details.",
+      )
+      return null
+    }
     if (!configuredName.isKotlinIdentifier()) {
       reportPathableError(
         declaration,
@@ -215,6 +225,7 @@ private class KPathsProcessor(
     return configuredName
   }
 
+  @OptIn(KspExperimental::class)
   private fun validateTopLevelGeneratedName(
     declaration: KSClassDeclaration,
     resolver: Resolver,
@@ -231,6 +242,10 @@ private class KPathsProcessor(
       resolver.getFunctionDeclarationsByName(name, includeTopLevel = true)
         .filter { it.parentDeclaration == null }
         .forEach { add("function '${it.qualifiedName?.asString()}'") }
+      resolver.getDeclarationsFromPackage(packageName)
+        .filterIsInstance<KSTypeAlias>()
+        .filter { it.simpleName.asString() == generatedName }
+        .forEach { add("type alias '${it.qualifiedName?.asString()}'") }
     }
     if (conflicts.isEmpty()) {
       return true
@@ -352,6 +367,12 @@ private class KPathsProcessor(
     casePaths: List<CasePath>,
   ): Boolean {
     val members = mutableListOf<GeneratedMember>()
+    if (declaration.typeParameters.isNotEmpty()) {
+      members += GeneratedMember(
+        name = "Companion",
+        description = "the generated generic-path companion",
+      )
+    }
 
     pathProperties.forEach { property ->
       members += GeneratedMember(
@@ -386,6 +407,16 @@ private class KPathsProcessor(
         reportPathableError(
           declaration,
           "Cannot generate paths because property '${property.simpleName.asString()}' uses the reserved " +
+            "'$generatedInternalPrefix' prefix for KPaths-generated implementation details.",
+        )
+        isValid = false
+      }
+    casePaths
+      .filter { it.name.startsWith(generatedInternalPrefix) }
+      .forEach { casePath ->
+        reportPathableError(
+          declaration,
+          "Cannot generate paths because case '${casePath.name}' uses the reserved " +
             "'$generatedInternalPrefix' prefix for KPaths-generated implementation details.",
         )
         isValid = false
@@ -843,13 +874,13 @@ private class KPathsProcessor(
   }
 
   private fun typeTokenName(parameterName: String): String =
-    generatedInternalPrefix + parameterName.replaceFirstChar { it.lowercaseChar() } + "TypeId"
+    escapeIdentifier(generatedInternalPrefix + parameterName + "TypeId")
 
   private fun typeTokenArgumentName(parameterName: String): String =
-    escapeIdentifier(parameterName.replaceFirstChar { it.lowercaseChar() } + "TypeId")
+    escapeIdentifier(parameterName + "TypeId")
 
   private fun typeTokenClassArgumentName(parameterName: String): String =
-    escapeIdentifier(parameterName.replaceFirstChar { it.lowercaseChar() } + "Type")
+    escapeIdentifier(parameterName + "Type")
 
   private fun renderKotlinQualifiedName(qualifiedName: String): String =
     qualifiedName.split('.').joinToString(".", transform = ::escapeIdentifier)

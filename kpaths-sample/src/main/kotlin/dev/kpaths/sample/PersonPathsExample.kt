@@ -37,6 +37,12 @@ data class Record(
 )
 
 @Pathable
+data class PairBox<Value, value>(
+  val first: Value,
+  val second: value,
+)
+
+@Pathable
 class Session(
   var token: String,
   val identifier: String,

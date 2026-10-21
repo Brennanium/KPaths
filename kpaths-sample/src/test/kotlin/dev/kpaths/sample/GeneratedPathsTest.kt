@@ -137,6 +137,15 @@ class GeneratedPathsTest {
   }
 
   @Test
+  fun `generic type parameters that differ by capitalization remain distinct`() {
+    val paths = PairBoxPaths<String, Int>()
+    val value = PairBox(first = "Blob", second = 42)
+
+    assertEquals("Blob", value[paths.first])
+    assertEquals(42, value[paths.second])
+  }
+
+  @Test
   fun `plain-class mutable properties generate reference-writable paths`() {
     val token: ReferenceWritableKeyPath<Session, String> = SessionPaths.token
     val session = Session(token = "first", identifier = "session-1")

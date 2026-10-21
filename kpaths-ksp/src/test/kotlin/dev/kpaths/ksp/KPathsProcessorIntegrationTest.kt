@@ -136,6 +136,79 @@ class KPathsProcessorIntegrationTest {
     assertContains(output, "'fixture.Second'")
   }
 
+  @Test
+  fun `reports top level type alias collisions at Pathable`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "TypeAliasCollision.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.Pathable
+
+        @Pathable
+        data class Person(val name: String)
+
+        typealias PersonPaths = String
+      """.trimIndent(),
+    )
+
+    assertContains(output, "TypeAliasCollision.kt:")
+    assertContains(output, "[KPaths] Cannot generate 'PersonPaths' because it conflicts with existing top-level")
+    assertContains(output, "type alias 'fixture.PersonPaths'")
+  }
+
+  @Test
+  fun `reports reserved prefixes on sealed cases at Pathable`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "ReservedCasePrefix.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.Pathable
+
+        @Pathable
+        sealed interface ReservedCasePrefix {
+          data object __kpaths_rootType : ReservedCasePrefix
+        }
+      """.trimIndent(),
+    )
+
+    assertContains(output, "ReservedCasePrefix.kt:")
+    assertContains(output, "[KPaths] Cannot generate paths because case '__kpaths_rootType'")
+    assertContains(output, "uses the reserved '__kpaths_' prefix")
+  }
+
+  @Test
+  fun `reports generic companion collisions at Pathable`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "CompanionCollision.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.Pathable
+
+        @Pathable
+        data class Box<Value>(val Companion: Value)
+      """.trimIndent(),
+    )
+
+    assertContains(output, "CompanionCollision.kt:")
+    assertContains(output, "[KPaths] Cannot generate paths because 'Companion' would name both")
+    assertContains(output, "the generated generic-path companion and the key path for property 'Companion'")
+  }
+
   private fun compileFailure(
     fixtureDirectory: Path,
     fileName: String,
