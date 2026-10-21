@@ -129,6 +129,17 @@ class StandardKeyPathsTest {
   }
 
   @Test
+  fun `indexed callable references can bind their index with at`() {
+    val second: (List<String>) -> String = List<String>::get.at(1)
+    val secondSetter: (IntArray, Int) -> Unit = IntArray::set.at(1)
+    val integers = intArrayOf(0, 0)
+
+    assertEquals("Jr.", second(listOf("Blob", "Jr.")))
+    secondSetter(integers, 42)
+    assertEquals(42, integers[1])
+  }
+
+  @Test
   fun `manual factories provide stable paths for computed and copy-based routes`() {
     val normalizedName = keyPath(
       id = PathId.custom(TypeId.of<StandardPerson>(), "test.StandardPerson.normalizedName"),
