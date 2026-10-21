@@ -13,17 +13,18 @@ public data class KPathsRuntimeWarning(
  * Configures delivery of non-fatal KPaths runtime diagnostics.
  *
  * The default handler writes to standard error. Applications may replace [handler] to integrate
- * with their logging system or set it to an empty handler to silence runtime warnings.
+ * with their logging system, or set it to `null` to disable runtime-warning work entirely.
  */
 public object KPathsRuntimeWarnings {
   @Volatile
-  public var handler: (KPathsRuntimeWarning) -> Unit = { warning ->
+  public var handler: ((KPathsRuntimeWarning) -> Unit)? = { warning ->
     System.err.println("[KPaths] warning: ${warning.message}")
   }
 
   private val reportedPathIds: MutableSet<PathId> = ConcurrentHashMap.newKeySet()
 
   internal fun warnIfDataClassRoot(rootClass: KClass<*>?, pathId: PathId) {
+    val handler = handler ?: return
     if (rootClass?.isData != true || !reportedPathIds.add(pathId)) return
 
     handler(

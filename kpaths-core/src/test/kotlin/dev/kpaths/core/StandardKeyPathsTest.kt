@@ -196,6 +196,31 @@ class StandardKeyPathsTest {
       KPathsRuntimeWarnings.handler = originalHandler
     }
   }
+
+  @Test
+  fun `null runtime-warning handler opts out before recording a data-class path`() {
+    val originalHandler = KPathsRuntimeWarnings.handler
+    val warnings = mutableListOf<KPathsRuntimeWarning>()
+    try {
+      KPathsRuntimeWarnings.handler = null
+      referenceWritableKeyPath(
+        name = "dataClassWarning.disabled",
+        get = StandardMutablePerson::name,
+        set = { person, value -> person.name = value },
+      )
+
+      KPathsRuntimeWarnings.handler = warnings::add
+      referenceWritableKeyPath(
+        name = "dataClassWarning.disabled",
+        get = StandardMutablePerson::name,
+        set = { person, value -> person.name = value },
+      )
+
+      assertEquals(1, warnings.size)
+    } finally {
+      KPathsRuntimeWarnings.handler = originalHandler
+    }
+  }
 }
 
 private data class StandardPerson(val name: String)
