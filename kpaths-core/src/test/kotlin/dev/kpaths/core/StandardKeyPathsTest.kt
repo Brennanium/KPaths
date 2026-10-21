@@ -69,6 +69,66 @@ class StandardKeyPathsTest {
   }
 
   @Test
+  fun `map paths replace values and use null to remove keys`() {
+    val readWrite = MapPaths<String, Int>().at("score")
+    val nullableValue = MapPaths<String, Int?>().at("score")
+    val mutable = mutableMapOf("score" to 1)
+    val mutablePath = MutableMapPaths<String, Int>().at("score")
+
+    assertEquals(null, readWrite.get(emptyMap()))
+    assertEquals(mapOf("score" to 2), readWrite.set(mapOf("score" to 1), 2))
+    assertEquals(emptyMap<String, Int>(), readWrite.set(mapOf("score" to 1), null))
+    assertEquals(emptyMap<String, Int?>(), nullableValue.set(mapOf("score" to null), null))
+    assertSame(mutable, mutablePath.set(mutable, 2))
+    assertEquals(2, mutable["score"])
+    assertSame(mutable, mutablePath.set(mutable, null))
+    assertEquals(false, mutable.containsKey("score"))
+    assertNotEquals<Any?>(readWrite, mutablePath)
+  }
+
+  @Test
+  fun `primitive array paths use Kotlin operator get and set semantics`() {
+    val booleans = booleanArrayOf(false, false)
+    val bytes = byteArrayOf(0, 0)
+    val chars = charArrayOf('a', 'b')
+    val shorts = shortArrayOf(0, 0)
+    val ints = intArrayOf(0, 0)
+    val longs = longArrayOf(0L, 0L)
+    val floats = floatArrayOf(0F, 0F)
+    val doubles = doubleArrayOf(0.0, 0.0)
+
+    assertSame(booleans, BooleanArrayPaths.at(1).set(booleans, true))
+    assertSame(bytes, ByteArrayPaths.at(1).set(bytes, 1))
+    assertSame(chars, CharArrayPaths.at(1).set(chars, 'z'))
+    assertSame(shorts, ShortArrayPaths.at(1).set(shorts, 1))
+    assertSame(ints, IntArrayPaths.at(1).set(ints, 1))
+    assertSame(longs, LongArrayPaths.at(1).set(longs, 1L))
+    assertSame(floats, FloatArrayPaths.at(1).set(floats, 1F))
+    assertSame(doubles, DoubleArrayPaths.at(1).set(doubles, 1.0))
+
+    assertEquals(true, booleans[1])
+    assertEquals(1, bytes[1])
+    assertEquals('z', chars[1])
+    assertEquals(1, shorts[1])
+    assertEquals(1, ints[1])
+    assertEquals(1L, longs[1])
+    assertEquals(1F, floats[1])
+    assertEquals(1.0, doubles[1])
+    assertEquals(2, IntArrayPaths.size.get(ints))
+  }
+
+  @Test
+  fun `char sequence and string paths use Kotlin UTF-16 indexing`() {
+    val sequence: CharSequence = "Blob"
+
+    assertEquals('l', CharSequencePaths.at(1).get(sequence))
+    assertEquals('l', StringPaths.at(1).get("Blob"))
+    assertEquals(4, CharSequencePaths.length.get(sequence))
+    assertEquals(StringPaths.at(1), StringPaths.at(1))
+    assertNotEquals<Any?>(CharSequencePaths.at(1), StringPaths.at(1))
+  }
+
+  @Test
   fun `manual factories provide stable paths for computed and copy-based routes`() {
     val normalizedName = keyPath(
       id = PathId.custom(TypeId.of<StandardPerson>(), "test.StandardPerson.normalizedName"),

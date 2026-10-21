@@ -276,12 +276,195 @@ public fun <Root> identityKeyPath(rootType: TypeId): WritableKeyPath<Root, Root>
 public inline fun <reified Root> identityKeyPath(): WritableKeyPath<Root, Root> =
   identityKeyPath(TypeId.of<Root>())
 
+private fun <Root, Value> indexedKeyPath(
+  rootType: TypeId,
+  valueType: TypeId,
+  index: Int,
+  get: (Root, Int) -> Value,
+): KeyPath<Root, Value> = keyPath(
+  id = PathId(rootType, listOf(PathSegment.Index(index))),
+  valueType = valueType,
+  get = { root -> get(root, index) },
+)
+
+private fun <Root : Any, Value> indexedReferenceWritableKeyPath(
+  rootType: TypeId,
+  valueType: TypeId,
+  index: Int,
+  get: (Root, Int) -> Value,
+  set: (Root, Int, Value) -> Unit,
+): ReferenceWritableKeyPath<Root, Value> = referenceWritableKeyPath(
+  id = PathId(rootType, listOf(PathSegment.Index(index))),
+  valueType = valueType,
+  get = { root -> get(root, index) },
+  set = { root, value -> set(root, index, value) },
+)
+
+/** Standard read-only paths for [CharSequence]. */
+public object CharSequencePaths {
+  public val length: KeyPath<CharSequence, Int> = keyPath(
+    id = PathId.property(TypeId.of<CharSequence>(), "length"),
+    valueType = TypeId.of<Int>(),
+  ) { sequence -> sequence.length }
+
+  /** Returns the [Char] at [index], using Kotlin's ordinary UTF-16 indexing semantics. */
+  public fun at(index: Int): KeyPath<CharSequence, Char> = indexedKeyPath(
+    rootType = TypeId.of<CharSequence>(),
+    valueType = TypeId.of<Char>(),
+    index = index,
+    get = CharSequence::get,
+  )
+}
+
 /** Standard read-only paths for [String]. */
 public object StringPaths {
   public val length: KeyPath<String, Int> = keyPath(
     id = PathId.property(TypeId.of<String>(), "length"),
     valueType = TypeId.of<Int>(),
   ) { string -> string.length }
+
+  /** Returns the [Char] at [index], using Kotlin's ordinary UTF-16 indexing semantics. */
+  public fun at(index: Int): KeyPath<String, Char> = indexedKeyPath(
+    rootType = TypeId.of<String>(),
+    valueType = TypeId.of<Char>(),
+    index = index,
+    get = String::get,
+  )
+}
+
+/** Standard paths for an immutable [Map]. Setting a focused `null` removes its key. */
+public class MapPaths<Key, Value> private constructor(
+  private val rootType: TypeId,
+  private val valueType: TypeId,
+) {
+  public val size: KeyPath<Map<Key, Value>, Int> = keyPath(
+    id = PathId.property(rootType, "size"),
+    valueType = TypeId.of<Int>(),
+  ) { map -> map.size }
+
+  /**
+   * Returns a copy-based path through [key]. A missing key reads as `null`; setting `null`
+   * removes the key, even when [Value] itself is nullable.
+   */
+  public fun at(key: Key): WritableKeyPath<Map<Key, Value>, Value?> = writableKeyPath(
+    id = PathId(rootType, listOf(PathSegment.Key(key))),
+    valueType = valueType.withNullability(true),
+    get = { map -> map[key] },
+    set = { map, value ->
+      if (value == null) map - key else map + (key to value)
+    },
+  )
+
+  public companion object {
+    public fun <Key, Value> of(keyType: TypeId, valueType: TypeId): MapPaths<Key, Value> =
+      MapPaths(
+        rootType = declaredType("kotlin.collections.Map", keyType, valueType),
+        valueType = valueType,
+      )
+  }
+}
+
+/** Captures a [Map]'s complete key and value type tokens from a reified Kotlin context. */
+public inline fun <reified Key, reified Value> MapPaths(): MapPaths<Key, Value> =
+  MapPaths.of(TypeId.of<Key>(), TypeId.of<Value>())
+
+/** Standard paths for a [MutableMap]. Setting a focused `null` removes its key in place. */
+public class MutableMapPaths<Key, Value> private constructor(
+  private val rootType: TypeId,
+  private val valueType: TypeId,
+) {
+  public val size: KeyPath<MutableMap<Key, Value>, Int> = keyPath(
+    id = PathId.property(rootType, "size"),
+    valueType = TypeId.of<Int>(),
+  ) { map -> map.size }
+
+  /**
+   * Returns an in-place mutable path through [key]. A missing key reads as `null`; setting
+   * `null` removes the key, even when [Value] itself is nullable.
+   */
+  public fun at(key: Key): ReferenceWritableKeyPath<MutableMap<Key, Value>, Value?> =
+    referenceWritableKeyPath(
+      id = PathId(rootType, listOf(PathSegment.Key(key))),
+      valueType = valueType.withNullability(true),
+      get = { map -> map[key] },
+      set = { map, value ->
+        if (value == null) map.remove(key) else map[key] = value
+      },
+    )
+
+  public companion object {
+    public fun <Key, Value> of(keyType: TypeId, valueType: TypeId): MutableMapPaths<Key, Value> =
+      MutableMapPaths(
+        rootType = declaredType("kotlin.collections.MutableMap", keyType, valueType),
+        valueType = valueType,
+      )
+  }
+}
+
+/** Captures a [MutableMap]'s complete key and value type tokens from a reified Kotlin context. */
+public inline fun <reified Key, reified Value> MutableMapPaths(): MutableMapPaths<Key, Value> =
+  MutableMapPaths.of(TypeId.of<Key>(), TypeId.of<Value>())
+
+private fun <Root : Any, Value> primitiveArrayPath(
+  rootType: TypeId,
+  valueType: TypeId,
+  index: Int,
+  get: (Root, Int) -> Value,
+  set: (Root, Int, Value) -> Unit,
+): ReferenceWritableKeyPath<Root, Value> = indexedReferenceWritableKeyPath(
+  rootType = rootType,
+  valueType = valueType,
+  index = index,
+  get = get,
+  set = set,
+)
+
+/** Standard paths for [BooleanArray]. */
+public object BooleanArrayPaths {
+  public val size: KeyPath<BooleanArray, Int> = keyPath(PathId.property(TypeId.of<BooleanArray>(), "size"), TypeId.of<Int>()) { it.size }
+  public fun at(index: Int): ReferenceWritableKeyPath<BooleanArray, Boolean> = primitiveArrayPath(TypeId.of<BooleanArray>(), TypeId.of<Boolean>(), index, BooleanArray::get, BooleanArray::set)
+}
+
+/** Standard paths for [ByteArray]. */
+public object ByteArrayPaths {
+  public val size: KeyPath<ByteArray, Int> = keyPath(PathId.property(TypeId.of<ByteArray>(), "size"), TypeId.of<Int>()) { it.size }
+  public fun at(index: Int): ReferenceWritableKeyPath<ByteArray, Byte> = primitiveArrayPath(TypeId.of<ByteArray>(), TypeId.of<Byte>(), index, ByteArray::get, ByteArray::set)
+}
+
+/** Standard paths for [CharArray]. */
+public object CharArrayPaths {
+  public val size: KeyPath<CharArray, Int> = keyPath(PathId.property(TypeId.of<CharArray>(), "size"), TypeId.of<Int>()) { it.size }
+  public fun at(index: Int): ReferenceWritableKeyPath<CharArray, Char> = primitiveArrayPath(TypeId.of<CharArray>(), TypeId.of<Char>(), index, CharArray::get, CharArray::set)
+}
+
+/** Standard paths for [ShortArray]. */
+public object ShortArrayPaths {
+  public val size: KeyPath<ShortArray, Int> = keyPath(PathId.property(TypeId.of<ShortArray>(), "size"), TypeId.of<Int>()) { it.size }
+  public fun at(index: Int): ReferenceWritableKeyPath<ShortArray, Short> = primitiveArrayPath(TypeId.of<ShortArray>(), TypeId.of<Short>(), index, ShortArray::get, ShortArray::set)
+}
+
+/** Standard paths for [IntArray]. */
+public object IntArrayPaths {
+  public val size: KeyPath<IntArray, Int> = keyPath(PathId.property(TypeId.of<IntArray>(), "size"), TypeId.of<Int>()) { it.size }
+  public fun at(index: Int): ReferenceWritableKeyPath<IntArray, Int> = primitiveArrayPath(TypeId.of<IntArray>(), TypeId.of<Int>(), index, IntArray::get, IntArray::set)
+}
+
+/** Standard paths for [LongArray]. */
+public object LongArrayPaths {
+  public val size: KeyPath<LongArray, Int> = keyPath(PathId.property(TypeId.of<LongArray>(), "size"), TypeId.of<Int>()) { it.size }
+  public fun at(index: Int): ReferenceWritableKeyPath<LongArray, Long> = primitiveArrayPath(TypeId.of<LongArray>(), TypeId.of<Long>(), index, LongArray::get, LongArray::set)
+}
+
+/** Standard paths for [FloatArray]. */
+public object FloatArrayPaths {
+  public val size: KeyPath<FloatArray, Int> = keyPath(PathId.property(TypeId.of<FloatArray>(), "size"), TypeId.of<Int>()) { it.size }
+  public fun at(index: Int): ReferenceWritableKeyPath<FloatArray, Float> = primitiveArrayPath(TypeId.of<FloatArray>(), TypeId.of<Float>(), index, FloatArray::get, FloatArray::set)
+}
+
+/** Standard paths for [DoubleArray]. */
+public object DoubleArrayPaths {
+  public val size: KeyPath<DoubleArray, Int> = keyPath(PathId.property(TypeId.of<DoubleArray>(), "size"), TypeId.of<Int>()) { it.size }
+  public fun at(index: Int): ReferenceWritableKeyPath<DoubleArray, Double> = primitiveArrayPath(TypeId.of<DoubleArray>(), TypeId.of<Double>(), index, DoubleArray::get, DoubleArray::set)
 }
 
 /** Standard read-only paths for a [Pair]. */

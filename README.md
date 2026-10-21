@@ -119,6 +119,7 @@ namespaces capture their concrete type arguments, just as generated namespaces d
 
 ```kotlin
 StringPaths.length.get("Blob") // 4
+StringPaths.at(1).get("Blob") // 'l'
 
 val pair = PairPaths<String, Int>()
 pair.first.get("Blob" to 42) // "Blob"
@@ -129,12 +130,19 @@ second.get(listOf("Blob", "Jr.")) // "Jr."
 val items = mutableListOf("Blob", "Jr.")
 MutableListPaths<String>().at(1).set(items, "Point-Free")
 // items is now ["Blob", "Point-Free"]
+
+val scores = MapPaths<String, Int>().at("blob")
+scores.set(mapOf("blob" to 1), null) // removes "blob"
 ```
 
 `PairPaths` and `TriplePaths` are read-only. `ListPaths` is read-only, including indexed paths;
 `ArrayPaths` and `MutableListPaths` expose reference-writable indexed paths because Kotlin lets
-those collections mutate their existing instances. Indexed reads and writes retain Kotlin's usual
-out-of-bounds behavior.
+those collections mutate their existing instances. `MapPaths` returns a copy-based nullable
+lookup path and `MutableMapPaths` returns its in-place counterpart; setting their focus to `null`
+always removes the key, including for maps with nullable value types. The primitive-array path
+objects (`IntArrayPaths`, `BooleanArrayPaths`, and the other primitive variants) are likewise
+reference-writable. Indexed reads and writes retain Kotlin's usual out-of-bounds behavior; string
+and `CharSequence` indexing follows Kotlin's UTF-16 `Char` semantics.
 
 ## Value-style and reference-style roots
 

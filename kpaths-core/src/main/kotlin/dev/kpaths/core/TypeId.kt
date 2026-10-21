@@ -65,13 +65,12 @@ public class TypeId(
       val renderedClassifier = type.toString()
         .removeSuffix("?")
         .substringBefore('<')
-      return if (
-        className == "kotlin.collections.List" &&
-          renderedClassifier == "kotlin.collections.MutableList"
-      ) {
-        renderedClassifier
-      } else {
-        className
+      return when {
+        className == "kotlin.collections.List" && renderedClassifier == "kotlin.collections.MutableList" ->
+          renderedClassifier
+        className == "kotlin.collections.Map" && renderedClassifier == "kotlin.collections.MutableMap" ->
+          renderedClassifier
+        else -> className
       }
     }
   }
