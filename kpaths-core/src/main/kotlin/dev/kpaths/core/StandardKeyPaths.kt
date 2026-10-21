@@ -88,6 +88,70 @@ public inline fun <reified Root, reified Value> writableKeyPath(
   set = set,
 )
 
+/**
+ * Adapts a property reference into a copy-based writable path with an explicitly supplied
+ * reconstruction operation.
+ *
+ * [get] provides the readable property route, while [set] defines how a replacement value forms
+ * a new root. This supports computed read-only properties when the caller can supply an inverse.
+ */
+public fun <Root, Value> writableKeyPath(
+  get: KProperty1<Root, Value>,
+  id: PathId,
+  valueType: TypeId,
+  set: (Root, Value) -> Root,
+): WritableKeyPath<Root, Value> = writableKeyPath(
+  id = id,
+  valueType = valueType,
+  get = get::get,
+  set = set,
+)
+
+/**
+ * Adapts a property reference into a copy-based writable path while inferring its identity and
+ * complete type tokens.
+ */
+public inline fun <reified Root, reified Value> writableKeyPath(
+  get: KProperty1<Root, Value>,
+  noinline set: (Root, Value) -> Root,
+): WritableKeyPath<Root, Value> = writableKeyPath(
+  get = get,
+  id = PathId.property(TypeId.of<Root>(), get.name),
+  valueType = TypeId.of<Value>(),
+  set = set,
+)
+
+/**
+ * Adapts a mutable property reference into a copy-based writable path.
+ *
+ * [copy] must return a distinct replacement root when value semantics are required. The mutable
+ * property setter, including a computed setter, is then invoked on that copied root.
+ */
+public fun <Root : Any, Value> writableKeyPath(
+  property: KMutableProperty1<Root, Value>,
+  id: PathId,
+  valueType: TypeId,
+  copy: (Root) -> Root,
+): WritableKeyPath<Root, Value> = writableKeyPath(
+  get = property,
+  id = id,
+  valueType = valueType,
+  set = { root, value ->
+    copy(root).also { copied -> property.set(copied, value) }
+  },
+)
+
+/** Adapts a mutable property reference while inferring its identity and complete type tokens. */
+public inline fun <reified Root : Any, reified Value> writableKeyPath(
+  property: KMutableProperty1<Root, Value>,
+  noinline copy: (Root) -> Root,
+): WritableKeyPath<Root, Value> = writableKeyPath(
+  property = property,
+  id = PathId.property(TypeId.of<Root>(), property.name),
+  valueType = TypeId.of<Value>(),
+  copy = copy,
+)
+
 /** Creates a path whose replacement mutates the supplied root instance. */
 public fun <Root : Any, Value> referenceWritableKeyPath(
   id: PathId,

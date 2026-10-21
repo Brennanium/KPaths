@@ -128,6 +128,16 @@ class GeneratedPathsTest {
   }
 
   @Test
+  fun `data-class computed vars generate copy-based writable paths`() {
+    val original = ComputedDraft(" first ")
+    val trimmedText: WritableKeyPath<ComputedDraft, String> = ComputedDraftPaths.trimmedText
+
+    assertEquals("first", trimmedText.get(original))
+    assertEquals(ComputedDraft("second"), trimmedText.set(original, " second "))
+    assertEquals(ComputedDraft(" first "), original)
+  }
+
+  @Test
   fun `model properties may be named rootType`() {
     val original = RootTypeModel(rootType = "document")
     val rootType: KeyPath<RootTypeModel, String> = RootTypeModelPaths.rootType

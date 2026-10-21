@@ -72,13 +72,22 @@ token.set(session, "new-token") // mutates this class instance
 
 The `keyPath` property-reference adapter deliberately returns a read-only `KeyPath`, even for a
 `var`. Choose reference mutation explicitly with `referenceWritableKeyPath`. For value-style
-replacement or a computed route, provide its behavior and a stable identity yourself:
+replacement, a property reference can infer the route while the caller supplies reconstruction:
+
+```kotlin
+val name = writableKeyPath(
+  get = User::name,
+  set = { user, name -> user.copy(name = name) },
+)
+```
+
+A mutable property, including a computed `var`, can instead copy first and invoke its ordinary
+setter on that copy:
 
 ```kotlin
 val displayName = writableKeyPath(
-  name = "displayName",
-  get = { user: User -> user.name },
-  set = { user, name -> user.copy(name = name) },
+  property = User::displayName,
+  copy = { user -> user.copy() },
 )
 ```
 

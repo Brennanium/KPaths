@@ -27,6 +27,17 @@ data class Draft(
 )
 
 @Pathable
+data class ComputedDraft(
+  var text: String,
+) {
+  var trimmedText: String
+    get() = text.trim()
+    set(value) {
+      text = value.trim()
+    }
+}
+
+@Pathable
 data class RootTypeModel(
   val rootType: String,
 )

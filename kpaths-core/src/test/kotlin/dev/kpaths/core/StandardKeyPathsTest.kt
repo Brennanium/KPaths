@@ -155,8 +155,32 @@ class StandardKeyPathsTest {
     assertEquals("second", session.token)
     assertEquals(writable, StandardSession::token.asReferenceWritableKeyPath())
   }
+
+  @Test
+  fun `property-reference writable factories support explicit reconstruction and copy`() {
+    val name = writableKeyPath(
+      get = StandardMutablePerson::name,
+      set = { person, value -> person.copy(name = value) },
+    )
+    val normalizedName = writableKeyPath(
+      property = StandardMutablePerson::normalizedName,
+      copy = { person -> person.copy() },
+    )
+    val original = StandardMutablePerson(" Blob ")
+
+    assertEquals(StandardMutablePerson("Jr."), name.set(original, "Jr."))
+    assertEquals(StandardMutablePerson("Jr."), normalizedName.set(original, " Jr. "))
+    assertEquals(StandardMutablePerson(" Blob "), original)
+  }
 }
 
 private data class StandardPerson(val name: String)
+private data class StandardMutablePerson(var name: String) {
+  var normalizedName: String
+    get() = name.trim()
+    set(value) {
+      name = value.trim()
+    }
+}
 private data class StandardBox<Value>(val value: Value)
 private class StandardSession(var token: String)

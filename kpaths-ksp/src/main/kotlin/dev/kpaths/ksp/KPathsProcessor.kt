@@ -372,9 +372,11 @@ private class KPathsProcessor(
     return accessibleProperties.mapNotNull { property ->
       if (property.isMutable && property.simpleName.asString() in constructorPropertyNames) {
         PathProperty(property, PathKind.COPY_WRITABLE)
+      } else if (property.isMutable && isSetterAccessible(property)) {
+        PathProperty(property, PathKind.COPY_THEN_MUTATE)
       } else if (property.isMutable) {
         logger.error(
-          "@Pathable data-class property '${property.simpleName.asString()}' must be declared in the primary constructor to receive a copy-based writable path.",
+          "@Pathable data-class property '${property.simpleName.asString()}' must be declared in the primary constructor or have an accessible setter to receive a copy-based writable path.",
           property,
         )
         null
@@ -533,11 +535,13 @@ private class KPathsProcessor(
     val pathInterface = when (pathProperty.kind) {
       PathKind.READ_ONLY -> "dev.kpaths.core.KeyPath"
       PathKind.COPY_WRITABLE -> "dev.kpaths.core.WritableKeyPath"
+      PathKind.COPY_THEN_MUTATE -> "dev.kpaths.core.WritableKeyPath"
       PathKind.REFERENCE_WRITABLE -> "dev.kpaths.core.ReferenceWritableKeyPath"
     }
     val pathBase = when (pathProperty.kind) {
       PathKind.READ_ONLY -> "dev.kpaths.core.KeyPathBase"
       PathKind.COPY_WRITABLE -> "dev.kpaths.core.WritableKeyPathBase"
+      PathKind.COPY_THEN_MUTATE -> "dev.kpaths.core.WritableKeyPathBase"
       PathKind.REFERENCE_WRITABLE -> "dev.kpaths.core.ReferenceWritableKeyPathBase"
     }
     writer.appendLine()
@@ -928,6 +932,13 @@ private class KPathsProcessor(
       PathKind.READ_ONLY -> Unit
       PathKind.COPY_WRITABLE ->
         writer.appendLine("${indent}override fun set(root: $rootKotlinType, value: $valueKotlinType): $rootKotlinType = root.copy($identifier = value)")
+      PathKind.COPY_THEN_MUTATE -> {
+        writer.appendLine("${indent}override fun set(root: $rootKotlinType, value: $valueKotlinType): $rootKotlinType {")
+        writer.appendLine("${indent}  val __kpaths_copy = root.copy()")
+        writer.appendLine("${indent}  __kpaths_copy.$identifier = value")
+        writer.appendLine("${indent}  return __kpaths_copy")
+        writer.appendLine("${indent}}")
+      }
       PathKind.REFERENCE_WRITABLE -> {
         writer.appendLine("${indent}override fun setInPlace(root: $rootKotlinType, value: $valueKotlinType) {")
         writer.appendLine("${indent}  root.$identifier = value")
@@ -984,6 +995,7 @@ private class KPathsProcessor(
   private enum class PathKind {
     READ_ONLY,
     COPY_WRITABLE,
+    COPY_THEN_MUTATE,
     REFERENCE_WRITABLE,
   }
 
