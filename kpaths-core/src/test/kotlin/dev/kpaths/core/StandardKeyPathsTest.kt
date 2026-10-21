@@ -129,14 +129,20 @@ class StandardKeyPathsTest {
   }
 
   @Test
-  fun `indexed callable references can bind their index with at`() {
-    val second: (List<String>) -> String = List<String>::get.at(1)
-    val secondSetter: (IntArray, Int) -> Unit = IntArray::set.at(1)
-    val integers = intArrayOf(0, 0)
+  fun `indexed callable references create canonical paths with at`() {
+    val second = keyPath(get = List<String>::get, at = 1)
+    val mutableSecond = referenceWritableKeyPath(
+      get = MutableList<String>::get,
+      set = MutableList<String>::set,
+      at = 1,
+    )
+    val items = mutableListOf("Blob", "Jr.")
 
-    assertEquals("Jr.", second(listOf("Blob", "Jr.")))
-    secondSetter(integers, 42)
-    assertEquals(42, integers[1])
+    assertEquals("Jr.", second.get(items))
+    assertEquals(ListPaths<String>().at(1), second)
+    assertSame(items, mutableSecond.set(items, "Revised"))
+    assertEquals(listOf("Blob", "Revised"), items)
+    assertEquals(MutableListPaths<String>().at(1), mutableSecond)
   }
 
   @Test

@@ -43,6 +43,21 @@ public inline fun <reified Root, reified Value> keyPath(
   get = get,
 )
 
+/**
+ * Creates a total read path through Kotlin's indexed `get` operation at [at].
+ *
+ * For example, `keyPath(get = List<String>::get, at = 1)` produces the same structural path as
+ * `ListPaths<String>().at(1)`.
+ */
+public inline fun <reified Root, reified Value> keyPath(
+  noinline get: (Root, Int) -> Value,
+  at: Int,
+): KeyPath<Root, Value> = keyPath(
+  id = PathId(TypeId.of<Root>(), listOf(PathSegment.Index(at))),
+  valueType = TypeId.of<Value>(),
+  get = { root -> get(root, at) },
+)
+
 /** Creates a copy-based writable path with an explicitly supplied structural identity and type token. */
 public fun <Root, Value> writableKeyPath(
   id: PathId,
@@ -202,6 +217,25 @@ public inline fun <reified Root : Any, reified Value> referenceWritableKeyPath(
   valueType = TypeId.of<Value>(),
   get = get,
   set = set,
+  rootClass = Root::class,
+)
+
+/**
+ * Creates an in-place mutable path through Kotlin's indexed `get` and `set` operations at [at].
+ *
+ * For example, `referenceWritableKeyPath(get = MutableList<String>::get, set =
+ * MutableList<String>::set, at = 1)` produces the same structural path as
+ * `MutableListPaths<String>().at(1)`.
+ */
+public inline fun <reified Root : Any, reified Value> referenceWritableKeyPath(
+  noinline get: (Root, Int) -> Value,
+  noinline set: (Root, Int, Value) -> Unit,
+  at: Int,
+): ReferenceWritableKeyPath<Root, Value> = referenceWritableKeyPath(
+  id = PathId(TypeId.of<Root>(), listOf(PathSegment.Index(at))),
+  valueType = TypeId.of<Value>(),
+  get = { root -> get(root, at) },
+  set = { root, value -> set(root, at, value) },
   rootClass = Root::class,
 )
 

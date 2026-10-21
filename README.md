@@ -144,15 +144,19 @@ objects (`IntArrayPaths`, `BooleanArrayPaths`, and the other primitive variants)
 reference-writable. Indexed reads and writes retain Kotlin's usual out-of-bounds behavior; string
 and `CharSequence` indexing follows Kotlin's UTF-16 `Char` semantics.
 
-Callable references for indexed operators can also bind an index while leaving the root open:
+Callable references for indexed operators can create canonical paths while supplying their index:
 
 ```kotlin
-val second: (List<String>) -> String = List<String>::get.at(1)
-val setSecond: (IntArray, Int) -> Unit = IntArray::set.at(1)
+val second = keyPath(get = List<String>::get, at = 1)
+
+val setSecond = referenceWritableKeyPath(
+  get = MutableList<String>::get,
+  set = MutableList<String>::set,
+  at = 1,
+)
 ```
 
-These are ordinary functions rather than KPaths; use the standard `at` path factories when a
-structurally identifiable path is needed.
+These paths use the same structural `Index` identity as the standard `at` path factories.
 
 ## Value-style and reference-style roots
 
