@@ -209,6 +209,29 @@ class KPathsProcessorIntegrationTest {
     assertContains(output, "the generated generic-path companion and the key path for property 'Companion'")
   }
 
+  @Test
+  fun `reports generated source file collisions at Pathable`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "PersonPaths.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.Pathable
+
+        @Pathable
+        data class Person(val name: String)
+      """.trimIndent(),
+    )
+
+    assertContains(output, "PersonPaths.kt:")
+    assertContains(output, "[KPaths] Cannot generate 'PersonPaths.kt' because source file")
+    assertContains(output, "@Pathable(\"CustomPersonPaths\")")
+  }
+
   private fun compileFailure(
     fixtureDirectory: Path,
     fileName: String,

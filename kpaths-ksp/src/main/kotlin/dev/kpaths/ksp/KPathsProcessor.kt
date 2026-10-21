@@ -248,13 +248,32 @@ private class KPathsProcessor(
         .forEach { add("type alias '${it.qualifiedName?.asString()}'") }
     }
     if (conflicts.isEmpty()) {
-      return true
+      return validateGeneratedFileName(declaration, resolver, packageName, generatedName)
     }
     reportPathableError(
       declaration,
       "Cannot generate '$generatedName' because it conflicts with existing top-level " +
         conflicts.joinToString(" and ") + ". Use an unused explicit name, such as " +
         "@Pathable(\"Custom$generatedName\"), or rename the existing declaration.",
+    )
+    return false
+  }
+
+  private fun validateGeneratedFileName(
+    declaration: KSClassDeclaration,
+    resolver: Resolver,
+    packageName: String,
+    generatedName: String,
+  ): Boolean {
+    val fileName = "$generatedName.kt"
+    val conflictingFile = resolver.getAllFiles().firstOrNull { file ->
+      file.packageName.asString() == packageName && file.fileName == fileName
+    } ?: return true
+    reportPathableError(
+      declaration,
+      "Cannot generate '$fileName' because source file '${conflictingFile.filePath}' has the same " +
+        "Kotlin/JVM file name. Use an unused explicit name, such as @Pathable(\"Custom$generatedName\"), " +
+        "or rename the source file.",
     )
     return false
   }
