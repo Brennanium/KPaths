@@ -128,8 +128,8 @@ val second = ListPaths<String>().at(1)
 second.get(listOf("Blob", "Jr.")) // "Jr."
 
 val items = mutableListOf("Blob", "Jr.")
-MutableListPaths<String>().at(1).set(items, "Point-Free")
-// items is now ["Blob", "Point-Free"]
+MutableListPaths<String>().at(1).set(items, "Revised")
+// items is now ["Blob", "Revised"]
 
 val scores = MapPaths<String, Int>().at("blob")
 scores.set(mapOf("blob" to 1), null) // removes "blob"
@@ -321,8 +321,7 @@ while enum entries use `NORTH`. The nested `ConnectedPaths` namespace is generat
 KSP-owned `ConnectionPaths` object; an eventual compiler-plugin façade may offer
 `Connection.Paths` as an additional spelling.
 
-For a sealed/enum root, the generated namespace is also a finite case catalog, analogous to
-Point-Free CasePaths' `AllCasePaths` surface:
+For a sealed/enum root, the generated namespace is also a finite case catalog:
 
 ```kotlin
 ConnectionPaths.allCasePaths
@@ -409,3 +408,9 @@ CustomRecordPaths.identifier
 KSP diagnoses a collision with an existing top-level type, property, or function of the generated
 name and points to `@Pathable`; it also diagnoses two `@Pathable` types that request the same
 name. Choose a different explicit name in either case.
+
+## Acknowledgments
+
+KPaths is inspired by Swift's native key-path system and
+[Point-Free's CasePaths](https://github.com/pointfreeco/swift-case-paths). It is designed as an
+independent Kotlin library with Kotlin-native APIs and semantics.

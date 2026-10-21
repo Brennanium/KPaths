@@ -40,7 +40,7 @@ class StandardKeyPathsTest {
     val paths = ListPaths<String>()
     val second = paths.at(1)
 
-    assertEquals(3, paths.size.get(listOf("Blob", "Jr.", "Point-Free")))
+    assertEquals(3, paths.size.get(listOf("Blob", "Jr.", "Revised")))
     assertEquals("Jr.", second.get(listOf("Blob", "Jr.")))
     assertEquals(second, ListPaths<String>().at(1))
     assertNotEquals(second, paths.at(0))
@@ -58,10 +58,10 @@ class StandardKeyPathsTest {
     val arrayPath: ReferenceWritableKeyPath<Array<String>, String> = ArrayPaths<String>().at(1)
     val listPath: ReferenceWritableKeyPath<MutableList<String>, String> = MutableListPaths<String>().at(1)
 
-    assertSame(array, arrayPath.set(array, "Point-Free"))
-    assertEquals(arrayOf("Blob", "Point-Free").toList(), array.toList())
-    assertSame(list, listPath.set(list, "Point-Free"))
-    assertEquals(listOf("Blob", "Point-Free"), list)
+    assertSame(array, arrayPath.set(array, "Revised"))
+    assertEquals(arrayOf("Blob", "Revised").toList(), array.toList())
+    assertSame(list, listPath.set(list, "Revised"))
+    assertEquals(listOf("Blob", "Revised"), list)
     assertEquals(TypeId.of<Array<String>>(), arrayPath.__kpaths_id.rootType)
     assertEquals(TypeId.of<MutableList<String>>(), listPath.__kpaths_id.rootType)
     assertNotEquals(TypeId.of<List<String>>(), TypeId.of<MutableList<String>>())
