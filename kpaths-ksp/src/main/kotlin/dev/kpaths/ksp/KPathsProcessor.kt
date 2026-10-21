@@ -178,6 +178,7 @@ private class KPathsProcessor(
           capturesTypeTokens = declaration.typeParameters.isNotEmpty(),
           casePath = resolvedCasePath.casePath,
           resolvedCaseType = resolvedCasePath.resolvedCaseType,
+          payload = generatedCasePayload(resolvedCasePath.casePath),
         )
       }
       if (resolvedCasePaths.isNotEmpty()) {
@@ -383,6 +384,43 @@ private class KPathsProcessor(
     }
   }
 
+  /** Returns the constructor properties that can form a lossless generated case payload path. */
+  private fun generatedCasePayload(casePath: CasePath): CasePayload? {
+    if (
+      casePath.kind != CaseKind.SEALED_VARIANT ||
+        Modifier.DATA !in casePath.declaration.modifiers
+    ) {
+      return null
+    }
+    val constructor = casePath.declaration.primaryConstructor ?: return null
+    if (Modifier.PRIVATE in constructor.modifiers || Modifier.PROTECTED in constructor.modifiers) {
+      return null
+    }
+    val parameters = constructor.parameters
+    if (parameters.size !in 1..3 || parameters.any { !it.isVal && !it.isVar }) {
+      return null
+    }
+    val propertiesByName = casePath.propertyPaths.associateBy { property ->
+      property.declaration.simpleName.asString()
+    }
+    val properties = parameters.mapNotNull { parameter ->
+      parameter.name?.asString()?.let(propertiesByName::get)
+    }
+    if (properties.size != parameters.size) {
+      return null
+    }
+    val onlyProperty = properties.singleOrNull()?.declaration?.type?.resolve()
+    if (
+      onlyProperty != null &&
+        (onlyProperty.isMarkedNullable || onlyProperty.declaration is KSTypeParameter)
+    ) {
+      // CaseKeyPath uses null to represent a failed case match, so a nullable or unconstrained
+      // type-parameter focus cannot be represented as a unary case payload path.
+      return null
+    }
+    return CasePayload(casePath, properties)
+  }
+
   private fun isAccessible(property: KSPropertyDeclaration): Boolean =
     Modifier.PRIVATE !in property.modifiers && Modifier.PROTECTED !in property.modifiers
 
@@ -464,6 +502,24 @@ private class KPathsProcessor(
         isValid = false
       }
 
+    casePaths.mapNotNull(::generatedCasePayload)
+      .takeIf { declaration.typeParameters.isEmpty() }
+      .orEmpty()
+      .filter { payload ->
+        payload.properties.size == 1 &&
+          payload.properties.single().declaration.simpleName.asString() in setOf("id", "valueType")
+      }
+      .forEach { payload ->
+        val propertyName = payload.properties.single().declaration.simpleName.asString()
+        reportPathableError(
+          declaration,
+          "Cannot generate the canonical case payload path '$propertyName' for " +
+            "'${payload.casePath.name}' because that name is already used by CaseKeyPath metadata. " +
+            "Rename the property or create this route with the manual caseKeyPath factory.",
+        )
+        isValid = false
+      }
+
     members.groupBy(GeneratedMember::name)
       .filterValues { it.size > 1 }
       .forEach { (name, collisions) ->
@@ -530,6 +586,7 @@ private class KPathsProcessor(
     capturesTypeTokens: Boolean,
     casePath: CasePath,
     resolvedCaseType: ResolvedCaseType,
+    payload: CasePayload?,
   ) {
     val caseIdentifier = escapeIdentifier(casePath.name)
 
@@ -556,6 +613,17 @@ private class KPathsProcessor(
         casePath = casePath,
         resolvedCaseType = resolvedCaseType,
       )
+      payload?.let {
+        writeCasePayloadPath(
+          writer = writer,
+          indent = "    ",
+          rootKotlinType = rootKotlinType,
+          rootTypeId = rootTypeId,
+          casePath = casePath,
+          resolvedCaseType = resolvedCaseType,
+          payload = it,
+        )
+      }
       writer.appendLine("  }")
     }
 
@@ -594,6 +662,70 @@ private class KPathsProcessor(
       }
       writer.appendLine("  }")
     }
+  }
+
+  /** Emits a reconstructable case payload path inside a non-generic concrete-case singleton. */
+  private fun writeCasePayloadPath(
+    writer: java.io.BufferedWriter,
+    indent: String,
+    rootKotlinType: String,
+    rootTypeId: String,
+    casePath: CasePath,
+    resolvedCaseType: ResolvedCaseType,
+    payload: CasePayload,
+  ) {
+    val properties = payload.properties
+    val propertyTypes = properties.map { property ->
+      property.declaration.type.resolve().renderKotlinType()
+    }
+    val focusKotlinType = when (properties.size) {
+      1 -> propertyTypes.single()
+      2 -> "kotlin.Pair<${propertyTypes.joinToString(", ")}>"
+      3 -> "kotlin.Triple<${propertyTypes.joinToString(", ")}>"
+      else -> error("Case payloads must contain one to three properties.")
+    }
+    val focusTypeId = when (properties.size) {
+      1 -> properties.single().declaration.type.resolve().renderTypeId(emptyMap())
+      2 -> "dev.kpaths.core.TypeId.of<kotlin.Pair<${propertyTypes.joinToString(", ")}>>()"
+      3 -> "dev.kpaths.core.TypeId.of<kotlin.Triple<${propertyTypes.joinToString(", ")}>>()"
+      else -> error("Case payloads must contain one to three properties.")
+    }
+    val memberName = if (properties.size == 1) {
+      properties.single().declaration.simpleName.asString()
+    } else {
+      "payload"
+    }
+    val memberIdentifier = escapeIdentifier(memberName)
+    val pathId = properties.fold(
+      "dev.kpaths.core.PathId.case($rootTypeId, \"${casePath.name}\")",
+    ) { accumulated, property ->
+      val propertyName = property.declaration.simpleName.asString()
+      "$accumulated.appending(dev.kpaths.core.PathId.property(${resolvedCaseType.typeId}, \"$propertyName\"))"
+    }
+
+    writer.appendLine()
+    writer.appendLine("${indent}public object $memberIdentifier : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, $focusKotlinType>() {")
+    writer.appendLine("${indent}  override val id: dev.kpaths.core.PathId = $pathId")
+    writer.appendLine("${indent}  override val valueType: dev.kpaths.core.TypeId = $focusTypeId")
+    writer.appendLine("${indent}  override fun extract(root: $rootKotlinType): $focusKotlinType? = (root as? ${resolvedCaseType.kotlinType})?.let { case ->")
+    when (properties.size) {
+      1 -> writer.appendLine("${indent}    case.${escapeIdentifier(properties.single().declaration.simpleName.asString())}")
+      2 -> writer.appendLine(
+        "${indent}    kotlin.Pair(${properties.joinToString(", ") { property -> "case.${escapeIdentifier(property.declaration.simpleName.asString())}" }})",
+      )
+      3 -> writer.appendLine(
+        "${indent}    kotlin.Triple(${properties.joinToString(", ") { property -> "case.${escapeIdentifier(property.declaration.simpleName.asString())}" }})",
+      )
+    }
+    writer.appendLine("${indent}  }")
+    val constructionArguments = when (properties.size) {
+      1 -> "value"
+      2 -> "value.first, value.second"
+      3 -> "value.first, value.second, value.third"
+      else -> error("Case payloads must contain one to three properties.")
+    }
+    writer.appendLine("${indent}  override fun embed(value: $focusKotlinType): $rootKotlinType = ${resolvedCaseType.kotlinType}($constructionArguments)")
+    writer.appendLine("${indent}}")
   }
 
   /** Emits the generated namespace's finite case catalog and a lookup for a root value's case. */
@@ -845,6 +977,11 @@ private class KPathsProcessor(
   private data class ResolvedCasePath(
     val casePath: CasePath,
     val resolvedCaseType: ResolvedCaseType,
+  )
+
+  private data class CasePayload(
+    val casePath: CasePath,
+    val properties: List<PathProperty>,
   )
 
   private data class GeneratedMember(

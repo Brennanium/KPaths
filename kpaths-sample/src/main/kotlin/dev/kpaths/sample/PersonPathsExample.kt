@@ -61,6 +61,14 @@ sealed interface Connection {
 }
 
 @Pathable
+sealed interface Request {
+  data class Selected(val value: String) : Request
+  data class Navigate(val id: String, val destination: String) : Request
+  data class Route(val id: String, val destination: String, val replace: Boolean) : Request
+  data class Nullable(val value: String?) : Request
+}
+
+@Pathable
 enum class Direction {
   NORTH,
   SOUTH,

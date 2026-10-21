@@ -1,5 +1,8 @@
 package dev.kpaths.sample
 
+import dev.kpaths.sample.Request.Navigate as NavigateCase
+import dev.kpaths.sample.Request.Route as RouteCase
+import dev.kpaths.sample.Request.Selected as SelectedCase
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -229,6 +232,59 @@ class GeneratedPathsTest {
       connectedWithNullHost[ConnectionPaths.Connected]
         ?.copy(host = "example.com"),
     )
+  }
+
+  @Test
+  fun `KSP generates canonical reconstructable payload paths for sealed data cases`() {
+    val selected: CaseKeyPath<Request, String> = RequestPaths.Selected.value
+    val navigate: CaseKeyPath<Request, Pair<String, String>> = RequestPaths.Navigate.payload
+    val route: CaseKeyPath<Request, Triple<String, String, Boolean>> = RequestPaths.Route.payload
+
+    assertEquals("Blob", Request.Selected("Blob")[selected])
+    assertNull(Request.Nullable(null)[selected])
+    assertEquals(Request.Selected("Jr."), selected.embed("Jr."))
+    assertEquals(
+      selected,
+      caseKeyPath<Request, Request.Selected, _>(
+        extract = Request.Selected::value,
+        embed = ::SelectedCase,
+      ),
+    )
+    assertEquals(
+      "id-1" to "settings",
+      Request.Navigate("id-1", "settings")[navigate],
+    )
+    assertEquals(
+      Request.Navigate("id-2", "profile"),
+      navigate.embed("id-2" to "profile"),
+    )
+    assertEquals(
+      navigate,
+      caseKeyPath<Request, Request.Navigate, _, _>(
+        extract1 = Request.Navigate::id,
+        extract2 = Request.Navigate::destination,
+        embed = ::NavigateCase,
+      ),
+    )
+    assertEquals(
+      Triple("id-3", "documents", true),
+      Request.Route("id-3", "documents", true)[route],
+    )
+    assertEquals(
+      Request.Route("id-4", "home", false),
+      route.embed(Triple("id-4", "home", false)),
+    )
+    assertEquals(
+      route,
+      caseKeyPath<Request, Request.Route, _, _, _>(
+        extract1 = Request.Route::id,
+        extract2 = Request.Route::destination,
+        extract3 = Request.Route::replace,
+        embed = ::RouteCase,
+      ),
+    )
+    assertEquals("Blob", Request.Selected("Blob")[RequestPaths.SelectedPaths.value])
+    assertEquals(null, Request.Nullable(null)[RequestPaths.NullablePaths.value])
   }
 
   @Test

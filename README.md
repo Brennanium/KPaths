@@ -208,6 +208,34 @@ val connected = caseKeyPath<Connection, Connection.Connected>()
 connection[connected] // Connection.Connected(host = null)
 ```
 
+For non-generic sealed roots, KSP additionally emits canonical payload paths whenever a data-class
+case has one to three accessible primary-constructor properties and can therefore be reconstructed
+without guessing:
+
+```kotlin
+@Pathable
+sealed interface Request {
+  data class Selected(val value: String) : Request
+  data class Navigate(val id: String, val destination: String) : Request
+  data class Route(val id: String, val destination: String, val replace: Boolean) : Request
+}
+
+RequestPaths.Selected.value
+// CaseKeyPath<Request, String>
+
+RequestPaths.Navigate.payload
+// CaseKeyPath<Request, Pair<String, String>>
+
+RequestPaths.Route.payload
+// CaseKeyPath<Request, Triple<String, String, Boolean>>
+```
+
+The outer case singleton remains available (`RequestPaths.Navigate`), and the ordinary structural
+property paths remain under `RequestPaths.NavigatePaths.id` and `.destination`. A unary nullable
+property does not receive a canonical payload path because `CaseKeyPath` reserves `null` for a
+failed match; its ordinary key path is still generated. Generic sealed roots retain their existing
+case and property paths for now.
+
 An enum entry has no distinct Kotlin type, so pass its singleton value instead:
 
 ```kotlin
