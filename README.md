@@ -33,10 +33,13 @@ data class Person(val name: String, val age: Int, val address: Address)
 @Pathable
 data class Address(val city: String)
 
-PersonPaths.name.get(Person("Blob", 100, Address("Paris")))
+Person("Blob", 100, Address("Paris"))[PersonPaths.name]
 // "Blob"
 
-PersonPaths.name.set(Person("Blob", 100, Address("Paris")), "Blob Jr.")
+Person("Blob", 100, Address("Paris")).set(
+  keyPath = PersonPaths.name,
+  value = "Blob Jr.",
+)
 // Person(name = "Blob Jr.", age = 100, address = Address(city = "Paris"))
 ```
 
@@ -47,7 +50,7 @@ path, so nested immutable updates stay concise:
 import dev.kpaths.core.then
 
 val city = PersonPaths.address.then(AddressPaths.city)
-val updated = city.set(person, "Toronto")
+val updated = person.setting(city, "Toronto")
 ```
 
 ## Value-style and reference-style roots
@@ -59,7 +62,9 @@ as a value-style model: primary-constructor properties receive copy-based `Writa
 @Pathable
 data class Draft(var text: String)
 
-val updated = DraftPaths.text.set(draft, "Revised") // returns draft.copy(text = "Revised")
+val text = draft[DraftPaths.text]
+val updated = draft.setting(DraftPaths.text, "Revised") // returns draft.copy(text = "Revised")
+val uppercased = updated.modifying(DraftPaths.text) { it.uppercase() }
 ```
 
 An annotated plain class instead exposes its accessible mutable properties as
@@ -69,8 +74,9 @@ An annotated plain class instead exposes its accessible mutable properties as
 @Pathable
 class Session(var token: String, val identifier: String)
 
-SessionPaths.token.setInPlace(session, "new-token")
-SessionPaths.identifier.get(session)
+session[SessionPaths.token] = "new-token"
+session.set(keyPath = SessionPaths.token, value = "another-token")
+session[SessionPaths.identifier]
 ```
 
 The generated path's equality and hash code are based on its `PathId`, rather than closure or

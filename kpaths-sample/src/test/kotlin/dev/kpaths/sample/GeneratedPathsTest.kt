@@ -9,6 +9,10 @@ import dev.kpaths.core.ReferenceWritableKeyPath
 import dev.kpaths.core.TypeArgument
 import dev.kpaths.core.TypeId
 import dev.kpaths.core.WritableKeyPathBase
+import dev.kpaths.core.get
+import dev.kpaths.core.modifying
+import dev.kpaths.core.set
+import dev.kpaths.core.setting
 import dev.kpaths.core.then
 
 class GeneratedPathsTest {
@@ -97,10 +101,17 @@ class GeneratedPathsTest {
   fun `data-class writable paths copy even when the property is mutable`() {
     val original = Draft(text = "first")
 
-    val updated = DraftPaths.text.set(original, "second")
+    assertEquals("first", original[DraftPaths.text])
+    assertEquals("first", original.get(keyPath = DraftPaths.text))
+
+    val updated = original.set(keyPath = DraftPaths.text, value = "second")
+    val modified = updated.modifying(DraftPaths.text) { it.uppercase() }
+    val reset = modified.setting(DraftPaths.text, "first")
 
     assertEquals("first", original.text)
     assertEquals("second", updated.text)
+    assertEquals("SECOND", modified.text)
+    assertEquals("first", reset.text)
   }
 
   @Test
@@ -112,6 +123,11 @@ class GeneratedPathsTest {
 
     assertSame(session, returned)
     assertEquals("second", session.token)
+
+    session[SessionPaths.token] = "third"
+    assertEquals("third", session.token)
+    assertSame(session, session.set(keyPath = SessionPaths.token, value = "fourth"))
+    assertEquals("fourth", session.token)
   }
 
   @Test
