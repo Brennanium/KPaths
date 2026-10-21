@@ -55,6 +55,7 @@ private class KPathsProcessor(
     }
     val packageName = declaration.packageName.asString()
     val generatedName = generatedObjectName(qualifiedName, packageName)
+    val generatedIdentifier = escapeIdentifier(generatedName)
     val pathProperties = pathProperties(declaration)
     val casePaths = casePaths(declaration)
     if (!validateGeneratedMemberNames(declaration, pathProperties, casePaths)) {
@@ -66,9 +67,10 @@ private class KPathsProcessor(
     val typeTokenArgumentNames = declaration.typeParameters.associate { parameter ->
       parameter.name.asString() to typeTokenArgumentName(parameter.name.asString())
     }
-    val rootKotlinType = qualifiedName + declaration.typeParameters
+    val generatedRootTypeName = generatedInternalPrefix + "rootType"
+    val rootKotlinType = renderKotlinQualifiedName(qualifiedName) + declaration.typeParameters
       .takeIf { it.isNotEmpty() }
-      ?.joinToString(prefix = "<", postfix = ">") { it.name.asString() }
+      ?.joinToString(prefix = "<", postfix = ">") { escapeIdentifier(it.name.asString()) }
       .orEmpty()
     val rootTypeId = renderDeclaredTypeId(qualifiedName, declaration.typeParameters, typeTokenNames)
     val containingFile = declaration.containingFile ?: run {
@@ -88,37 +90,37 @@ private class KPathsProcessor(
       writer.appendLine()
       writer.appendLine("/** Generated paths for $qualifiedName. */")
       if (declaration.typeParameters.isEmpty()) {
-        writer.appendLine("public object $generatedName {")
+        writer.appendLine("public object $generatedIdentifier {")
       } else {
-        val typeParameters = declaration.typeParameters.joinToString { it.name.asString() }
+        val typeParameters = declaration.typeParameters.joinToString { escapeIdentifier(it.name.asString()) }
         val tokenParameters = declaration.typeParameters.joinToString(", ") { parameter ->
           "${typeTokenArgumentNames.getValue(parameter.name.asString())}: dev.kpaths.core.TypeId"
         }
         val constructorParameters = typeTokenNames.values.joinToString(", ") { name ->
           "private val $name: dev.kpaths.core.TypeId"
         }
-        writer.appendLine("public class $generatedName<$typeParameters> private constructor(")
+        writer.appendLine("public class $generatedIdentifier<$typeParameters> private constructor(")
         writer.appendLine("  $constructorParameters,")
         writer.appendLine(") {")
         writer.appendLine("  public companion object {")
-        writer.appendLine("    public fun <$typeParameters> of($tokenParameters): $generatedName<$typeParameters> =")
-        writer.appendLine("      $generatedName(${declaration.typeParameters.joinToString { typeTokenArgumentNames.getValue(it.name.asString()) }})")
+        writer.appendLine("    public fun <$typeParameters> of($tokenParameters): $generatedIdentifier<$typeParameters> =")
+        writer.appendLine("      $generatedIdentifier(${declaration.typeParameters.joinToString { typeTokenArgumentNames.getValue(it.name.asString()) }})")
         val classTokenParameters = declaration.typeParameters.joinToString(", ") { parameter ->
-          "${typeTokenClassArgumentName(parameter.name.asString())}: kotlin.reflect.KClass<${parameter.name.asString()}>"
+          "${typeTokenClassArgumentName(parameter.name.asString())}: kotlin.reflect.KClass<${escapeIdentifier(parameter.name.asString())}>"
         }
         val nonNullTypeParameters = declaration.typeParameters.joinToString(", ") { parameter ->
-          "${parameter.name.asString()} : Any"
+          "${escapeIdentifier(parameter.name.asString())} : Any"
         }
-        writer.appendLine("    public fun <$nonNullTypeParameters> of($classTokenParameters): $generatedName<$typeParameters> =")
-        writer.appendLine("      $generatedName(${declaration.typeParameters.joinToString { "dev.kpaths.core.TypeId.from(${typeTokenClassArgumentName(it.name.asString())})" }})")
+        writer.appendLine("    public fun <$nonNullTypeParameters> of($classTokenParameters): $generatedIdentifier<$typeParameters> =")
+        writer.appendLine("      $generatedIdentifier(${declaration.typeParameters.joinToString { "dev.kpaths.core.TypeId.from(${typeTokenClassArgumentName(it.name.asString())})" }})")
         writer.appendLine("  }")
       }
-      writer.appendLine("  public val rootType: dev.kpaths.core.TypeId = $rootTypeId")
+      writer.appendLine("  private val $generatedRootTypeName: dev.kpaths.core.TypeId = $rootTypeId")
       pathProperties.forEach { property ->
         writePropertyPath(
           writer = writer,
           rootKotlinType = rootKotlinType,
-          rootTypeId = rootTypeId,
+          rootTypeId = generatedRootTypeName,
           pathProperty = property,
           typeTokenNames = typeTokenNames,
           capturesTypeTokens = declaration.typeParameters.isNotEmpty(),
@@ -129,7 +131,7 @@ private class KPathsProcessor(
         writeCasePath(
           writer = writer,
           rootKotlinType = rootKotlinType,
-          rootTypeId = rootTypeId,
+          rootTypeId = generatedRootTypeName,
           rootDeclaration = declaration,
           rootTypeTokenNames = typeTokenNames,
           capturesTypeTokens = declaration.typeParameters.isNotEmpty(),
@@ -138,11 +140,11 @@ private class KPathsProcessor(
       }
       writer.appendLine("}")
       if (declaration.typeParameters.isNotEmpty()) {
-        val typeParameters = declaration.typeParameters.joinToString { "reified ${it.name.asString()}" }
+        val typeParameters = declaration.typeParameters.joinToString { "reified ${escapeIdentifier(it.name.asString())}" }
         writer.appendLine()
-        val returnTypeParameters = declaration.typeParameters.joinToString { it.name.asString() }
-        writer.appendLine("public inline fun <$typeParameters> $generatedName(): $generatedName<$returnTypeParameters> =")
-        writer.appendLine("  $generatedName.of(${declaration.typeParameters.joinToString { "dev.kpaths.core.TypeId.of<${it.name.asString()}>()" }})")
+        val returnTypeParameters = declaration.typeParameters.joinToString { escapeIdentifier(it.name.asString()) }
+        writer.appendLine("public inline fun <$typeParameters> $generatedIdentifier(): $generatedIdentifier<$returnTypeParameters> =")
+        writer.appendLine("  $generatedIdentifier.of(${declaration.typeParameters.joinToString { "dev.kpaths.core.TypeId.of<${escapeIdentifier(it.name.asString())}>()" }})")
       }
     }
   }
@@ -259,9 +261,7 @@ private class KPathsProcessor(
     pathProperties: List<PathProperty>,
     casePaths: List<CasePath>,
   ): Boolean {
-    val members = mutableListOf(
-      GeneratedMember(name = "rootType", description = "KPaths root-type metadata"),
-    )
+    val members = mutableListOf<GeneratedMember>()
 
     pathProperties.forEach { property ->
       members += GeneratedMember(
@@ -469,7 +469,7 @@ private class KPathsProcessor(
     resolvedCaseType: ResolvedCaseType,
     caseProperties: List<PathProperty>,
   ) {
-    val rootTypeParameters = rootDeclaration.typeParameters.joinToString { it.name.asString() }
+    val rootTypeParameters = rootDeclaration.typeParameters.joinToString { escapeIdentifier(it.name.asString()) }
     val tokenParameters = rootDeclaration.typeParameters.joinToString(", ") { parameter ->
       "private val ${rootTypeTokenNames.getValue(parameter.name.asString())}: dev.kpaths.core.TypeId"
     }
@@ -527,7 +527,7 @@ private class KPathsProcessor(
         return null
       }
       return ResolvedCaseType(
-        kotlinType = caseQualifiedName,
+        kotlinType = renderKotlinQualifiedName(caseQualifiedName),
         typeId = renderDeclaredTypeId(caseQualifiedName, emptyList(), emptyMap()),
         typeParameterSubstitutions = emptyMap(),
         typeTokenSubstitutions = emptyMap(),
@@ -597,10 +597,10 @@ private class KPathsProcessor(
     }
 
     val caseTypeArguments = caseDeclaration.typeParameters.joinToString { parameter ->
-      kotlinSubstitutions.getValue(parameter.name.asString())
+      escapeIdentifier(kotlinSubstitutions.getValue(parameter.name.asString()))
     }
     return ResolvedCaseType(
-      kotlinType = caseQualifiedName + caseTypeArguments.takeIf { it.isNotEmpty() }
+      kotlinType = renderKotlinQualifiedName(caseQualifiedName) + caseTypeArguments.takeIf { it.isNotEmpty() }
         ?.let { "<$it>" }
         .orEmpty(),
       typeId = renderDeclaredTypeId(caseQualifiedName, caseDeclaration.typeParameters, tokenSubstitutions),
@@ -695,9 +695,12 @@ private class KPathsProcessor(
     if (typeDeclaration is KSTypeParameter) {
       val name = typeParameterSubstitutions[typeDeclaration.name.asString()]
         ?: typeDeclaration.name.asString()
-      return name + if (isMarkedNullable) "?" else ""
+      return escapeIdentifier(name) + if (isMarkedNullable) "?" else ""
     }
-    val declarationName = typeDeclaration.qualifiedName?.asString() ?: typeDeclaration.simpleName.asString()
+    val declarationName = typeDeclaration.qualifiedName
+      ?.asString()
+      ?.let(::renderKotlinQualifiedName)
+      ?: escapeIdentifier(typeDeclaration.simpleName.asString())
     val arguments = arguments
       .takeIf { it.isNotEmpty() }
       ?.joinToString(prefix = "<", postfix = ">") { argument ->
@@ -753,8 +756,18 @@ private class KPathsProcessor(
   private fun typeTokenClassArgumentName(parameterName: String): String =
     escapeIdentifier(parameterName.replaceFirstChar { it.lowercaseChar() } + "Type")
 
+  private fun renderKotlinQualifiedName(qualifiedName: String): String =
+    qualifiedName.split('.').joinToString(".", transform = ::escapeIdentifier)
+
   private fun escapeIdentifier(identifier: String): String =
-    if (identifier in kotlinKeywords) "`$identifier`" else identifier
+    if (identifier in kotlinKeywords || !identifier.isKotlinIdentifier()) "`$identifier`" else identifier
+
+  private fun String.isKotlinIdentifier(): Boolean =
+    isNotEmpty() && first().isLetterOrUnderscore() && drop(1).all { it.isLetterOrDigitOrUnderscore() }
+
+  private fun Char.isLetterOrUnderscore(): Boolean = isLetter() || this == '_'
+
+  private fun Char.isLetterOrDigitOrUnderscore(): Boolean = isLetterOrDigit() || this == '_'
 
   private companion object {
     private const val generatedInternalPrefix = "__kpaths_"

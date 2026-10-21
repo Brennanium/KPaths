@@ -34,12 +34,12 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports public generated member collisions at Pathable`(
+  fun `reports use of KPaths reserved internal prefix at Pathable`(
     @TempDir fixtureDirectory: Path,
   ) {
     val output = compileFailure(
       fixtureDirectory = fixtureDirectory,
-      fileName = "ReservedName.kt",
+      fileName = "ReservedPrefix.kt",
       source =
       """
         package fixture
@@ -47,13 +47,13 @@ class KPathsProcessorIntegrationTest {
         import dev.kpaths.annotations.Pathable
 
         @Pathable
-        data class ReservedName(val rootType: String)
+        data class ReservedPrefix(val __kpaths_rootType: String)
       """.trimIndent(),
     )
 
-    assertContains(output, "ReservedName.kt:")
-    assertContains(output, "[KPaths] Cannot generate paths because 'rootType' would name both")
-    assertContains(output, "KPaths root-type metadata and the key path for property 'rootType'")
+    assertContains(output, "ReservedPrefix.kt:")
+    assertContains(output, "[KPaths] Cannot generate paths because property '__kpaths_rootType'")
+    assertContains(output, "uses the reserved '__kpaths_' prefix")
   }
 
   @Test

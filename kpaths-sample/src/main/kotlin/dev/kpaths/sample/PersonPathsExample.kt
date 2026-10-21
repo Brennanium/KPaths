@@ -27,6 +27,11 @@ data class Draft(
 )
 
 @Pathable
+data class RootTypeModel(
+  val rootType: String,
+)
+
+@Pathable
 class Session(
   var token: String,
   val identifier: String,
@@ -47,6 +52,16 @@ enum class Direction {
 @Pathable
 enum class KeywordDirection {
   `when`,
+}
+
+@Pathable
+data class KeywordProperty(
+  val `display name`: String,
+)
+
+@Pathable
+sealed interface KeywordCase {
+  data class `when`(val value: String) : KeywordCase
 }
 
 @Pathable

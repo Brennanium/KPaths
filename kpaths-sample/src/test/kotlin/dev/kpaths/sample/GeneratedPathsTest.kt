@@ -119,6 +119,17 @@ class GeneratedPathsTest {
   }
 
   @Test
+  fun `model properties may be named rootType`() {
+    val original = RootTypeModel(rootType = "document")
+
+    assertEquals("document", original[RootTypeModelPaths.rootType])
+    assertEquals(
+      RootTypeModel(rootType = "folder"),
+      original.setting(RootTypeModelPaths.rootType, "folder"),
+    )
+  }
+
+  @Test
   fun `plain-class mutable properties generate reference-writable paths`() {
     val token: ReferenceWritableKeyPath<Session, String> = SessionPaths.token
     val session = Session(token = "first", identifier = "session-1")
@@ -146,7 +157,6 @@ class GeneratedPathsTest {
     val connected: CaseKeyPath<Connection, Connection.Connected> = ConnectionPaths.Connected
     val connectedWithNullHost = Connection.Connected(host = null)
 
-    assertEquals(TypeId("dev.kpaths.sample.Connection"), ConnectionPaths.rootType)
     assertEquals(connectedWithNullHost, connectedWithNullHost[ConnectionPaths.Connected])
     assertEquals(
       connectedWithNullHost,
@@ -198,6 +208,16 @@ class GeneratedPathsTest {
   fun `KSP preserves keyword enum case names with Kotlin backticks`() {
     assertEquals(Unit, KeywordDirection.`when`[KeywordDirectionPaths.`when`])
     assertEquals(KeywordDirection.`when`, KeywordDirectionPaths.`when`.embed(Unit))
+  }
+
+  @Test
+  fun `KSP preserves backticked property and sealed case names`() {
+    val property = KeywordProperty(`display name` = "Blob")
+    val state: KeywordCase = KeywordCase.`when`("now")
+
+    assertEquals("Blob", property[KeywordPropertyPaths.`display name`])
+    assertEquals(KeywordCase.`when`("now"), state[KeywordCasePaths.`when`])
+    assertEquals("now", state[KeywordCasePaths.`when`]?.get(keyPath = KeywordCasePaths.whenPaths.value))
   }
 
   @Test

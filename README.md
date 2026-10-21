@@ -134,8 +134,22 @@ while enum entries use `NORTH`. The nested `ConnectedPaths` namespace is generat
 KSP-owned `ConnectionPaths` object; an eventual compiler-plugin façade may offer
 `Connection.Paths` as an additional spelling.
 
-Kotlin keywords remain valid case names when the original declaration and generated path use
-backticks, such as ``KeywordDirectionPaths.`when` ``.
+Kotlin backticked identifiers remain valid in generated paths. KSP preserves their semantic name
+and emits the required backticks for properties, enum entries, and sealed cases:
+
+```kotlin
+@Pathable
+data class KeywordProperty(val `display name`: String)
+
+KeywordProperty("Blob")[KeywordPropertyPaths.`display name`]
+// "Blob"
+
+@Pathable
+enum class KeywordDirection { `when` }
+
+KeywordDirection.`when`[KeywordDirectionPaths.`when`]
+// Unit
+```
 ## Enum case paths
 
 Enum entries have no associated data, so their generated `CaseKeyPath` focus is Kotlin's `Unit`
@@ -177,6 +191,6 @@ a variant as every specialization of the root.
 ## Generated-name collisions
 
 KPaths preserves declared property and case names rather than silently renaming public paths. If
-two generated members would share a namespace—for example, a `rootType` property conflicting with
-the generated `rootType` metadata—KSP reports an error at `@Pathable` explaining both members.
-Names beginning with `__kpaths_` are reserved for generator implementation details.
+two generated members would share a namespace—for example, a `Connected` property and a
+`Connected` sealed case—KSP reports an error at `@Pathable` explaining both members. Names
+beginning with `__kpaths_` are reserved for generator implementation details.
