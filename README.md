@@ -54,6 +54,40 @@ val city = PersonPaths.address.then(AddressPaths.city)
 val updated = person.setting(city, "Toronto")
 ```
 
+## Identity and standard-library paths
+
+`identityKeyPath` focuses an entire value. It is a copy-based `WritableKeyPath`: replacing its
+focus simply returns the replacement root.
+
+```kotlin
+val wholePerson = identityKeyPath<Person>()
+
+wholePerson.get(person)                  // person
+wholePerson.set(person, replacement)     // replacement
+```
+
+KPaths also bundles stable paths for a small set of unambiguous Kotlin standard types. Generic
+namespaces capture their concrete type arguments, just as generated namespaces do:
+
+```kotlin
+StringPaths.length.get("Blob") // 4
+
+val pair = PairPaths<String, Int>()
+pair.first.get("Blob" to 42) // "Blob"
+
+val second = ListPaths<String>().at(1)
+second.get(listOf("Blob", "Jr.")) // "Jr."
+
+val items = mutableListOf("Blob", "Jr.")
+MutableListPaths<String>().at(1).set(items, "Point-Free")
+// items is now ["Blob", "Point-Free"]
+```
+
+`PairPaths` and `TriplePaths` are read-only. `ListPaths` is read-only, including indexed paths;
+`ArrayPaths` and `MutableListPaths` expose reference-writable indexed paths because Kotlin lets
+those collections mutate their existing instances. Indexed reads and writes retain Kotlin's usual
+out-of-bounds behavior.
+
 ## Value-style and reference-style roots
 
 Kotlin data classes are reference objects, but KPaths deliberately treats an annotated data class

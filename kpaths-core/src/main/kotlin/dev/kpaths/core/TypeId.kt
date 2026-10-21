@@ -39,7 +39,7 @@ public class TypeId(
     /** Converts Kotlin reflection metadata into the stable representation used by paths. */
     public fun from(type: KType): TypeId {
       val classifier = when (val classifier = type.classifier) {
-        is KClass<*> -> classifier.qualifiedName
+        is KClass<*> -> classifier.classifierName(type)
         is KTypeParameter -> classifier.name
         else -> null
       } ?: error("Local and anonymous types cannot form stable TypeIds.")
@@ -53,6 +53,26 @@ public class TypeId(
         }
       }
       return TypeId(classifier, arguments, type.isMarkedNullable)
+    }
+
+    /**
+     * Kotlin/JVM reflection exposes mutable collection interfaces through the same [KClass] as
+     * their read-only counterparts. Its rendered [KType] retains the source-level mutability,
+     * which is significant to a path's capabilities and therefore its identity.
+     */
+    private fun KClass<*>.classifierName(type: KType): String? {
+      val className = this.qualifiedName ?: return null
+      val renderedClassifier = type.toString()
+        .removeSuffix("?")
+        .substringBefore('<')
+      return if (
+        className == "kotlin.collections.List" &&
+          renderedClassifier == "kotlin.collections.MutableList"
+      ) {
+        renderedClassifier
+      } else {
+        className
+      }
     }
   }
 

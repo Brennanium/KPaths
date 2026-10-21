@@ -43,6 +43,12 @@ data class PairBox<Value, value>(
 )
 
 @Pathable
+data class CollectionHolder(
+  val immutable: List<String>,
+  var mutable: MutableList<String>,
+)
+
+@Pathable
 class Session(
   var token: String,
   val identifier: String,

@@ -147,6 +147,13 @@ class GeneratedPathsTest {
   }
 
   @Test
+  fun `generated paths preserve mutable collection type identities`() {
+    assertEquals(TypeId.of<List<String>>(), CollectionHolderPaths.immutable.valueType)
+    assertEquals(TypeId.of<MutableList<String>>(), CollectionHolderPaths.mutable.valueType)
+    assertNotEquals(CollectionHolderPaths.immutable.valueType, CollectionHolderPaths.mutable.valueType)
+  }
+
+  @Test
   fun `plain-class mutable properties generate reference-writable paths`() {
     val token: ReferenceWritableKeyPath<Session, String> = SessionPaths.token
     val session = Session(token = "first", identifier = "session-1")
