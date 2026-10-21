@@ -26,6 +26,22 @@ public inline fun <reified Root, reified Value> keyPath(
   noinline get: (Root) -> Value,
 ): KeyPath<Root, Value> = keyPath(id, TypeId.of<Value>(), get)
 
+/**
+ * Creates a custom read path with a root-local stable [name].
+ *
+ * The root's complete type token is captured automatically, so two paths with the same [name]
+ * but different root specializations remain distinct. Use the [PathId]-taking overload only when
+ * a custom multi-segment identity is necessary.
+ */
+public inline fun <reified Root, reified Value> keyPath(
+  name: String,
+  noinline get: (Root) -> Value,
+): KeyPath<Root, Value> = keyPath(
+  id = PathId.custom(TypeId.of<Root>(), name),
+  valueType = TypeId.of<Value>(),
+  get = get,
+)
+
 /** Creates a copy-based writable path with an explicitly supplied structural identity and type token. */
 public fun <Root, Value> writableKeyPath(
   id: PathId,
@@ -54,6 +70,23 @@ public inline fun <reified Root, reified Value> writableKeyPath(
   noinline get: (Root) -> Value,
   noinline set: (Root, Value) -> Root,
 ): WritableKeyPath<Root, Value> = writableKeyPath(id, TypeId.of<Value>(), get, set)
+
+/**
+ * Creates a custom copy-based writable path with a root-local stable [name].
+ *
+ * The root's complete type token is captured automatically. Use the [PathId]-taking overload
+ * only when a custom multi-segment identity is necessary.
+ */
+public inline fun <reified Root, reified Value> writableKeyPath(
+  name: String,
+  noinline get: (Root) -> Value,
+  noinline set: (Root, Value) -> Root,
+): WritableKeyPath<Root, Value> = writableKeyPath(
+  id = PathId.custom(TypeId.of<Root>(), name),
+  valueType = TypeId.of<Value>(),
+  get = get,
+  set = set,
+)
 
 /** Creates a path whose replacement mutates the supplied root instance. */
 public fun <Root : Any, Value> referenceWritableKeyPath(
@@ -86,6 +119,23 @@ public inline fun <reified Root : Any, reified Value> referenceWritableKeyPath(
   noinline set: (Root, Value) -> Unit,
 ): ReferenceWritableKeyPath<Root, Value> =
   referenceWritableKeyPath(id, TypeId.of<Value>(), get, set)
+
+/**
+ * Creates a custom in-place writable path with a root-local stable [name].
+ *
+ * The root's complete type token is captured automatically. Use the [PathId]-taking overload
+ * only when a custom multi-segment identity is necessary.
+ */
+public inline fun <reified Root : Any, reified Value> referenceWritableKeyPath(
+  name: String,
+  noinline get: (Root) -> Value,
+  noinline set: (Root, Value) -> Unit,
+): ReferenceWritableKeyPath<Root, Value> = referenceWritableKeyPath(
+  id = PathId.custom(TypeId.of<Root>(), name),
+  valueType = TypeId.of<Value>(),
+  get = get,
+  set = set,
+)
 
 /**
  * Adapts a Kotlin property reference into a read-only path.

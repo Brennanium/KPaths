@@ -74,7 +74,7 @@ replacement or a computed route, provide its behavior and a stable identity your
 
 ```kotlin
 val displayName = writableKeyPath(
-  id = PathId.custom(TypeId.of<User>(), "example.User.displayName"),
+  name = "displayName",
   get = { user: User -> user.name },
   set = { user, name -> user.copy(name = name) },
 )
@@ -82,7 +82,9 @@ val displayName = writableKeyPath(
 
 Property-reference adapters preserve the concrete root and focus generic arguments at reified call
 sites. In a non-reified generic context, use the overload that takes an explicit `valueType`
-token (and a `PathId` with the root token you intend).
+token (and a `PathId` with the root token you intend). The named custom factories capture the
+root token automatically; their name only needs to be stable within that root type. The `PathId`
+overloads remain available for a deliberately custom multi-segment identity.
 
 ## Identity and standard-library paths
 

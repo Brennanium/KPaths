@@ -93,6 +93,38 @@ class StandardKeyPathsTest {
   }
 
   @Test
+  fun `named factories derive the root identity automatically`() {
+    val normalizedName = keyPath<StandardPerson, String>(
+      name = "normalizedName",
+      get = { person -> person.name.trim().lowercase() },
+    )
+    val inferredNormalizedName = keyPath(name = "normalizedName") { person: StandardPerson ->
+      person.name.trim().lowercase()
+    }
+    val renamed = writableKeyPath<StandardPerson, String>(
+      name = "name",
+      get = StandardPerson::name,
+      set = { person, name -> person.copy(name = name) },
+    )
+    val session = StandardSession("first")
+    val token = referenceWritableKeyPath<StandardSession, String>(
+      name = "token",
+      get = StandardSession::token,
+      set = { target, value -> target.token = value },
+    )
+
+    assertEquals("blob", normalizedName.get(StandardPerson(" Blob ")))
+    assertEquals(
+      PathId.custom(TypeId.of<StandardPerson>(), "normalizedName"),
+      normalizedName.id,
+    )
+    assertEquals(normalizedName, inferredNormalizedName)
+    assertEquals(StandardPerson("Jr."), renamed.set(StandardPerson("Blob"), "Jr."))
+    assertSame(session, token.set(session, "second"))
+    assertEquals("second", session.token)
+  }
+
+  @Test
   fun `property-reference adapters preserve concrete generic type identities`() {
     val stringProperty: KProperty1<StandardBox<String>, String> = StandardBox<String>::value
     val intProperty: KProperty1<StandardBox<Int>, Int> = StandardBox<Int>::value
