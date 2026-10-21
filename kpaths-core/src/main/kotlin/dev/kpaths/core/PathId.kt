@@ -14,11 +14,24 @@ public class PathId(
   public val segments: List<PathSegment> = segments.toList()
 
   public companion object {
+    /** The identity route that focuses an entire root value. */
+    public fun identity(rootType: TypeId): PathId = PathId(rootType, emptyList())
+
     public fun property(rootType: TypeId, name: String): PathId =
       PathId(rootType, listOf(PathSegment.Property(name)))
 
     public fun case(rootType: TypeId, name: String): PathId =
       PathId(rootType, listOf(PathSegment.Case(name)))
+
+    /**
+     * An explicitly named route for a manual or computed path.
+     *
+     * Use a stable, library-qualified name when paths may need to compare equal across call
+     * sites. A custom route deliberately remains distinct from a stored property of the same
+     * spelling.
+     */
+    public fun custom(rootType: TypeId, name: String): PathId =
+      PathId(rootType, listOf(PathSegment.Custom(name)))
   }
 
   public fun appending(segment: PathSegment): PathId =
@@ -45,6 +58,7 @@ public class PathId(
 public sealed interface PathSegment {
   public data class Property(public val name: String) : PathSegment
   public data class Case(public val name: String) : PathSegment
+  public data class Custom(public val name: String) : PathSegment
   public data class Index(public val value: Int) : PathSegment
   public data class Key(public val value: Any?) : PathSegment
 }

@@ -1,9 +1,10 @@
 # KPaths
 
-KPaths is a Kotlin path library inspired by Swift key paths and case paths. It provides generated,
-stable, typed property and case paths for ordinary Kotlin models; reducer-based architectures are
-one future use case, not the library's framing. Apply one `@Pathable` annotation: data/class
-properties generate key paths, while sealed variants generate case key paths.
+KPaths is a Kotlin path library inspired by Swift key paths and case paths. It provides stable,
+typed property and case paths for ordinary Kotlin models; reducer-based architectures are one
+future use case, not the library's framing. Any accessible Kotlin property can become a manual
+key path; `@Pathable` generates named, optimized paths for models you own. Data/class properties
+generate key paths, while sealed variants generate case key paths.
 
 ## Modules
 
@@ -53,6 +54,35 @@ import dev.kpaths.core.then
 val city = PersonPaths.address.then(AddressPaths.city)
 val updated = person.setting(city, "Toronto")
 ```
+
+## Paths for any Kotlin type
+
+`@Pathable` is convenience and source generation, not a requirement. Kotlin property references
+provide a concise manual route for accessible properties, including types from another library:
+
+```kotlin
+val title = keyPath(ThirdPartyArticle::title)
+title.get(article)
+
+val token = referenceWritableKeyPath(ThirdPartySession::token)
+token.set(session, "new-token") // mutates this class instance
+```
+
+The `keyPath` property-reference adapter deliberately returns a read-only `KeyPath`, even for a
+`var`. Choose reference mutation explicitly with `referenceWritableKeyPath`. For value-style
+replacement or a computed route, provide its behavior and a stable identity yourself:
+
+```kotlin
+val displayName = writableKeyPath(
+  id = PathId.custom(TypeId.of<User>(), "example.User.displayName"),
+  get = { user: User -> user.name },
+  set = { user, name -> user.copy(name = name) },
+)
+```
+
+Property-reference adapters preserve the concrete root and focus generic arguments at reified call
+sites. In a non-reified generic context, use the overload that takes an explicit `valueType`
+token (and a `PathId` with the root token you intend).
 
 ## Identity and standard-library paths
 

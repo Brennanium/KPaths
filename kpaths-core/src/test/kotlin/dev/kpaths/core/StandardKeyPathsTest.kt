@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
 import kotlin.test.assertSame
+import kotlin.reflect.KProperty1
 
 class StandardKeyPathsTest {
   @Test
@@ -65,6 +66,65 @@ class StandardKeyPathsTest {
     assertNotEquals(TypeId.of<List<String>>(), TypeId.of<MutableList<String>>())
     assertNotEquals<Any?>(ListPaths<String>().at(1), listPath)
   }
+
+  @Test
+  fun `manual factories provide stable paths for computed and copy-based routes`() {
+    val normalizedName = keyPath(
+      id = PathId.custom(TypeId.of<StandardPerson>(), "test.StandardPerson.normalizedName"),
+      get = { person: StandardPerson -> person.name.trim().lowercase() },
+    )
+    val renamed = writableKeyPath(
+      id = PathId.property(TypeId.of<StandardPerson>(), "name"),
+      get = StandardPerson::name,
+      set = { person, name -> person.copy(name = name) },
+    )
+    val original = StandardPerson(" Blob ")
+
+    assertEquals("blob", normalizedName.get(original))
+    assertEquals(StandardPerson("Jr."), renamed.set(original, "Jr."))
+    assertEquals(
+      normalizedName,
+      keyPath(
+        id = PathId.custom(TypeId.of<StandardPerson>(), "test.StandardPerson.normalizedName"),
+        get = { person: StandardPerson -> person.name.trim().lowercase() },
+      ),
+    )
+    assertNotEquals(normalizedName, keyPath(StandardPerson::name))
+  }
+
+  @Test
+  fun `property-reference adapters preserve concrete generic type identities`() {
+    val stringProperty: KProperty1<StandardBox<String>, String> = StandardBox<String>::value
+    val intProperty: KProperty1<StandardBox<Int>, Int> = StandardBox<Int>::value
+    val stringPath = keyPath(stringProperty)
+    val intPath = keyPath(intProperty)
+    val explicitStringPath = keyPath(
+      property = stringProperty,
+      id = PathId.property(TypeId.of<StandardBox<String>>(), "value"),
+      valueType = TypeId.of<String>(),
+    )
+
+    assertEquals("Blob", stringPath.get(StandardBox("Blob")))
+    assertEquals(42, intPath.get(StandardBox(42)))
+    assertEquals(TypeId.of<StandardBox<String>>(), stringPath.id.rootType)
+    assertNotEquals<Any?>(stringPath, intPath)
+    assertEquals(stringPath, explicitStringPath)
+    assertEquals(stringPath, stringProperty.asKeyPath())
+  }
+
+  @Test
+  fun `mutable property references opt into in-place mutation`() {
+    val session = StandardSession("first")
+    val readOnly = keyPath(StandardSession::token)
+    val writable = referenceWritableKeyPath(StandardSession::token)
+
+    assertEquals("first", readOnly.get(session))
+    assertSame(session, writable.set(session, "second"))
+    assertEquals("second", session.token)
+    assertEquals(writable, StandardSession::token.asReferenceWritableKeyPath())
+  }
 }
 
 private data class StandardPerson(val name: String)
+private data class StandardBox<Value>(val value: Value)
+private class StandardSession(var token: String)

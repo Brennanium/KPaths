@@ -15,6 +15,7 @@ import dev.kpaths.core.TypeId
 import dev.kpaths.core.WritableKeyPath
 import dev.kpaths.core.KeyPathBase
 import dev.kpaths.core.get
+import dev.kpaths.core.keyPath
 import dev.kpaths.core.modifying
 import dev.kpaths.core.set
 import dev.kpaths.core.setting
@@ -66,6 +67,7 @@ class GeneratedPathsTest {
   fun `generated key paths compare by structural identity`() {
     assertEquals<Any?>(PersonPaths.name, EquivalentNamePath)
     assertEquals(PersonPaths.name.hashCode(), EquivalentNamePath.hashCode())
+    assertEquals(PersonPaths.name, keyPath(Person::name))
   }
 
   @Test
