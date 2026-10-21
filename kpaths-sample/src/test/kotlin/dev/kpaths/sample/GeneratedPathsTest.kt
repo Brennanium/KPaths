@@ -143,18 +143,18 @@ class GeneratedPathsTest {
 
   @Test
   fun `KSP generates concrete sealed case paths and nested case-property namespaces`() {
-    val connected: CaseKeyPath<Connection, Connection.Connected> = ConnectionPaths.connected
+    val connected: CaseKeyPath<Connection, Connection.Connected> = ConnectionPaths.Connected
     val connectedWithNullHost = Connection.Connected(host = null)
 
     assertEquals(TypeId("dev.kpaths.sample.Connection"), ConnectionPaths.rootType)
-    assertEquals(connectedWithNullHost, connectedWithNullHost[ConnectionPaths.connected])
+    assertEquals(connectedWithNullHost, connectedWithNullHost[ConnectionPaths.Connected])
     assertEquals(
       connectedWithNullHost,
-      connectedWithNullHost.get(caseKeyPath = ConnectionPaths.connected),
+      connectedWithNullHost.get(caseKeyPath = ConnectionPaths.Connected),
     )
-    assertNull(Connection.Disconnected[ConnectionPaths.connected])
+    assertNull(Connection.Disconnected[ConnectionPaths.Connected])
     assertEquals(connectedWithNullHost, connected.embed(connectedWithNullHost))
-    assertEquals(Connection.Disconnected, Connection.Disconnected[ConnectionPaths.disconnected])
+    assertEquals(Connection.Disconnected, Connection.Disconnected[ConnectionPaths.Disconnected])
     assertEquals(
       Connection.Disconnected,
       connected.replaceIfMatching(Connection.Disconnected, connectedWithNullHost),
@@ -165,73 +165,79 @@ class GeneratedPathsTest {
     )
     assertEquals(
       dev.kpaths.core.PathId.case(TypeId("dev.kpaths.sample.Connection"), "Connected"),
-      ConnectionPaths.connected.id,
+      ConnectionPaths.Connected.id,
     )
     assertNull(
-      connectedWithNullHost[ConnectionPaths.connected]
+      connectedWithNullHost[ConnectionPaths.Connected]
         ?.get(keyPath = ConnectionPaths.ConnectedPaths.host),
     )
     assertEquals(
       Connection.Connected(host = "example.com"),
-      connectedWithNullHost[ConnectionPaths.connected]
+      connectedWithNullHost[ConnectionPaths.Connected]
         ?.setting(ConnectionPaths.ConnectedPaths.host, "example.com"),
     )
   }
 
   @Test
   fun `KSP generates enum case paths with Unit focuses`() {
-    val north: CaseKeyPath<Direction, Unit> = DirectionPaths.north
+    val north: CaseKeyPath<Direction, Unit> = DirectionPaths.NORTH
 
-    assertEquals(Unit, Direction.NORTH[DirectionPaths.north])
-    assertNull(Direction.SOUTH[DirectionPaths.north])
+    assertEquals(Unit, Direction.NORTH[DirectionPaths.NORTH])
+    assertNull(Direction.SOUTH[DirectionPaths.NORTH])
     assertEquals(Direction.NORTH, north.embed(Unit))
     assertTrue(north.matches(Direction.NORTH))
     assertFalse(north.matches(Direction.SOUTH))
     assertEquals(
       dev.kpaths.core.PathId.case(TypeId("dev.kpaths.sample.Direction"), "NORTH"),
-      DirectionPaths.north.id,
+      DirectionPaths.NORTH.id,
     )
-    assertEquals(TypeId.of<Unit>(), DirectionPaths.north.valueType)
+    assertEquals(TypeId.of<Unit>(), DirectionPaths.NORTH.valueType)
+  }
+
+  @Test
+  fun `KSP preserves keyword enum case names with Kotlin backticks`() {
+    assertEquals(Unit, KeywordDirection.`when`[KeywordDirectionPaths.`when`])
+    assertEquals(KeywordDirection.`when`, KeywordDirectionPaths.`when`.embed(Unit))
   }
 
   @Test
   fun `KSP generates generic sealed case paths with substituted type identities`() {
     val stringPaths = LoadablePaths<String>()
     val integerPaths = LoadablePaths<Int>()
-    val loaded: CaseKeyPath<Loadable<String>, Loadable.Loaded<String>> = stringPaths.loaded
+    val loaded: CaseKeyPath<Loadable<String>, Loadable.Loaded<String>> = stringPaths.Loaded
     val value: Loadable<String> = Loadable.Loaded("Blob")
 
-    assertEquals(Loadable.Loaded("Blob"), value[stringPaths.loaded])
-    assertEquals("Blob", value[stringPaths.loaded]?.get(keyPath = stringPaths.LoadedPaths.value))
+    assertEquals(Loadable.Loaded("Blob"), value[stringPaths.Loaded])
+    assertEquals("Blob", value[stringPaths.Loaded]?.get(keyPath = stringPaths.LoadedPaths.value))
     assertEquals(
       Loadable.Loaded("Blob Jr."),
-      value[stringPaths.loaded]?.setting(stringPaths.LoadedPaths.value, "Blob Jr."),
+      value[stringPaths.Loaded]?.setting(stringPaths.LoadedPaths.value, "Blob Jr."),
     )
-    assertNull(Loadable.Idle[stringPaths.loaded])
-    assertEquals(Loadable.Idle, Loadable.Idle[stringPaths.idle])
+    assertNull(Loadable.Idle[stringPaths.Loaded])
+    assertEquals(Loadable.Idle, Loadable.Idle[stringPaths.Idle])
     assertEquals(Loadable.Loaded("Blob Jr."), loaded.embed(Loadable.Loaded("Blob Jr.")))
-    assertNotEquals(stringPaths.loaded.id, integerPaths.loaded.id)
+    assertNotEquals(stringPaths.Loaded.id, integerPaths.Loaded.id)
     assertEquals(
       TypeId(
         "dev.kpaths.sample.Loadable",
         listOf(TypeArgument.invariant(TypeId.of<String>())),
       ),
-      stringPaths.loaded.id.rootType,
+      stringPaths.Loaded.id.rootType,
     )
     assertEquals(
       TypeId(
         "dev.kpaths.sample.Loadable.Loaded",
         listOf(TypeArgument.invariant(TypeId.of<String>())),
       ),
-      stringPaths.loaded.valueType,
+      stringPaths.Loaded.valueType,
     )
   }
 
   @Test
   fun `KSP substitutes each generic root parameter through its matching case`() {
     val paths = ApiResultPaths<String, Int>()
-    val success: CaseKeyPath<ApiResult<String, Int>, ApiResult.Success<String>> = paths.success
-    val error: CaseKeyPath<ApiResult<String, Int>, ApiResult.Error<Int>> = paths.error
+    val success: CaseKeyPath<ApiResult<String, Int>, ApiResult.Success<String>> = paths.Success
+    val error: CaseKeyPath<ApiResult<String, Int>, ApiResult.Error<Int>> = paths.Error
     val successState: ApiResult<String, Int> = ApiResult.Success("Blob")
     val errorState: ApiResult<String, Int> = ApiResult.Error(404)
 
@@ -244,14 +250,14 @@ class GeneratedPathsTest {
         "dev.kpaths.sample.ApiResult.Success",
         listOf(TypeArgument.invariant(TypeId.of<String>())),
       ),
-      paths.success.valueType,
+      paths.Success.valueType,
     )
     assertEquals(
       TypeId(
         "dev.kpaths.sample.ApiResult.Error",
         listOf(TypeArgument.invariant(TypeId.of<Int>())),
       ),
-      paths.error.valueType,
+      paths.Error.valueType,
     )
   }
 }

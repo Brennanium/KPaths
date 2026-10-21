@@ -118,19 +118,24 @@ sealed interface Connection {
 
 val connection: Connection = Connection.Connected(host = null)
 
-connection[ConnectionPaths.connected]
+connection[ConnectionPaths.Connected]
 // Connection.Connected(host = null)
 
-Connection.Disconnected[ConnectionPaths.connected]
+Connection.Disconnected[ConnectionPaths.Connected]
 // null
 
-connection[ConnectionPaths.connected]
+connection[ConnectionPaths.Connected]
   ?.get(keyPath = ConnectionPaths.ConnectedPaths.host)
 // null, because the matched case's host is null
 ```
 
-The nested `ConnectedPaths` namespace is generated inside the KSP-owned `ConnectionPaths` object;
-an eventual compiler-plugin façade may offer `Connection.Paths` as an additional spelling.
+Case-path names retain their Kotlin declaration spelling: class-like sealed cases use `Connected`,
+while enum entries use `NORTH`. The nested `ConnectedPaths` namespace is generated inside the
+KSP-owned `ConnectionPaths` object; an eventual compiler-plugin façade may offer
+`Connection.Paths` as an additional spelling.
+
+Kotlin keywords remain valid case names when the original declaration and generated path use
+backticks, such as ``KeywordDirectionPaths.`when` ``.
 ## Enum case paths
 
 Enum entries have no associated data, so their generated `CaseKeyPath` focus is Kotlin's `Unit`
@@ -140,9 +145,9 @@ Enum entries have no associated data, so their generated `CaseKeyPath` focus is 
 @Pathable
 enum class Direction { NORTH, SOUTH }
 
-Direction.NORTH[DirectionPaths.north] // Unit
-Direction.SOUTH[DirectionPaths.north] // null
-DirectionPaths.north.embed(Unit)      // Direction.NORTH
+Direction.NORTH[DirectionPaths.NORTH] // Unit
+Direction.SOUTH[DirectionPaths.NORTH] // null
+DirectionPaths.NORTH.embed(Unit)      // Direction.NORTH
 ```
 
 The first case-path slice supports non-generic sealed classes, sealed interfaces, and enums.
@@ -161,10 +166,17 @@ sealed interface Loadable<out Value> {
 val paths = LoadablePaths<String>()
 val state: Loadable<String> = Loadable.Loaded("Blob")
 
-state[paths.loaded]?.get(keyPath = paths.LoadedPaths.value)
+state[paths.Loaded]?.get(keyPath = paths.LoadedPaths.value)
 // "Blob"
 ```
 
 For a generic root, every variant must either forward a root type parameter or safely refine a
 covariant parameter to `Nothing`. KPaths reports an error at `@Pathable` when Kotlin cannot embed
 a variant as every specialization of the root.
+
+## Generated-name collisions
+
+KPaths preserves declared property and case names rather than silently renaming public paths. If
+two generated members would share a namespace—for example, a `rootType` property conflicting with
+the generated `rootType` metadata—KSP reports an error at `@Pathable` explaining both members.
+Names beginning with `__kpaths_` are reserved for generator implementation details.

@@ -12,6 +12,82 @@ class KPathsProcessorIntegrationTest {
   fun `reports an actionable error at Pathable for unsupported generic sealed variants`(
     @TempDir fixtureDirectory: Path,
   ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "InvalidLoadable.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.Pathable
+
+        @Pathable
+        sealed interface InvalidLoadable<Value> {
+          data object Idle : InvalidLoadable<Nothing>
+        }
+      """.trimIndent(),
+    )
+
+    assertContains(output, "InvalidLoadable.kt:")
+    assertContains(output, "[KPaths] Cannot generate 'Idle'")
+    assertContains(output, "must forward that type parameter, or refine it to Nothing through an `out` parameter")
+  }
+
+  @Test
+  fun `reports public generated member collisions at Pathable`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "ReservedName.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.Pathable
+
+        @Pathable
+        data class ReservedName(val rootType: String)
+      """.trimIndent(),
+    )
+
+    assertContains(output, "ReservedName.kt:")
+    assertContains(output, "[KPaths] Cannot generate paths because 'rootType' would name both")
+    assertContains(output, "KPaths root-type metadata and the key path for property 'rootType'")
+  }
+
+  @Test
+  fun `reports property and case path collisions at Pathable`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "PropertyCaseCollision.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.Pathable
+
+        @Pathable
+        sealed class Connection {
+          abstract val Connected: String
+
+          data class Connected(override val Connected: String) : Connection()
+        }
+      """.trimIndent(),
+    )
+
+    assertContains(output, "PropertyCaseCollision.kt:")
+    assertContains(output, "[KPaths] Cannot generate paths because 'Connected' would name both")
+    assertContains(output, "the key path for property 'Connected' and the case path for 'Connected'")
+  }
+
+  private fun compileFailure(
+    fixtureDirectory: Path,
+    fileName: String,
+    source: String,
+  ): String {
     val projectDirectory = Path.of(checkNotNull(System.getProperty("kpaths.projectDir")))
     val annotationsJar = projectDirectory.resolve("kpaths-annotations/build/libs/kpaths-annotations.jar")
     val coreJar = projectDirectory.resolve("kpaths-core/build/libs/kpaths-core.jar")
@@ -51,28 +127,13 @@ class KPathsProcessorIntegrationTest {
       """.trimIndent(),
     )
     val sourceDirectory = Files.createDirectories(fixtureDirectory.resolve("src/main/kotlin/fixture"))
-    Files.writeString(
-      sourceDirectory.resolve("InvalidLoadable.kt"),
-      """
-        package fixture
+    Files.writeString(sourceDirectory.resolve(fileName), source)
 
-        import dev.kpaths.annotations.Pathable
-
-        @Pathable
-        sealed interface InvalidLoadable<Value> {
-          data object Idle : InvalidLoadable<Nothing>
-        }
-      """.trimIndent(),
-    )
-
-    val result = GradleRunner.create()
+    return GradleRunner.create()
       .withProjectDir(fixtureDirectory.toFile())
       .withArguments("compileKotlin", "--stacktrace")
       .buildAndFail()
-
-    assertContains(result.output, "InvalidLoadable.kt:")
-    assertContains(result.output, "[KPaths] Cannot generate 'Idle'")
-    assertContains(result.output, "must forward that type parameter, or refine it to Nothing through an `out` parameter")
+      .output
   }
 
   private fun Path.gradlePath(): String = toString().replace("\\", "\\\\")

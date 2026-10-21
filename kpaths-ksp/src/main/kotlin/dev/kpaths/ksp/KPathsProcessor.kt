@@ -57,8 +57,14 @@ private class KPathsProcessor(
     val generatedName = generatedObjectName(qualifiedName, packageName)
     val pathProperties = pathProperties(declaration)
     val casePaths = casePaths(declaration)
+    if (!validateGeneratedMemberNames(declaration, pathProperties, casePaths)) {
+      return
+    }
     val typeTokenNames = declaration.typeParameters.associate { parameter ->
       parameter.name.asString() to typeTokenName(parameter.name.asString())
+    }
+    val typeTokenArgumentNames = declaration.typeParameters.associate { parameter ->
+      parameter.name.asString() to typeTokenArgumentName(parameter.name.asString())
     }
     val rootKotlinType = qualifiedName + declaration.typeParameters
       .takeIf { it.isNotEmpty() }
@@ -85,8 +91,8 @@ private class KPathsProcessor(
         writer.appendLine("public object $generatedName {")
       } else {
         val typeParameters = declaration.typeParameters.joinToString { it.name.asString() }
-        val tokenParameters = typeTokenNames.values.joinToString(", ") { name ->
-          "$name: dev.kpaths.core.TypeId"
+        val tokenParameters = declaration.typeParameters.joinToString(", ") { parameter ->
+          "${typeTokenArgumentNames.getValue(parameter.name.asString())}: dev.kpaths.core.TypeId"
         }
         val constructorParameters = typeTokenNames.values.joinToString(", ") { name ->
           "private val $name: dev.kpaths.core.TypeId"
@@ -96,15 +102,15 @@ private class KPathsProcessor(
         writer.appendLine(") {")
         writer.appendLine("  public companion object {")
         writer.appendLine("    public fun <$typeParameters> of($tokenParameters): $generatedName<$typeParameters> =")
-        writer.appendLine("      $generatedName(${typeTokenNames.values.joinToString()})")
+        writer.appendLine("      $generatedName(${declaration.typeParameters.joinToString { typeTokenArgumentNames.getValue(it.name.asString()) }})")
         val classTokenParameters = declaration.typeParameters.joinToString(", ") { parameter ->
-          "${typeTokenName(parameter.name.asString())}: kotlin.reflect.KClass<${parameter.name.asString()}>"
+          "${typeTokenClassArgumentName(parameter.name.asString())}: kotlin.reflect.KClass<${parameter.name.asString()}>"
         }
         val nonNullTypeParameters = declaration.typeParameters.joinToString(", ") { parameter ->
           "${parameter.name.asString()} : Any"
         }
         writer.appendLine("    public fun <$nonNullTypeParameters> of($classTokenParameters): $generatedName<$typeParameters> =")
-        writer.appendLine("      $generatedName(${typeTokenNames.values.joinToString { "dev.kpaths.core.TypeId.from($it)" }})")
+        writer.appendLine("      $generatedName(${declaration.typeParameters.joinToString { "dev.kpaths.core.TypeId.from(${typeTokenClassArgumentName(it.name.asString())})" }})")
         writer.appendLine("  }")
       }
       writer.appendLine("  public val rootType: dev.kpaths.core.TypeId = $rootTypeId")
@@ -169,6 +175,7 @@ private class KPathsProcessor(
           name = caseDeclaration.simpleName.asString(),
           kind = CaseKind.SEALED_VARIANT,
           qualifiedName = qualifiedName,
+          propertyPaths = pathProperties(caseDeclaration),
         )
       }.toList()
     }
@@ -183,6 +190,7 @@ private class KPathsProcessor(
             name = entry.simpleName.asString(),
             kind = CaseKind.ENUM_ENTRY,
             qualifiedName = null,
+            propertyPaths = emptyList(),
           )
         }
         .toList()
@@ -245,6 +253,67 @@ private class KPathsProcessor(
   private fun isAccessible(setter: com.google.devtools.ksp.symbol.KSPropertySetter): Boolean =
     Modifier.PRIVATE !in setter.modifiers && Modifier.PROTECTED !in setter.modifiers
 
+  /** Rejects ambiguous public members instead of silently changing the generated API. */
+  private fun validateGeneratedMemberNames(
+    declaration: KSClassDeclaration,
+    pathProperties: List<PathProperty>,
+    casePaths: List<CasePath>,
+  ): Boolean {
+    val members = mutableListOf(
+      GeneratedMember(name = "rootType", description = "KPaths root-type metadata"),
+    )
+
+    pathProperties.forEach { property ->
+      members += GeneratedMember(
+        name = property.declaration.simpleName.asString(),
+        description = "the key path for property '${property.declaration.simpleName.asString()}'",
+      )
+    }
+    casePaths.forEach { casePath ->
+      members += GeneratedMember(
+        name = casePath.name,
+        description = "the case path for '${casePath.name}'",
+      )
+      if (casePath.kind == CaseKind.SEALED_VARIANT && casePath.propertyPaths.isNotEmpty()) {
+        members += GeneratedMember(
+          name = casePath.name + "Paths",
+          description = "the property-path namespace for case '${casePath.name}'",
+        )
+        if (declaration.typeParameters.isNotEmpty()) {
+          members += GeneratedMember(
+            name = casePath.name + "PropertyPaths",
+            description = "the generated property-path type for case '${casePath.name}'",
+          )
+        }
+      }
+    }
+
+    var isValid = true
+    (pathProperties.asSequence() + casePaths.asSequence().flatMap { it.propertyPaths.asSequence() })
+      .map { it.declaration }
+      .filter { it.simpleName.asString().startsWith(generatedInternalPrefix) }
+      .forEach { property ->
+        reportPathableError(
+          declaration,
+          "Cannot generate paths because property '${property.simpleName.asString()}' uses the reserved " +
+            "'$generatedInternalPrefix' prefix for KPaths-generated implementation details.",
+        )
+        isValid = false
+      }
+
+    members.groupBy(GeneratedMember::name)
+      .filterValues { it.size > 1 }
+      .forEach { (name, collisions) ->
+        reportPathableError(
+          declaration,
+          "Cannot generate paths because '$name' would name both " +
+            collisions.joinToString(" and ") { it.description } + ". Rename one of the model members.",
+        )
+        isValid = false
+      }
+    return isValid
+  }
+
   private fun writePropertyPath(
     writer: java.io.BufferedWriter,
     rootKotlinType: String,
@@ -298,7 +367,7 @@ private class KPathsProcessor(
     capturesTypeTokens: Boolean,
     casePath: CasePath,
   ) {
-    val caseIdentifier = escapeIdentifier(casePath.name.pathIdentifier())
+    val caseIdentifier = escapeIdentifier(casePath.name)
     val resolvedCaseType = resolveCaseType(
       rootDeclaration = rootDeclaration,
       rootTypeTokenNames = rootTypeTokenNames,
@@ -335,7 +404,7 @@ private class KPathsProcessor(
       return
     }
 
-    val caseProperties = pathProperties(casePath.declaration)
+    val caseProperties = casePath.propertyPaths
     if (caseProperties.isEmpty()) {
       return
     }
@@ -385,8 +454,9 @@ private class KPathsProcessor(
         writer.appendLine("${indent}override fun embed(value: ${resolvedCaseType.kotlinType}): $rootKotlinType = value")
       }
       CaseKind.ENUM_ENTRY -> {
-        writer.appendLine("${indent}override fun extract(root: $rootKotlinType): kotlin.Unit? = if (root == $rootKotlinType.${casePath.name}) kotlin.Unit else null")
-        writer.appendLine("${indent}override fun embed(value: kotlin.Unit): $rootKotlinType = $rootKotlinType.${casePath.name}")
+        val enumEntryIdentifier = escapeIdentifier(casePath.name)
+        writer.appendLine("${indent}override fun extract(root: $rootKotlinType): kotlin.Unit? = if (root == $rootKotlinType.$enumEntryIdentifier) kotlin.Unit else null")
+        writer.appendLine("${indent}override fun embed(value: kotlin.Unit): $rootKotlinType = $rootKotlinType.$enumEntryIdentifier")
       }
     }
   }
@@ -579,6 +649,7 @@ private class KPathsProcessor(
     val name: String,
     val kind: CaseKind,
     val qualifiedName: String?,
+    val propertyPaths: List<PathProperty>,
   )
 
   private data class ResolvedCaseType(
@@ -586,6 +657,11 @@ private class KPathsProcessor(
     val typeId: String,
     val typeParameterSubstitutions: Map<String, String>,
     val typeTokenSubstitutions: Map<String, String>,
+  )
+
+  private data class GeneratedMember(
+    val name: String,
+    val description: String,
   )
 
   private enum class CaseKind {
@@ -669,15 +745,20 @@ private class KPathsProcessor(
   }
 
   private fun typeTokenName(parameterName: String): String =
+    generatedInternalPrefix + parameterName.replaceFirstChar { it.lowercaseChar() } + "TypeId"
+
+  private fun typeTokenArgumentName(parameterName: String): String =
     escapeIdentifier(parameterName.replaceFirstChar { it.lowercaseChar() } + "TypeId")
 
-  private fun String.pathIdentifier(): String =
-    if (this == uppercase()) lowercase() else replaceFirstChar { it.lowercaseChar() }
+  private fun typeTokenClassArgumentName(parameterName: String): String =
+    escapeIdentifier(parameterName.replaceFirstChar { it.lowercaseChar() } + "Type")
 
   private fun escapeIdentifier(identifier: String): String =
     if (identifier in kotlinKeywords) "`$identifier`" else identifier
 
   private companion object {
+    private const val generatedInternalPrefix = "__kpaths_"
+
     private val kotlinKeywords = setOf(
       "as", "as?", "break", "class", "continue", "do", "else", "false", "for", "fun", "if",
       "in", "!in", "interface", "is", "!is", "null", "object", "package", "return", "super",

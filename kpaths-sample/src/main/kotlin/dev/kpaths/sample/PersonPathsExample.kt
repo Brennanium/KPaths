@@ -45,6 +45,11 @@ enum class Direction {
 }
 
 @Pathable
+enum class KeywordDirection {
+  `when`,
+}
+
+@Pathable
 sealed interface Loadable<out Value> {
   data object Idle : Loadable<Nothing>
   data class Loaded<T>(val value: T) : Loadable<T>
