@@ -17,7 +17,7 @@ class KeyPathCompositionTest {
         TypeId("dev.kpaths.core.Person"),
         listOf(PathSegment.Property("address"), PathSegment.Property("city")),
       ),
-      city.id,
+      city.__kpaths_id,
     )
   }
 
@@ -47,8 +47,8 @@ private data class Address(val city: String)
 private class AddressBox(var address: Address)
 
 private object PersonAddressPath : WritableKeyPathBase<Person, Address>() {
-  override val id: PathId = PathId.property(TypeId("dev.kpaths.core.Person"), "address")
-  override val valueType: TypeId = TypeId("dev.kpaths.core.Address")
+  override val __kpaths_id: PathId = PathId.property(TypeId("dev.kpaths.core.Person"), "address")
+  override val __kpaths_valueType: TypeId = TypeId("dev.kpaths.core.Address")
 
   override fun get(root: Person): Address = root.address
 
@@ -56,8 +56,8 @@ private object PersonAddressPath : WritableKeyPathBase<Person, Address>() {
 }
 
 private object AddressCityPath : WritableKeyPathBase<Address, String>() {
-  override val id: PathId = PathId.property(TypeId("dev.kpaths.core.Address"), "city")
-  override val valueType: TypeId = TypeId.of<String>()
+  override val __kpaths_id: PathId = PathId.property(TypeId("dev.kpaths.core.Address"), "city")
+  override val __kpaths_valueType: TypeId = TypeId.of<String>()
 
   override fun get(root: Address): String = root.city
 
@@ -65,15 +65,15 @@ private object AddressCityPath : WritableKeyPathBase<Address, String>() {
 }
 
 private object CityLengthPath : KeyPathBase<Address, Int>() {
-  override val id: PathId = PathId.property(TypeId("dev.kpaths.core.Address"), "cityLength")
-  override val valueType: TypeId = TypeId.of<Int>()
+  override val __kpaths_id: PathId = PathId.property(TypeId("dev.kpaths.core.Address"), "cityLength")
+  override val __kpaths_valueType: TypeId = TypeId.of<Int>()
 
   override fun get(root: Address): Int = root.city.length
 }
 
 private object BoxAddressPath : ReferenceWritableKeyPathBase<AddressBox, Address>() {
-  override val id: PathId = PathId.property(TypeId("dev.kpaths.core.AddressBox"), "address")
-  override val valueType: TypeId = TypeId("dev.kpaths.core.Address")
+  override val __kpaths_id: PathId = PathId.property(TypeId("dev.kpaths.core.AddressBox"), "address")
+  override val __kpaths_valueType: TypeId = TypeId("dev.kpaths.core.Address")
 
   override fun get(root: AddressBox): Address = root.address
 

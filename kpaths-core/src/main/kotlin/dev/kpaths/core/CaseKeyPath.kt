@@ -41,8 +41,8 @@ public interface CaseKeyPath<Root, Value : Any> : PartialCaseKeyPath<Root> {
 public fun <Root, Middle : Any, Value : Any> CaseKeyPath<Root, Middle>.appending(
   next: CaseKeyPath<Middle, Value>,
 ): CaseKeyPath<Root, Value> = caseKeyPath(
-  id = id.appending(next.id),
-  valueType = next.valueType,
+  id = __kpaths_id.appending(next.__kpaths_id),
+  valueType = next.__kpaths_valueType,
   extract = { root -> extract(root)?.let(next::extract) },
   embed = { value -> embed(next.embed(value)) },
 )
@@ -66,8 +66,8 @@ public fun <Root, Case : Any, Value : Any> CaseKeyPath<Root, Case>.appending(
   val outer = this
   val constructCase = embed
   return caseKeyPath(
-    id = outer.id.appending(next.id),
-    valueType = next.valueType,
+    id = outer.__kpaths_id.appending(next.__kpaths_id),
+    valueType = next.__kpaths_valueType,
     extract = { root -> outer.extract(root)?.let(next::get) },
     embed = { value -> outer.embed(constructCase(value)) },
   )
@@ -98,8 +98,8 @@ public fun <Root, Value : Any> caseKeyPath(
   val extractor = extract
   val embedder = embed
   return object : CaseKeyPathBase<Root, Value>() {
-    override val id: PathId = id
-    override val valueType: TypeId = valueType
+    override val __kpaths_id: PathId = id
+    override val __kpaths_valueType: TypeId = valueType
 
     override fun extract(root: Root): Value? = extractor(root)
 
@@ -163,7 +163,7 @@ public inline fun <reified Root : Any, reified Case : Root, reified First, reifi
   val secondPath = keyPath(extract2)
   val constructCase = embed
   return caseKeyPath(
-    id = casePath.id.appending(firstPath.id).appending(secondPath.id),
+    id = casePath.__kpaths_id.appending(firstPath.__kpaths_id).appending(secondPath.__kpaths_id),
     valueType = TypeId.of<Pair<First, Second>>(),
     extract = { root ->
       casePath.extract(root)?.let { case -> Pair(firstPath.get(case), secondPath.get(case)) }
@@ -190,7 +190,10 @@ public inline fun <reified Root : Any, reified Case : Root, reified First, reifi
   val thirdPath = keyPath(extract3)
   val constructCase = embed
   return caseKeyPath(
-    id = casePath.id.appending(firstPath.id).appending(secondPath.id).appending(thirdPath.id),
+    id = casePath.__kpaths_id
+      .appending(firstPath.__kpaths_id)
+      .appending(secondPath.__kpaths_id)
+      .appending(thirdPath.__kpaths_id),
     valueType = TypeId.of<Triple<First, Second, Third>>(),
     extract = { root ->
       casePath.extract(root)?.let { case ->

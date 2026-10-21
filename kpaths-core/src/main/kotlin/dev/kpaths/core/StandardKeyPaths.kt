@@ -11,8 +11,8 @@ public fun <Root, Value> keyPath(
 ): KeyPath<Root, Value> {
   val getter = get
   return object : KeyPathBase<Root, Value>() {
-    override val id: PathId = id
-    override val valueType: TypeId = valueType
+    override val __kpaths_id: PathId = id
+    override val __kpaths_valueType: TypeId = valueType
 
     override fun get(root: Root): Value = getter(root)
   }
@@ -52,8 +52,8 @@ public fun <Root, Value> writableKeyPath(
   val getter = get
   val setter = set
   return object : WritableKeyPathBase<Root, Value>() {
-    override val id: PathId = id
-    override val valueType: TypeId = valueType
+    override val __kpaths_id: PathId = id
+    override val __kpaths_valueType: TypeId = valueType
 
     override fun get(root: Root): Value = getter(root)
 
@@ -98,8 +98,8 @@ public fun <Root : Any, Value> referenceWritableKeyPath(
   val getter = get
   val setter = set
   return object : ReferenceWritableKeyPathBase<Root, Value>() {
-    override val id: PathId = id
-    override val valueType: TypeId = valueType
+    override val __kpaths_id: PathId = id
+    override val __kpaths_valueType: TypeId = valueType
 
     override fun get(root: Root): Value = getter(root)
 
@@ -194,8 +194,8 @@ public inline fun <reified Root : Any, reified Value> KMutableProperty1<Root, Va
  */
 public fun <Root> identityKeyPath(rootType: TypeId): WritableKeyPath<Root, Root> =
   object : WritableKeyPathBase<Root, Root>() {
-    override val id: PathId = PathId.identity(rootType)
-    override val valueType: TypeId = rootType
+    override val __kpaths_id: PathId = PathId.identity(rootType)
+    override val __kpaths_valueType: TypeId = rootType
 
     override fun get(root: Root): Root = root
 

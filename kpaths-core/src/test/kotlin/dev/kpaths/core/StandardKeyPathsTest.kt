@@ -16,7 +16,7 @@ class StandardKeyPathsTest {
     assertEquals(original, identity.get(original))
     assertEquals(replacement, identity.set(original, replacement))
     assertEquals(identity, identityKeyPath<StandardPerson>())
-    assertEquals(PathId(TypeId.of<StandardPerson>(), emptyList()), identity.id)
+    assertEquals(PathId(TypeId.of<StandardPerson>(), emptyList()), identity.__kpaths_id)
   }
 
   @Test
@@ -30,8 +30,8 @@ class StandardKeyPathsTest {
     assertEquals("Blob", triplePaths.first.get(Triple("Blob", 42, true)))
     assertEquals(42, triplePaths.second.get(Triple("Blob", 42, true)))
     assertEquals(true, triplePaths.third.get(Triple("Blob", 42, true)))
-    assertEquals(TypeId.of<Pair<String, Int>>(), pairPaths.first.id.rootType)
-    assertEquals(TypeId.of<Triple<String, Int, Boolean>>(), triplePaths.third.id.rootType)
+    assertEquals(TypeId.of<Pair<String, Int>>(), pairPaths.first.__kpaths_id.rootType)
+    assertEquals(TypeId.of<Triple<String, Int, Boolean>>(), triplePaths.third.__kpaths_id.rootType)
   }
 
   @Test
@@ -43,10 +43,10 @@ class StandardKeyPathsTest {
     assertEquals("Jr.", second.get(listOf("Blob", "Jr.")))
     assertEquals(second, ListPaths<String>().at(1))
     assertNotEquals(second, paths.at(0))
-    assertEquals(TypeId.of<List<String>>(), second.id.rootType)
+    assertEquals(TypeId.of<List<String>>(), second.__kpaths_id.rootType)
     assertEquals(
       PathId(TypeId.of<List<String>>(), listOf(PathSegment.Index(1))),
-      second.id,
+      second.__kpaths_id,
     )
   }
 
@@ -61,8 +61,8 @@ class StandardKeyPathsTest {
     assertEquals(arrayOf("Blob", "Point-Free").toList(), array.toList())
     assertSame(list, listPath.set(list, "Point-Free"))
     assertEquals(listOf("Blob", "Point-Free"), list)
-    assertEquals(TypeId.of<Array<String>>(), arrayPath.id.rootType)
-    assertEquals(TypeId.of<MutableList<String>>(), listPath.id.rootType)
+    assertEquals(TypeId.of<Array<String>>(), arrayPath.__kpaths_id.rootType)
+    assertEquals(TypeId.of<MutableList<String>>(), listPath.__kpaths_id.rootType)
     assertNotEquals(TypeId.of<List<String>>(), TypeId.of<MutableList<String>>())
     assertNotEquals<Any?>(ListPaths<String>().at(1), listPath)
   }
@@ -116,7 +116,7 @@ class StandardKeyPathsTest {
     assertEquals("blob", normalizedName.get(StandardPerson(" Blob ")))
     assertEquals(
       PathId.custom(TypeId.of<StandardPerson>(), "normalizedName"),
-      normalizedName.id,
+      normalizedName.__kpaths_id,
     )
     assertEquals(normalizedName, inferredNormalizedName)
     assertEquals(StandardPerson("Jr."), renamed.set(StandardPerson("Blob"), "Jr."))
@@ -138,7 +138,7 @@ class StandardKeyPathsTest {
 
     assertEquals("Blob", stringPath.get(StandardBox("Blob")))
     assertEquals(42, intPath.get(StandardBox(42)))
-    assertEquals(TypeId.of<StandardBox<String>>(), stringPath.id.rootType)
+    assertEquals(TypeId.of<StandardBox<String>>(), stringPath.__kpaths_id.rootType)
     assertNotEquals<Any?>(stringPath, intPath)
     assertEquals(stringPath, explicitStringPath)
     assertEquals(stringPath, stringProperty.asKeyPath())

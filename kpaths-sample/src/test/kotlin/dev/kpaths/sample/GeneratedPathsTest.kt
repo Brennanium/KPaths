@@ -63,7 +63,7 @@ class GeneratedPathsTest {
           dev.kpaths.core.PathSegment.Property("city"),
         ),
       ),
-      city.id,
+      city.__kpaths_id,
     )
   }
 
@@ -92,22 +92,22 @@ class GeneratedPathsTest {
         "dev.kpaths.sample.Box",
         listOf(TypeArgument.invariant(TypeId.of<Int>())),
       ),
-      integerValue.id.rootType,
+      integerValue.__kpaths_id.rootType,
     )
-    assertNotEquals(integerValue.id, stringValue.id)
+    assertNotEquals(integerValue.__kpaths_id, stringValue.__kpaths_id)
     assertEquals(
       TypeId(
         "dev.kpaths.sample.Box",
         listOf(TypeArgument.invariant(TypeId.of<List<String?>>())),
       ),
-      nullableStringsValue.id.rootType,
+      nullableStringsValue.__kpaths_id.rootType,
     )
   }
 
   @Test
   fun `generated tokens preserve nested generic arguments and nullability`() {
-    assertEquals(TypeId.of<List<String>>(), PersonPaths.tags.valueType)
-    assertEquals(TypeId.of<String?>(), PersonPaths.nickname.valueType)
+    assertEquals(TypeId.of<List<String>>(), PersonPaths.tags.__kpaths_valueType)
+    assertEquals(TypeId.of<String?>(), PersonPaths.nickname.__kpaths_valueType)
   }
 
   @Test
@@ -154,9 +154,9 @@ class GeneratedPathsTest {
 
   @Test
   fun `generated paths preserve mutable collection type identities`() {
-    assertEquals(TypeId.of<List<String>>(), CollectionHolderPaths.immutable.valueType)
-    assertEquals(TypeId.of<MutableList<String>>(), CollectionHolderPaths.mutable.valueType)
-    assertNotEquals(CollectionHolderPaths.immutable.valueType, CollectionHolderPaths.mutable.valueType)
+    assertEquals(TypeId.of<List<String>>(), CollectionHolderPaths.immutable.__kpaths_valueType)
+    assertEquals(TypeId.of<MutableList<String>>(), CollectionHolderPaths.mutable.__kpaths_valueType)
+    assertNotEquals(CollectionHolderPaths.immutable.__kpaths_valueType, CollectionHolderPaths.mutable.__kpaths_valueType)
   }
 
   @Test
@@ -217,7 +217,7 @@ class GeneratedPathsTest {
     )
     assertEquals(
       dev.kpaths.core.PathId.case(TypeId("dev.kpaths.sample.Connection"), "Connected"),
-      ConnectionPaths.Connected.id,
+      ConnectionPaths.Connected.__kpaths_id,
     )
     assertEquals(
       ConnectionPaths.Connected,
@@ -237,10 +237,16 @@ class GeneratedPathsTest {
   @Test
   fun `KSP generates canonical reconstructable payload paths for sealed data cases`() {
     val selected: CaseKeyPath<Request, String> = RequestPaths.Selected.value
+    val identified: CaseKeyPath<Request, String> = RequestPaths.Identified.id
+    val typed: CaseKeyPath<Request, String> = RequestPaths.Typed.valueType
     val navigate: CaseKeyPath<Request, Pair<String, String>> = RequestPaths.Navigate.payload
     val route: CaseKeyPath<Request, Triple<String, String, Boolean>> = RequestPaths.Route.payload
 
     assertEquals("Blob", Request.Selected("Blob")[selected])
+    assertEquals("id-1", Request.Identified("id-1")[identified])
+    assertEquals(Request.Identified("id-2"), identified.embed("id-2"))
+    assertEquals("text", Request.Typed("text")[typed])
+    assertEquals(Request.Typed("other"), typed.embed("other"))
     assertNull(Request.Nullable(null)[selected])
     assertEquals(Request.Selected("Jr."), selected.embed("Jr."))
     assertEquals(
@@ -298,9 +304,9 @@ class GeneratedPathsTest {
     assertFalse(north.matches(Direction.SOUTH))
     assertEquals(
       dev.kpaths.core.PathId.case(TypeId("dev.kpaths.sample.Direction"), "NORTH"),
-      DirectionPaths.NORTH.id,
+      DirectionPaths.NORTH.__kpaths_id,
     )
-    assertEquals(TypeId.of<Unit>(), DirectionPaths.NORTH.valueType)
+    assertEquals(TypeId.of<Unit>(), DirectionPaths.NORTH.__kpaths_valueType)
     assertEquals(DirectionPaths.NORTH, caseKeyPath(Direction.NORTH))
     assertEquals(DirectionPaths.NORTH, DirectionPaths.caseOf(Direction.NORTH))
     assertEquals(DirectionPaths.SOUTH, DirectionPaths.caseOf(Direction.SOUTH))
@@ -349,20 +355,20 @@ class GeneratedPathsTest {
       stringPaths.Loaded,
       caseKeyPath<Loadable<String>, Loadable.Loaded<String>>(),
     )
-    assertNotEquals(stringPaths.Loaded.id, integerPaths.Loaded.id)
+    assertNotEquals(stringPaths.Loaded.__kpaths_id, integerPaths.Loaded.__kpaths_id)
     assertEquals(
       TypeId(
         "dev.kpaths.sample.Loadable",
         listOf(TypeArgument.invariant(TypeId.of<String>())),
       ),
-      stringPaths.Loaded.id.rootType,
+      stringPaths.Loaded.__kpaths_id.rootType,
     )
     assertEquals(
       TypeId(
         "dev.kpaths.sample.Loadable.Loaded",
         listOf(TypeArgument.invariant(TypeId.of<String>())),
       ),
-      stringPaths.Loaded.valueType,
+      stringPaths.Loaded.__kpaths_valueType,
     )
   }
 
@@ -383,21 +389,21 @@ class GeneratedPathsTest {
         "dev.kpaths.sample.ApiResult.Success",
         listOf(TypeArgument.invariant(TypeId.of<String>())),
       ),
-      paths.Success.valueType,
+      paths.Success.__kpaths_valueType,
     )
     assertEquals(
       TypeId(
         "dev.kpaths.sample.ApiResult.Error",
         listOf(TypeArgument.invariant(TypeId.of<Int>())),
       ),
-      paths.Error.valueType,
+      paths.Error.__kpaths_valueType,
     )
   }
 }
 
 private object EquivalentNamePath : KeyPathBase<Person, String>() {
-  override val id = dev.kpaths.core.PathId.property(TypeId("dev.kpaths.sample.Person"), "name")
-  override val valueType = TypeId.of<String>()
+  override val __kpaths_id = dev.kpaths.core.PathId.property(TypeId("dev.kpaths.sample.Person"), "name")
+  override val __kpaths_valueType = TypeId.of<String>()
 
   override fun get(root: Person): String = root.name
 }

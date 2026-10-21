@@ -109,31 +109,6 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports canonical unary payload collisions at Pathable`(
-    @TempDir fixtureDirectory: Path,
-  ) {
-    val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
-      fileName = "CasePayloadCollision.kt",
-      source =
-      """
-        package fixture
-
-        import dev.kpaths.annotations.Pathable
-
-        @Pathable
-        sealed interface Event {
-          data class Identified(val id: String) : Event
-        }
-      """.trimIndent(),
-    )
-
-    assertContains(output, "CasePayloadCollision.kt:")
-    assertContains(output, "Cannot generate the canonical case payload path 'id' for 'Identified'")
-    assertContains(output, "manual caseKeyPath factory")
-  }
-
-  @Test
   fun `reports top level generated namespace collisions at Pathable`(
     @TempDir fixtureDirectory: Path,
   ) {

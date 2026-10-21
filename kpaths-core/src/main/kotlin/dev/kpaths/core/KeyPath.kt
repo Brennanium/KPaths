@@ -2,8 +2,11 @@ package dev.kpaths.core
 
 /** Metadata shared by all generated paths, independent of their focusing capability. */
 public interface AnyPath {
-  public val id: PathId
-  public val valueType: TypeId
+  /** Library-reserved structural identity metadata. */
+  public val __kpaths_id: PathId
+
+  /** Library-reserved focused-value type metadata. */
+  public val __kpaths_valueType: TypeId
 }
 
 /** Type-erased metadata common to all property key paths. */
@@ -29,11 +32,15 @@ public interface KeyPath<Root, Value> : PartialKeyPath<Root> {
  */
 public abstract class PathBase : AnyPath {
   final override fun equals(other: Any?): Boolean =
-    other is AnyPath && id == other.id && valueType == other.valueType
+    other is AnyPath &&
+      __kpaths_id == other.__kpaths_id &&
+      __kpaths_valueType == other.__kpaths_valueType
 
-  final override fun hashCode(): Int = 31 * id.hashCode() + valueType.hashCode()
+  final override fun hashCode(): Int =
+    31 * __kpaths_id.hashCode() + __kpaths_valueType.hashCode()
 
-  override fun toString(): String = "${this::class.simpleName}(id=$id, valueType=$valueType)"
+  override fun toString(): String =
+    "${this::class.simpleName}(id=$__kpaths_id, valueType=$__kpaths_valueType)"
 }
 
 /** Base class for generated total property key paths. */
@@ -81,8 +88,8 @@ private class AppendedKeyPath<Root, Middle, Value>(
   private val outer: KeyPath<Root, Middle>,
   private val inner: KeyPath<Middle, Value>,
 ) : KeyPathBase<Root, Value>() {
-  override val id: PathId = outer.id.appending(inner.id)
-  override val valueType: TypeId = inner.valueType
+  override val __kpaths_id: PathId = outer.__kpaths_id.appending(inner.__kpaths_id)
+  override val __kpaths_valueType: TypeId = inner.__kpaths_valueType
 
   override fun get(root: Root): Value = inner.get(outer.get(root))
 }
@@ -91,8 +98,8 @@ private class AppendedWritableKeyPath<Root, Middle, Value>(
   private val outer: WritableKeyPath<Root, Middle>,
   private val inner: WritableKeyPath<Middle, Value>,
 ) : WritableKeyPathBase<Root, Value>() {
-  override val id: PathId = outer.id.appending(inner.id)
-  override val valueType: TypeId = inner.valueType
+  override val __kpaths_id: PathId = outer.__kpaths_id.appending(inner.__kpaths_id)
+  override val __kpaths_valueType: TypeId = inner.__kpaths_valueType
 
   override fun get(root: Root): Value = inner.get(outer.get(root))
 
@@ -138,8 +145,8 @@ private class AppendedReferenceWritableKeyPath<Root : Any, Middle, Value>(
   private val outer: ReferenceWritableKeyPath<Root, Middle>,
   private val inner: WritableKeyPath<Middle, Value>,
 ) : ReferenceWritableKeyPathBase<Root, Value>() {
-  override val id: PathId = outer.id.appending(inner.id)
-  override val valueType: TypeId = inner.valueType
+  override val __kpaths_id: PathId = outer.__kpaths_id.appending(inner.__kpaths_id)
+  override val __kpaths_valueType: TypeId = inner.__kpaths_valueType
 
   override fun get(root: Root): Value = inner.get(outer.get(root))
 

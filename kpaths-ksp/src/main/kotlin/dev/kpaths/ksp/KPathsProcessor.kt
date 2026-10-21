@@ -502,24 +502,6 @@ private class KPathsProcessor(
         isValid = false
       }
 
-    casePaths.mapNotNull(::generatedCasePayload)
-      .takeIf { declaration.typeParameters.isEmpty() }
-      .orEmpty()
-      .filter { payload ->
-        payload.properties.size == 1 &&
-          payload.properties.single().declaration.simpleName.asString() in setOf("id", "valueType")
-      }
-      .forEach { payload ->
-        val propertyName = payload.properties.single().declaration.simpleName.asString()
-        reportPathableError(
-          declaration,
-          "Cannot generate the canonical case payload path '$propertyName' for " +
-            "'${payload.casePath.name}' because that name is already used by CaseKeyPath metadata. " +
-            "Rename the property or create this route with the manual caseKeyPath factory.",
-        )
-        isValid = false
-      }
-
     members.groupBy(GeneratedMember::name)
       .filterValues { it.size > 1 }
       .forEach { (name, collisions) ->
@@ -562,15 +544,15 @@ private class KPathsProcessor(
     if (capturesTypeTokens) {
       writer.appendLine("${declarationIndent}public val $identifier: $pathInterface<$rootKotlinType, $valueKotlinType> =")
       writer.appendLine("${declarationIndent}  object : $pathBase<$rootKotlinType, $valueKotlinType>() {")
-      writer.appendLine("${declarationIndent}    override val id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property($rootTypeId, \"$name\")")
-      writer.appendLine("${declarationIndent}    override val valueType: dev.kpaths.core.TypeId = $valueTypeId")
+      writer.appendLine("${declarationIndent}    override val __kpaths_id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property($rootTypeId, \"$name\")")
+      writer.appendLine("${declarationIndent}    override val __kpaths_valueType: dev.kpaths.core.TypeId = $valueTypeId")
       writer.appendLine("${declarationIndent}    override fun get(root: $rootKotlinType): $valueKotlinType = root.$identifier")
       writeSetter(writer, pathProperty.kind, rootKotlinType, valueKotlinType, identifier, indent = "${declarationIndent}    ")
       writer.appendLine("${declarationIndent}  }")
     } else {
       writer.appendLine("${declarationIndent}public object $identifier : $pathBase<$rootKotlinType, $valueKotlinType>() {")
-      writer.appendLine("${declarationIndent}  override val id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property($rootTypeId, \"$name\")")
-      writer.appendLine("${declarationIndent}  override val valueType: dev.kpaths.core.TypeId = $valueTypeId")
+      writer.appendLine("${declarationIndent}  override val __kpaths_id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property($rootTypeId, \"$name\")")
+      writer.appendLine("${declarationIndent}  override val __kpaths_valueType: dev.kpaths.core.TypeId = $valueTypeId")
       writer.appendLine("${declarationIndent}  override fun get(root: $rootKotlinType): $valueKotlinType = root.$identifier")
       writeSetter(writer, pathProperty.kind, rootKotlinType, valueKotlinType, identifier, indent = "${declarationIndent}  ")
       writer.appendLine("${declarationIndent}}")
@@ -705,8 +687,8 @@ private class KPathsProcessor(
 
     writer.appendLine()
     writer.appendLine("${indent}public object $memberIdentifier : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, $focusKotlinType>() {")
-    writer.appendLine("${indent}  override val id: dev.kpaths.core.PathId = $pathId")
-    writer.appendLine("${indent}  override val valueType: dev.kpaths.core.TypeId = $focusTypeId")
+    writer.appendLine("${indent}  override val __kpaths_id: dev.kpaths.core.PathId = $pathId")
+    writer.appendLine("${indent}  override val __kpaths_valueType: dev.kpaths.core.TypeId = $focusTypeId")
     writer.appendLine("${indent}  override fun extract(root: $rootKotlinType): $focusKotlinType? = (root as? ${resolvedCaseType.kotlinType})?.let { case ->")
     when (properties.size) {
       1 -> writer.appendLine("${indent}    case.${escapeIdentifier(properties.single().declaration.simpleName.asString())}")
@@ -760,8 +742,8 @@ private class KPathsProcessor(
     casePath: CasePath,
     resolvedCaseType: ResolvedCaseType,
   ) {
-    writer.appendLine("${indent}override val id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.case($rootTypeId, \"${casePath.name}\")")
-    writer.appendLine("${indent}override val valueType: dev.kpaths.core.TypeId = ${resolvedCaseType.typeId}")
+    writer.appendLine("${indent}override val __kpaths_id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.case($rootTypeId, \"${casePath.name}\")")
+    writer.appendLine("${indent}override val __kpaths_valueType: dev.kpaths.core.TypeId = ${resolvedCaseType.typeId}")
     when (casePath.kind) {
       CaseKind.SEALED_VARIANT -> {
         writer.appendLine("${indent}@Suppress(\"UNCHECKED_CAST\")")

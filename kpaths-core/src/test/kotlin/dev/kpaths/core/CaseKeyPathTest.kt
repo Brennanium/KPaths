@@ -14,7 +14,7 @@ class CaseKeyPathTest {
     assertEquals(ManualEvent.Selected("Jr."), selected.embed(ManualEvent.Selected("Jr.")))
     assertEquals(
       PathId.case(TypeId.of<ManualEvent>(), "Selected"),
-      selected.id,
+      selected.__kpaths_id,
     )
   }
 
@@ -25,7 +25,7 @@ class CaseKeyPathTest {
     assertEquals(Unit, north.extract(ManualDirection.NORTH))
     assertNull(north.extract(ManualDirection.SOUTH))
     assertEquals(ManualDirection.NORTH, north.embed(Unit))
-    assertEquals(PathId.case(TypeId.of<ManualDirection>(), "NORTH"), north.id)
+    assertEquals(PathId.case(TypeId.of<ManualDirection>(), "NORTH"), north.__kpaths_id)
   }
 
   @Test
@@ -65,7 +65,7 @@ class CaseKeyPathTest {
           PathSegment.Case("Selected"),
         ),
       ),
-      selected.id,
+      selected.__kpaths_id,
     )
   }
 
@@ -87,7 +87,7 @@ class CaseKeyPathTest {
           PathSegment.Property("name"),
         ),
       ),
-      selected.id,
+      selected.__kpaths_id,
     )
   }
 
@@ -110,7 +110,7 @@ class CaseKeyPathTest {
     )
     assertEquals(
       TypeId.of<Pair<String, ManualChildAction>>(),
-      navigate.valueType,
+      navigate.__kpaths_valueType,
     )
   }
 
@@ -134,7 +134,7 @@ class CaseKeyPathTest {
     )
     assertEquals(
       TypeId.of<Triple<String, String, ManualChildAction>>(),
-      navigate.valueType,
+      navigate.__kpaths_valueType,
     )
   }
 }

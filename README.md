@@ -153,12 +153,15 @@ The generated path's equality and hash code are based on its `PathId`, rather th
 object identity. `PathId` contains structural `TypeId` tokens, preserving a classifier, generic
 arguments, variance, and nullability without reflection:
 
+Path metadata uses the reserved `__kpaths_id` and `__kpaths_valueType` names. This leaves ordinary
+model and case-payload names such as `id` and `valueType` available in generated path catalogs.
+
 ```kotlin
 @Pathable
 data class Box<T>(val value: T)
 
 val integerValue = BoxPaths.of<Int>(TypeId.of<Int>()).value
-integerValue.id.rootType // TypeId("your.package.Box", [TypeArgument.invariant(TypeId.of<Int>())])
+integerValue.__kpaths_id.rootType // TypeId("your.package.Box", [TypeArgument.invariant(TypeId.of<Int>())])
 ```
 
 The preferred generic syntax uses an inline-reified factory, which captures the full type token:
