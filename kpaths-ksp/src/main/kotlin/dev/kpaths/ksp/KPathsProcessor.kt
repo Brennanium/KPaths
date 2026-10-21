@@ -55,7 +55,7 @@ private class KPathsProcessor(
     }
     val packageName = declaration.packageName.asString()
     val generatedName = generatedObjectName(qualifiedName, packageName)
-    val writableProperties = writableProperties(declaration)
+    val pathProperties = pathProperties(declaration)
     val typeTokenNames = declaration.typeParameters.associate { parameter ->
       parameter.name.asString() to typeTokenName(parameter.name.asString())
     }
@@ -104,12 +104,12 @@ private class KPathsProcessor(
         writer.appendLine("  }")
       }
       writer.appendLine("  public val rootType: dev.kpaths.core.TypeId = $rootTypeId")
-      writableProperties.forEach { property ->
-        writeDataClassPropertyPath(
+      pathProperties.forEach { property ->
+        writePropertyPath(
           writer = writer,
           rootKotlinType = rootKotlinType,
           rootTypeId = rootTypeId,
-          property = property,
+          pathProperty = property,
           typeTokenNames = typeTokenNames,
           capturesTypeTokens = declaration.typeParameters.isNotEmpty(),
         )
@@ -132,13 +132,27 @@ private class KPathsProcessor(
     return typePath.replace('.', '_') + "Paths"
   }
 
-  /**
-   * An immutable [WritableKeyPath] can be emitted when Kotlin supplies `copy` with a named
-   * argument for the property: that is precisely a primary-constructor property of a data class.
-   */
-  private fun writableProperties(declaration: KSClassDeclaration): List<KSPropertyDeclaration> {
-    if (declaration.classKind != ClassKind.CLASS || Modifier.DATA !in declaration.modifiers) {
+  /** Classifies Kotlin properties into the library's explicit value-style and reference-style APIs. */
+  private fun pathProperties(declaration: KSClassDeclaration): List<PathProperty> {
+    if (declaration.classKind != ClassKind.CLASS) {
       return emptyList()
+    }
+
+    val accessibleProperties = declaration.getDeclaredProperties()
+      .filter(::isAccessible)
+      .toList()
+
+    if (Modifier.DATA !in declaration.modifiers) {
+      return accessibleProperties.map { property ->
+        PathProperty(
+          declaration = property,
+          kind = if (property.isMutable && isSetterAccessible(property)) {
+            PathKind.REFERENCE_WRITABLE
+          } else {
+            PathKind.READ_ONLY
+          },
+        )
+      }
     }
 
     val constructorPropertyNames = declaration.primaryConstructor
@@ -146,46 +160,103 @@ private class KPathsProcessor(
       ?.filter { it.isVal || it.isVar }
       ?.mapNotNull { it.name?.asString() }
       ?.toSet()
-      ?: return emptyList()
+      ?: emptySet()
 
-    return declaration.getDeclaredProperties()
-      .filter { property ->
-        property.simpleName.asString() in constructorPropertyNames &&
-          Modifier.PRIVATE !in property.modifiers &&
-          Modifier.PROTECTED !in property.modifiers
+    return accessibleProperties.mapNotNull { property ->
+      if (property.simpleName.asString() in constructorPropertyNames) {
+        PathProperty(property, PathKind.COPY_WRITABLE)
+      } else if (property.isMutable) {
+        logger.error(
+          "@Pathable data-class property '${property.simpleName.asString()}' must be declared in the primary constructor to receive a copy-based writable path.",
+          property,
+        )
+        null
+      } else {
+        PathProperty(property, PathKind.READ_ONLY)
       }
-      .toList()
+    }
   }
 
-  private fun writeDataClassPropertyPath(
+  private fun isAccessible(property: KSPropertyDeclaration): Boolean =
+    Modifier.PRIVATE !in property.modifiers && Modifier.PROTECTED !in property.modifiers
+
+  private fun isSetterAccessible(property: KSPropertyDeclaration): Boolean =
+    property.setter?.let(::isAccessible) ?: false
+
+  private fun isAccessible(setter: com.google.devtools.ksp.symbol.KSPropertySetter): Boolean =
+    Modifier.PRIVATE !in setter.modifiers && Modifier.PROTECTED !in setter.modifiers
+
+  private fun writePropertyPath(
     writer: java.io.BufferedWriter,
     rootKotlinType: String,
     rootTypeId: String,
-    property: KSPropertyDeclaration,
+    pathProperty: PathProperty,
     typeTokenNames: Map<String, String>,
     capturesTypeTokens: Boolean,
   ) {
+    val property = pathProperty.declaration
     val name = property.simpleName.asString()
     val identifier = escapeIdentifier(name)
     val valueKotlinType = property.type.resolve().renderKotlinType()
     val valueTypeId = property.type.resolve().renderTypeId(typeTokenNames)
+    val pathInterface = when (pathProperty.kind) {
+      PathKind.READ_ONLY -> "dev.kpaths.core.KeyPath"
+      PathKind.COPY_WRITABLE -> "dev.kpaths.core.WritableKeyPath"
+      PathKind.REFERENCE_WRITABLE -> "dev.kpaths.core.ReferenceWritableKeyPath"
+    }
+    val pathBase = when (pathProperty.kind) {
+      PathKind.READ_ONLY -> "dev.kpaths.core.KeyPathBase"
+      PathKind.COPY_WRITABLE -> "dev.kpaths.core.WritableKeyPathBase"
+      PathKind.REFERENCE_WRITABLE -> "dev.kpaths.core.ReferenceWritableKeyPathBase"
+    }
     writer.appendLine()
     if (capturesTypeTokens) {
-      writer.appendLine("  public val $identifier: dev.kpaths.core.WritableKeyPath<$rootKotlinType, $valueKotlinType> =")
-      writer.appendLine("    object : dev.kpaths.core.WritableKeyPathBase<$rootKotlinType, $valueKotlinType>() {")
+      writer.appendLine("  public val $identifier: $pathInterface<$rootKotlinType, $valueKotlinType> =")
+      writer.appendLine("    object : $pathBase<$rootKotlinType, $valueKotlinType>() {")
       writer.appendLine("      override val id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property($rootTypeId, \"$name\")")
       writer.appendLine("      override val valueType: dev.kpaths.core.TypeId = $valueTypeId")
       writer.appendLine("      override fun get(root: $rootKotlinType): $valueKotlinType = root.$identifier")
-      writer.appendLine("      override fun set(root: $rootKotlinType, value: $valueKotlinType): $rootKotlinType = root.copy($identifier = value)")
+      writeSetter(writer, pathProperty.kind, rootKotlinType, valueKotlinType, identifier, indent = "      ")
       writer.appendLine("    }")
     } else {
-      writer.appendLine("  public object $identifier : dev.kpaths.core.WritableKeyPathBase<$rootKotlinType, $valueKotlinType>() {")
+      writer.appendLine("  public object $identifier : $pathBase<$rootKotlinType, $valueKotlinType>() {")
       writer.appendLine("    override val id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property($rootTypeId, \"$name\")")
       writer.appendLine("    override val valueType: dev.kpaths.core.TypeId = $valueTypeId")
       writer.appendLine("    override fun get(root: $rootKotlinType): $valueKotlinType = root.$identifier")
-      writer.appendLine("    override fun set(root: $rootKotlinType, value: $valueKotlinType): $rootKotlinType = root.copy($identifier = value)")
+      writeSetter(writer, pathProperty.kind, rootKotlinType, valueKotlinType, identifier, indent = "    ")
       writer.appendLine("  }")
     }
+  }
+
+  private fun writeSetter(
+    writer: java.io.BufferedWriter,
+    kind: PathKind,
+    rootKotlinType: String,
+    valueKotlinType: String,
+    identifier: String,
+    indent: String,
+  ) {
+    when (kind) {
+      PathKind.READ_ONLY -> Unit
+      PathKind.COPY_WRITABLE ->
+        writer.appendLine("${indent}override fun set(root: $rootKotlinType, value: $valueKotlinType): $rootKotlinType = root.copy($identifier = value)")
+      PathKind.REFERENCE_WRITABLE -> {
+        writer.appendLine("${indent}override fun setInPlace(root: $rootKotlinType, value: $valueKotlinType) {")
+        writer.appendLine("${indent}  root.$identifier = value")
+        writer.appendLine("${indent}}")
+      }
+    }
+  }
+
+  private data class PathProperty(
+    val declaration: KSPropertyDeclaration,
+    val kind: PathKind,
+  )
+
+  private enum class PathKind {
+    READ_ONLY,
+    COPY_WRITABLE,
+    REFERENCE_WRITABLE,
   }
 
   private fun renderDeclaredTypeId(

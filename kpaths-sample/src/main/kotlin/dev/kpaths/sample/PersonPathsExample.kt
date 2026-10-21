@@ -22,6 +22,17 @@ data class Box<T>(
 )
 
 @Pathable
+data class Draft(
+  var text: String,
+)
+
+@Pathable
+class Session(
+  var token: String,
+  val identifier: String,
+)
+
+@Pathable
 sealed interface Connection {
   data object Disconnected : Connection
   data class Connected(val host: String) : Connection

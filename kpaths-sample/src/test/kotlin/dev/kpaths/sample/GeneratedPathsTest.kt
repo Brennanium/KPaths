@@ -3,6 +3,9 @@ package dev.kpaths.sample
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertSame
+import dev.kpaths.core.KeyPath
+import dev.kpaths.core.ReferenceWritableKeyPath
 import dev.kpaths.core.TypeArgument
 import dev.kpaths.core.TypeId
 import dev.kpaths.core.WritableKeyPathBase
@@ -88,6 +91,34 @@ class GeneratedPathsTest {
   fun `generated tokens preserve nested generic arguments and nullability`() {
     assertEquals(TypeId.list(TypeId.string), PersonPaths.tags.valueType)
     assertEquals(TypeId.string.withNullability(true), PersonPaths.nickname.valueType)
+  }
+
+  @Test
+  fun `data-class writable paths copy even when the property is mutable`() {
+    val original = Draft(text = "first")
+
+    val updated = DraftPaths.text.set(original, "second")
+
+    assertEquals("first", original.text)
+    assertEquals("second", updated.text)
+  }
+
+  @Test
+  fun `plain-class mutable properties generate reference-writable paths`() {
+    val token: ReferenceWritableKeyPath<Session, String> = SessionPaths.token
+    val session = Session(token = "first", identifier = "session-1")
+
+    val returned = token.set(session, "second")
+
+    assertSame(session, returned)
+    assertEquals("second", session.token)
+  }
+
+  @Test
+  fun `plain-class immutable properties generate read-only paths`() {
+    val identifier: KeyPath<Session, String> = SessionPaths.identifier
+
+    assertEquals("session-1", identifier.get(Session(token = "first", identifier = "session-1")))
   }
 
   @Test

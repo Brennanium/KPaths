@@ -50,6 +50,29 @@ val city = PersonPaths.address.then(AddressPaths.city)
 val updated = city.set(person, "Toronto")
 ```
 
+## Value-style and reference-style roots
+
+Kotlin data classes are reference objects, but KPaths deliberately treats an annotated data class
+as a value-style model: primary-constructor properties receive copy-based `WritableKeyPath`s.
+
+```kotlin
+@Pathable
+data class Draft(var text: String)
+
+val updated = DraftPaths.text.set(draft, "Revised") // returns draft.copy(text = "Revised")
+```
+
+An annotated plain class instead exposes its accessible mutable properties as
+`ReferenceWritableKeyPath`s and immutable properties as read-only `KeyPath`s:
+
+```kotlin
+@Pathable
+class Session(var token: String, val identifier: String)
+
+SessionPaths.token.setInPlace(session, "new-token")
+SessionPaths.identifier.get(session)
+```
+
 The generated path's equality and hash code are based on its `PathId`, rather than closure or
 object identity. `PathId` contains structural `TypeId` tokens, preserving a classifier, generic
 arguments, variance, and nullability without reflection:
