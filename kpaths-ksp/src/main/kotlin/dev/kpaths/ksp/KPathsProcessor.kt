@@ -149,37 +149,53 @@ private class KPathsProcessor(
     return typePath.replace('.', '_') + "Paths"
   }
 
-  /** Returns direct concrete variants for the first sealed-hierarchy generation slice. */
+  /** Returns direct sealed variants or payload-less enum entries. */
   private fun casePaths(declaration: KSClassDeclaration): List<CasePath> {
-    if (Modifier.SEALED !in declaration.modifiers) {
-      return emptyList()
+    if (Modifier.SEALED in declaration.modifiers) {
+      return declaration.getSealedSubclasses().mapNotNull { caseDeclaration ->
+        if (caseDeclaration.classKind !in setOf(ClassKind.CLASS, ClassKind.OBJECT)) {
+          logger.error(
+            "@Pathable sealed variant '${caseDeclaration.simpleName.asString()}' must be a class or object.",
+            caseDeclaration,
+          )
+          return@mapNotNull null
+        }
+        if (caseDeclaration.typeParameters.isNotEmpty()) {
+          logger.error(
+            "@Pathable sealed variant '${caseDeclaration.simpleName.asString()}' cannot declare type parameters yet.",
+            caseDeclaration,
+          )
+          return@mapNotNull null
+        }
+        val qualifiedName = caseDeclaration.qualifiedName?.asString() ?: run {
+          logger.error("Sealed variants must have qualified names.", caseDeclaration)
+          return@mapNotNull null
+        }
+        CasePath(
+          declaration = caseDeclaration,
+          name = caseDeclaration.simpleName.asString(),
+          kind = CaseKind.SEALED_VARIANT,
+          qualifiedName = qualifiedName,
+        )
+      }.toList()
     }
 
-    return declaration.getSealedSubclasses().mapNotNull { caseDeclaration ->
-      if (caseDeclaration.classKind !in setOf(ClassKind.CLASS, ClassKind.OBJECT)) {
-        logger.error(
-          "@Pathable sealed variant '${caseDeclaration.simpleName.asString()}' must be a class or object.",
-          caseDeclaration,
-        )
-        return@mapNotNull null
-      }
-      if (caseDeclaration.typeParameters.isNotEmpty()) {
-        logger.error(
-          "@Pathable sealed variant '${caseDeclaration.simpleName.asString()}' cannot declare type parameters yet.",
-          caseDeclaration,
-        )
-        return@mapNotNull null
-      }
-      val qualifiedName = caseDeclaration.qualifiedName?.asString() ?: run {
-        logger.error("Sealed variants must have qualified names.", caseDeclaration)
-        return@mapNotNull null
-      }
-      CasePath(
-        declaration = caseDeclaration,
-        name = caseDeclaration.simpleName.asString(),
-        qualifiedName = qualifiedName,
-      )
-    }.toList()
+    if (declaration.classKind == ClassKind.ENUM_CLASS) {
+      return declaration.declarations
+        .filterIsInstance<KSClassDeclaration>()
+        .filter { it.classKind == ClassKind.ENUM_ENTRY }
+        .map { entry ->
+          CasePath(
+            declaration = entry,
+            name = entry.simpleName.asString(),
+            kind = CaseKind.ENUM_ENTRY,
+            qualifiedName = null,
+          )
+        }
+        .toList()
+    }
+
+    return emptyList()
   }
 
   /** Classifies Kotlin properties into the library's explicit value-style and reference-style APIs. */
@@ -285,16 +301,37 @@ private class KPathsProcessor(
     rootTypeId: String,
     casePath: CasePath,
   ) {
-    val caseIdentifier = escapeIdentifier(casePath.name.replaceFirstChar { it.lowercaseChar() })
-    val caseTypeId = renderDeclaredTypeId(casePath.qualifiedName, emptyList(), emptyMap())
+    val caseIdentifier = escapeIdentifier(casePath.name.pathIdentifier())
+    val valueKotlinType = when (casePath.kind) {
+      CaseKind.SEALED_VARIANT -> requireNotNull(casePath.qualifiedName)
+      CaseKind.ENUM_ENTRY -> "kotlin.Unit"
+    }
+    val valueTypeId = when (casePath.kind) {
+      CaseKind.SEALED_VARIANT ->
+        renderDeclaredTypeId(requireNotNull(casePath.qualifiedName), emptyList(), emptyMap())
+      CaseKind.ENUM_ENTRY -> "dev.kpaths.core.TypeId.of<kotlin.Unit>()"
+    }
 
     writer.appendLine()
-    writer.appendLine("  public object $caseIdentifier : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, ${casePath.qualifiedName}>() {")
+    writer.appendLine("  public object $caseIdentifier : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, $valueKotlinType>() {")
     writer.appendLine("    override val id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.case($rootTypeId, \"${casePath.name}\")")
-    writer.appendLine("    override val valueType: dev.kpaths.core.TypeId = $caseTypeId")
-    writer.appendLine("    override fun extract(root: $rootKotlinType): ${casePath.qualifiedName}? = root as? ${casePath.qualifiedName}")
-    writer.appendLine("    override fun embed(value: ${casePath.qualifiedName}): $rootKotlinType = value")
+    writer.appendLine("    override val valueType: dev.kpaths.core.TypeId = $valueTypeId")
+    when (casePath.kind) {
+      CaseKind.SEALED_VARIANT -> {
+        val qualifiedName = requireNotNull(casePath.qualifiedName)
+        writer.appendLine("    override fun extract(root: $rootKotlinType): $qualifiedName? = root as? $qualifiedName")
+        writer.appendLine("    override fun embed(value: $qualifiedName): $rootKotlinType = value")
+      }
+      CaseKind.ENUM_ENTRY -> {
+        writer.appendLine("    override fun extract(root: $rootKotlinType): kotlin.Unit? = if (root == $rootKotlinType.${casePath.name}) kotlin.Unit else null")
+        writer.appendLine("    override fun embed(value: kotlin.Unit): $rootKotlinType = $rootKotlinType.${casePath.name}")
+      }
+    }
     writer.appendLine("  }")
+
+    if (casePath.kind != CaseKind.SEALED_VARIANT) {
+      return
+    }
 
     val caseProperties = pathProperties(casePath.declaration)
     if (caseProperties.isEmpty()) {
@@ -303,11 +340,12 @@ private class KPathsProcessor(
 
     writer.appendLine()
     writer.appendLine("  public object ${escapeIdentifier(casePath.name + "Paths")} {")
-    val caseRootTypeId = renderDeclaredTypeId(casePath.qualifiedName, emptyList(), emptyMap())
+    val caseQualifiedName = requireNotNull(casePath.qualifiedName)
+    val caseRootTypeId = renderDeclaredTypeId(caseQualifiedName, emptyList(), emptyMap())
     caseProperties.forEach { property ->
       writePropertyPath(
         writer = writer,
-        rootKotlinType = casePath.qualifiedName,
+        rootKotlinType = caseQualifiedName,
         rootTypeId = caseRootTypeId,
         pathProperty = property,
         typeTokenNames = emptyMap(),
@@ -346,8 +384,14 @@ private class KPathsProcessor(
   private data class CasePath(
     val declaration: KSClassDeclaration,
     val name: String,
-    val qualifiedName: String,
+    val kind: CaseKind,
+    val qualifiedName: String?,
   )
+
+  private enum class CaseKind {
+    SEALED_VARIANT,
+    ENUM_ENTRY,
+  }
 
   private enum class PathKind {
     READ_ONLY,
@@ -423,6 +467,9 @@ private class KPathsProcessor(
 
   private fun typeTokenName(parameterName: String): String =
     escapeIdentifier(parameterName.replaceFirstChar { it.lowercaseChar() } + "Type")
+
+  private fun String.pathIdentifier(): String =
+    if (this == uppercase()) lowercase() else replaceFirstChar { it.lowercaseChar() }
 
   private fun escapeIdentifier(identifier: String): String =
     if (identifier in kotlinKeywords) "`$identifier`" else identifier

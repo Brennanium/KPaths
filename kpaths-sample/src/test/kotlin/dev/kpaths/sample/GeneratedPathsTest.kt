@@ -2,9 +2,11 @@ package dev.kpaths.sample
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNotEquals
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 import dev.kpaths.core.CaseKeyPath
 import dev.kpaths.core.KeyPath
 import dev.kpaths.core.ReferenceWritableKeyPath
@@ -174,6 +176,22 @@ class GeneratedPathsTest {
       connectedWithNullHost[ConnectionPaths.connected]
         ?.setting(ConnectionPaths.ConnectedPaths.host, "example.com"),
     )
+  }
+
+  @Test
+  fun `KSP generates enum case paths with Unit focuses`() {
+    val north: CaseKeyPath<Direction, Unit> = DirectionPaths.north
+
+    assertEquals(Unit, Direction.NORTH[DirectionPaths.north])
+    assertNull(Direction.SOUTH[DirectionPaths.north])
+    assertEquals(Direction.NORTH, north.embed(Unit))
+    assertTrue(north.matches(Direction.NORTH))
+    assertFalse(north.matches(Direction.SOUTH))
+    assertEquals(
+      dev.kpaths.core.PathId.case(TypeId("dev.kpaths.sample.Direction"), "NORTH"),
+      DirectionPaths.north.id,
+    )
+    assertEquals(TypeId.of<Unit>(), DirectionPaths.north.valueType)
   }
 }
 

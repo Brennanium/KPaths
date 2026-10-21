@@ -131,5 +131,19 @@ connection[ConnectionPaths.connected]
 
 The nested `ConnectedPaths` namespace is generated inside the KSP-owned `ConnectionPaths` object;
 an eventual compiler-plugin façade may offer `Connection.Paths` as an additional spelling.
-The first case-path slice supports non-generic sealed classes and interfaces; enum and generic
-sealed-hierarchy support follow in later work.
+## Enum case paths
+
+Enum entries have no associated data, so their generated `CaseKeyPath` focus is Kotlin's `Unit`
+(the equivalent of Swift's `Void`):
+
+```kotlin
+@Pathable
+enum class Direction { NORTH, SOUTH }
+
+Direction.NORTH[DirectionPaths.north] // Unit
+Direction.SOUTH[DirectionPaths.north] // null
+DirectionPaths.north.embed(Unit)      // Direction.NORTH
+```
+
+The first case-path slice supports non-generic sealed classes, sealed interfaces, and enums.
+Generic sealed-hierarchy support follows in later work.

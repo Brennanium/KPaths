@@ -37,3 +37,9 @@ sealed interface Connection {
   data object Disconnected : Connection
   data class Connected(val host: String?) : Connection
 }
+
+@Pathable
+enum class Direction {
+  NORTH,
+  SOUTH,
+}
