@@ -193,6 +193,18 @@ class GeneratedPathsTest {
     assertEquals(connectedWithNullHost, connected.embed(connectedWithNullHost))
     assertEquals(Connection.Disconnected, Connection.Disconnected[ConnectionPaths.Disconnected])
     assertEquals(
+      ConnectionPaths.Connected,
+      ConnectionPaths.caseOf(connectedWithNullHost),
+    )
+    assertEquals(
+      ConnectionPaths.Disconnected,
+      ConnectionPaths.caseOf(Connection.Disconnected),
+    )
+    assertEquals(
+      setOf<Any?>(ConnectionPaths.Disconnected, ConnectionPaths.Connected),
+      ConnectionPaths.allCasePaths.toSet(),
+    )
+    assertEquals(
       Connection.Disconnected,
       connected.replaceIfMatching(Connection.Disconnected, connectedWithNullHost),
     )
@@ -234,6 +246,12 @@ class GeneratedPathsTest {
     )
     assertEquals(TypeId.of<Unit>(), DirectionPaths.NORTH.valueType)
     assertEquals(DirectionPaths.NORTH, caseKeyPath(Direction.NORTH))
+    assertEquals(DirectionPaths.NORTH, DirectionPaths.caseOf(Direction.NORTH))
+    assertEquals(DirectionPaths.SOUTH, DirectionPaths.caseOf(Direction.SOUTH))
+    assertEquals(
+      setOf<Any?>(DirectionPaths.NORTH, DirectionPaths.SOUTH),
+      DirectionPaths.allCasePaths.toSet(),
+    )
   }
 
   @Test
@@ -264,6 +282,12 @@ class GeneratedPathsTest {
     assertFalse((stringPaths.LoadedPaths.value as Any) is WritableKeyPath<*, *>)
     assertNull(Loadable.Idle[stringPaths.Loaded])
     assertEquals(Loadable.Idle, Loadable.Idle[stringPaths.Idle])
+    assertEquals(stringPaths.Loaded, stringPaths.caseOf(value))
+    assertEquals(stringPaths.Idle, stringPaths.caseOf(Loadable.Idle))
+    assertEquals(
+      setOf<Any?>(stringPaths.Idle, stringPaths.Loaded),
+      stringPaths.allCasePaths.toSet(),
+    )
     assertEquals(Loadable.Loaded("Blob Jr."), loaded.embed(Loadable.Loaded("Blob Jr.")))
     assertEquals(
       stringPaths.Loaded,

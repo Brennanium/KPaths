@@ -109,6 +109,11 @@ private class KPathsProcessor(
       ?.joinToString(prefix = "<", postfix = ">") { escapeIdentifier(it.name.asString()) }
       .orEmpty()
     val rootTypeId = renderDeclaredTypeId(qualifiedName, declaration.typeParameters, typeTokenNames)
+    val resolvedCasePaths = casePaths.mapNotNull { casePath ->
+      resolveCaseType(declaration, typeTokenNames, casePath)?.let { resolvedCaseType ->
+        ResolvedCasePath(casePath, resolvedCaseType)
+      }
+    }
     val containingFile = declaration.containingFile ?: run {
       logger.error("@Pathable types must originate from a source file.", declaration)
       return
@@ -163,7 +168,7 @@ private class KPathsProcessor(
           declarationIndent = "  ",
         )
       }
-      casePaths.forEach { casePath ->
+      resolvedCasePaths.forEach { resolvedCasePath ->
         writeCasePath(
           writer = writer,
           rootKotlinType = rootKotlinType,
@@ -171,7 +176,15 @@ private class KPathsProcessor(
           rootDeclaration = declaration,
           rootTypeTokenNames = typeTokenNames,
           capturesTypeTokens = declaration.typeParameters.isNotEmpty(),
-          casePath = casePath,
+          casePath = resolvedCasePath.casePath,
+          resolvedCaseType = resolvedCasePath.resolvedCaseType,
+        )
+      }
+      if (resolvedCasePaths.isNotEmpty()) {
+        writeCaseCatalog(
+          writer = writer,
+          rootKotlinType = rootKotlinType,
+          resolvedCasePaths = resolvedCasePaths,
         )
       }
       writer.appendLine("}")
@@ -417,6 +430,16 @@ private class KPathsProcessor(
         }
       }
     }
+    if (casePaths.isNotEmpty()) {
+      members += GeneratedMember(
+        name = "allCasePaths",
+        description = "the generated catalog of all case paths",
+      )
+      members += GeneratedMember(
+        name = "caseOf",
+        description = "the generated case-path lookup function",
+      )
+    }
 
     var isValid = true
     (pathProperties.asSequence() + casePaths.asSequence().flatMap { it.propertyPaths.asSequence() })
@@ -506,13 +529,9 @@ private class KPathsProcessor(
     rootTypeTokenNames: Map<String, String>,
     capturesTypeTokens: Boolean,
     casePath: CasePath,
+    resolvedCaseType: ResolvedCaseType,
   ) {
     val caseIdentifier = escapeIdentifier(casePath.name)
-    val resolvedCaseType = resolveCaseType(
-      rootDeclaration = rootDeclaration,
-      rootTypeTokenNames = rootTypeTokenNames,
-      casePath = casePath,
-    ) ?: return
 
     writer.appendLine()
     if (capturesTypeTokens) {
@@ -575,6 +594,30 @@ private class KPathsProcessor(
       }
       writer.appendLine("  }")
     }
+  }
+
+  /** Emits the generated namespace's finite case catalog and a lookup for a root value's case. */
+  private fun writeCaseCatalog(
+    writer: java.io.BufferedWriter,
+    rootKotlinType: String,
+    resolvedCasePaths: List<ResolvedCasePath>,
+  ) {
+    val partialCasePathType = "dev.kpaths.core.PartialCaseKeyPath<$rootKotlinType>"
+    val paths = resolvedCasePaths.joinToString { resolvedCasePath ->
+      escapeIdentifier(resolvedCasePath.casePath.name)
+    }
+
+    writer.appendLine()
+    writer.appendLine("  public val allCasePaths: kotlin.collections.List<$partialCasePathType> =")
+    writer.appendLine("    kotlin.collections.listOf($paths)")
+    writer.appendLine()
+    writer.appendLine("  public fun caseOf(root: $rootKotlinType): $partialCasePathType {")
+    resolvedCasePaths.forEach { resolvedCasePath ->
+      val identifier = escapeIdentifier(resolvedCasePath.casePath.name)
+      writer.appendLine("    if ($identifier.matches(root)) return $identifier")
+    }
+    writer.appendLine("    error(\"No generated case path matched the supplied ${rootKotlinType.substringBefore('<')} value.\")")
+    writer.appendLine("  }")
   }
 
   private fun writeCasePathBody(
@@ -797,6 +840,11 @@ private class KPathsProcessor(
     val typeId: String,
     val typeParameterSubstitutions: Map<String, String>,
     val typeTokenSubstitutions: Map<String, String>,
+  )
+
+  private data class ResolvedCasePath(
+    val casePath: CasePath,
+    val resolvedCaseType: ResolvedCaseType,
   )
 
   private data class GeneratedMember(

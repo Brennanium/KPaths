@@ -30,6 +30,26 @@ public interface CaseKeyPath<Root, Value : Any> : PartialCaseKeyPath<Root> {
     extract(root)?.let { embed(update(it)) } ?: root
 }
 
+/**
+ * Appends two case paths, retaining full extract-and-embed behavior.
+ *
+ * This is the prism equivalent of Swift CasePaths' nested case-path composition: the inner path
+ * constructs its intermediate case, which the outer path can in turn construct into the root.
+ */
+public fun <Root, Middle : Any, Value : Any> CaseKeyPath<Root, Middle>.appending(
+  next: CaseKeyPath<Middle, Value>,
+): CaseKeyPath<Root, Value> = caseKeyPath(
+  id = id.appending(next.id),
+  valueType = next.valueType,
+  extract = { root -> extract(root)?.let(next::extract) },
+  embed = { value -> embed(next.embed(value)) },
+)
+
+/** Kotlin-friendly spelling of [appending]. */
+public fun <Root, Middle : Any, Value : Any> CaseKeyPath<Root, Middle>.then(
+  next: CaseKeyPath<Middle, Value>,
+): CaseKeyPath<Root, Value> = appending(next)
+
 /** Base class for generated case paths with the same structural identity rules as key paths. */
 public abstract class CaseKeyPathBase<Root, Value : Any> : PathBase(), CaseKeyPath<Root, Value>
 

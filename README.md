@@ -2,13 +2,14 @@
 
 KPaths is a Kotlin path library inspired by Swift key paths and case paths. It provides stable,
 typed property and case paths for ordinary Kotlin models; reducer-based architectures are one
-future use case, not the library's framing. Any accessible Kotlin property can become a manual
-key path; `@Pathable` generates named, optimized paths for models you own. Data/class properties
-generate key paths, while sealed variants generate case key paths.
+future use case, not the library's framing. Any accessible Kotlin property or ordinary sealed
+case can become a manual path. Apply `@Pathable` to a source-owned model when you want KSP to
+generate its complete, canonical optics catalog: named property paths, sealed/enum case paths,
+case-property namespaces, and source-aware diagnostics.
 
 ## Modules
 
-- `kpaths-annotations` — the opt-in `@Pathable` annotation for model types.
+- `kpaths-annotations` — the opt-in `@Pathable` annotation for generated model path catalogs.
 - `kpaths-core` — runtime path interfaces and stable path identities.
 - `kpaths-ksp` — the Kotlin Symbol Processing generator.
 - `kpaths-sample` — a small compile-time smoke test for the generator.
@@ -22,11 +23,12 @@ export JAVA_HOME="$(brew --prefix openjdk@17)"
 ./gradlew check
 ```
 
-## First vertical slice
+## Generated model catalogs
 
 For an annotated non-generic data class, KSP emits one stable singleton per accessible property:
 `val` properties produce read-only `KeyPath`s, while primary-constructor `var` properties produce
-copy-based `WritableKeyPath`s.
+copy-based `WritableKeyPath`s. This is optional for one-off paths—`keyPath(Person::name)` works
+without an annotation—but gives a model a discoverable canonical API.
 
 ```kotlin
 @Pathable
@@ -220,6 +222,20 @@ Case-path names retain their Kotlin declaration spelling: class-like sealed case
 while enum entries use `NORTH`. The nested `ConnectedPaths` namespace is generated inside the
 KSP-owned `ConnectionPaths` object; an eventual compiler-plugin façade may offer
 `Connection.Paths` as an additional spelling.
+
+For a sealed/enum root, the generated namespace is also a finite case catalog, analogous to
+Point-Free CasePaths' `AllCasePaths` surface:
+
+```kotlin
+ConnectionPaths.allCasePaths
+// [ConnectionPaths.Disconnected, ConnectionPaths.Connected]
+
+ConnectionPaths.caseOf(connection)
+// ConnectionPaths.Connected
+```
+
+`allCasePaths` contains `PartialCaseKeyPath<Connection>` values suitable for generic inspection;
+`caseOf` returns the one generated path that matches a particular root value.
 
 Kotlin backticked identifiers remain valid in generated paths. KSP preserves their semantic name
 and emits the required backticks for properties, enum entries, and sealed cases:

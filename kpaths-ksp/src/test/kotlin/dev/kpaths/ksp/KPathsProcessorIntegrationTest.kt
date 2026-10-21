@@ -84,6 +84,31 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
+  fun `reports generated case catalog collisions at Pathable`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "CaseCatalogCollision.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.Pathable
+
+        @Pathable
+        sealed interface Event {
+          data object allCasePaths : Event
+        }
+      """.trimIndent(),
+    )
+
+    assertContains(output, "CaseCatalogCollision.kt:")
+    assertContains(output, "[KPaths] Cannot generate paths because 'allCasePaths' would name both")
+    assertContains(output, "the case path for 'allCasePaths' and the generated catalog of all case paths")
+  }
+
+  @Test
   fun `reports top level generated namespace collisions at Pathable`(
     @TempDir fixtureDirectory: Path,
   ) {

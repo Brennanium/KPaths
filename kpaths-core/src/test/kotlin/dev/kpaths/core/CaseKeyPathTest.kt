@@ -41,6 +41,33 @@ class CaseKeyPathTest {
     assertNull(even.extract(41))
     assertEquals(2, even.embed(2))
   }
+
+  @Test
+  fun `case paths compose while retaining extraction and embedding`() {
+    val outer = caseKeyPath<ManualOuter, ManualOuter.Nested>()
+    val inner = caseKeyPath<ManualOuter.Nested, ManualOuter.Nested.Selected>()
+    val selected = outer.then(inner)
+
+    assertEquals(
+      ManualOuter.Nested.Selected("Blob"),
+      selected.extract(ManualOuter.Nested.Selected("Blob")),
+    )
+    assertNull(selected.extract(ManualOuter.Nested.Dismissed))
+    assertEquals(
+      ManualOuter.Nested.Selected("Jr."),
+      selected.embed(ManualOuter.Nested.Selected("Jr.")),
+    )
+    assertEquals(
+      PathId(
+        rootType = TypeId.of<ManualOuter>(),
+        segments = listOf(
+          PathSegment.Case("Nested"),
+          PathSegment.Case("Selected"),
+        ),
+      ),
+      selected.id,
+    )
+  }
 }
 
 private sealed interface ManualEvent {
@@ -51,4 +78,11 @@ private sealed interface ManualEvent {
 private enum class ManualDirection {
   NORTH,
   SOUTH,
+}
+
+private sealed interface ManualOuter {
+  sealed interface Nested : ManualOuter {
+    data object Dismissed : Nested
+    data class Selected(val name: String) : Nested
+  }
 }
