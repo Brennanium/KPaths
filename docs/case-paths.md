@@ -118,4 +118,7 @@ RequestPaths.Search
 // WritableCaseKeyPath<Request, Request.Search>
 ```
 
-KSP also provides direct payload conveniences for cases with one to three primary-constructor properties, but these are optional shortcuts. Prefer the whole-case path plus a writable composition whenever updating one property while retaining the rest of the case is the intent.
+KSP also provides direct payload conveniences for cases with one to three primary-constructor
+properties, but these are optional shortcuts. The [generated sealed-catalog guide](generation.md#sealed-hierarchies-and-generated-case-catalogs)
+shows their exact shape, value semantics, generic-root form, and the distinction from
+`RequestPaths.SearchPaths` concrete-case property paths.
