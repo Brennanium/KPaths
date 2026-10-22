@@ -83,6 +83,23 @@ public fun <Root, Case : Any, Value : Any> CaseKeyPath<Root, Case>.then(
 public abstract class CaseKeyPathBase<Root, Value : Any> : PathBase(), CaseKeyPath<Root, Value>
 
 /**
+ * Views this case path as a total, read-only key path whose focus is nullable.
+ *
+ * The resulting path returns the matched case value when [Root] has this case and `null` when it
+ * does not. It deliberately has no writable counterpart: assigning `null` cannot have a universal
+ * meaning for a case path.
+ */
+public fun <Root, Value : Any> CaseKeyPath<Root, Value>.matching(): KeyPath<Root, Value?> {
+  val casePath = this
+  return object : KeyPathBase<Root, Value?>() {
+    override val __kpaths_id: PathId = casePath.__kpaths_id
+    override val __kpaths_valueType: TypeId = casePath.__kpaths_valueType.withNullability(true)
+
+    override fun get(root: Root): Value? = casePath.extract(root)
+  }
+}
+
+/**
  * Creates a case path with an explicitly supplied structural identity and focus type token.
  *
  * [extract] must return `null` only when the root does not match. A case focus itself is always

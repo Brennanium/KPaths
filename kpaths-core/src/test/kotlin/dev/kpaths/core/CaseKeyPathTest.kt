@@ -43,6 +43,18 @@ class CaseKeyPathTest {
   }
 
   @Test
+  fun `matching exposes a case path as a nullable read-only key path`() {
+    val selected = caseKeyPath<ManualEvent, ManualEvent.Selected>()
+    val matching = selected.matching()
+
+    assertEquals(ManualEvent.Selected("Blob"), matching.get(ManualEvent.Selected("Blob")))
+    assertNull(matching.get(ManualEvent.Dismissed))
+    assertEquals(selected.__kpaths_id, matching.__kpaths_id)
+    assertEquals(TypeId.of<ManualEvent.Selected?>(), matching.__kpaths_valueType)
+    assertEquals(matching, selected.matching())
+  }
+
+  @Test
   fun `case paths compose while retaining extraction and embedding`() {
     val outer = caseKeyPath<ManualOuter, ManualOuter.Nested>()
     val inner = caseKeyPath<ManualOuter.Nested, ManualOuter.Nested.Selected>()

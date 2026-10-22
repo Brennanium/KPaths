@@ -263,9 +263,8 @@ val connected = caseKeyPath<Connection, Connection.Connected>()
 connection[connected] // Connection.Connected(host = null)
 ```
 
-For non-generic sealed roots, KSP additionally emits canonical payload paths whenever a data-class
-case has one to three accessible primary-constructor properties and can therefore be reconstructed
-without guessing:
+KSP additionally emits canonical payload paths whenever a data-class case has one to three
+accessible primary-constructor properties and can therefore be reconstructed without guessing:
 
 ```kotlin
 @Pathable
@@ -288,8 +287,42 @@ RequestPaths.Route.payload
 The outer case singleton remains available (`RequestPaths.Navigate`), and the ordinary structural
 property paths remain under `RequestPaths.NavigatePaths.id` and `.destination`. A unary nullable
 property does not receive a canonical payload path because `CaseKeyPath` reserves `null` for a
-failed match; its ordinary key path is still generated. Generic sealed roots retain their existing
-case and property paths for now.
+failed match; its ordinary key path is still generated. Cases with more than three constructor
+properties likewise retain their whole-case and individual-property paths; model a dedicated
+payload data class when that group needs its own path.
+
+Generic sealed roots receive the same direct paths when the focused payload is provably non-null.
+The generated case path is an instance member, so it captures the concrete root type token:
+
+```kotlin
+@Pathable
+sealed interface Loadable<out Value : Any> {
+  data object Idle : Loadable<Nothing>
+  data class Loaded<T : Any>(val value: T) : Loadable<T>
+}
+
+val loaded: CaseKeyPath<Loadable<String>, String> =
+  LoadablePaths<String>().Loaded.value
+```
+
+An unconstrained `Value` may be nullable, so it intentionally does not receive this direct
+payload path yet. The whole-case path (`LoadablePaths<Value>().Loaded`) and
+`LoadablePaths<Value>().LoadedPaths.value` remain available.
+
+## Case matching as a key path
+
+`matching()` provides a read-only nullable `KeyPath` view of any `CaseKeyPath`:
+
+```kotlin
+val selected: CaseKeyPath<Request, Request.Selected> = RequestPaths.Selected
+val selectedValue: KeyPath<Request, Request.Selected?> = selected.matching()
+
+selectedValue.get(Request.Selected("Blob")) // Request.Selected("Blob")
+selectedValue.get(Request.Navigate("id-1", "settings")) // null
+```
+
+It is intentionally read-only. Assigning `null` to such a view could mean “do nothing,” “reject
+the update,” or “change to another case,” and KPaths does not choose one of those meanings.
 
 An enum entry has no distinct Kotlin type, so pass its singleton value instead:
 

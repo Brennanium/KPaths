@@ -133,26 +133,24 @@ private class KPathsProcessor(
       if (declaration.typeParameters.isEmpty()) {
         writer.appendLine("public object $generatedIdentifier {")
       } else {
-        val typeParameters = declaration.typeParameters.joinToString { escapeIdentifier(it.name.asString()) }
+        val typeParameters = renderTypeParameters(declaration.typeParameters)
         val tokenParameters = declaration.typeParameters.joinToString(", ") { parameter ->
           "${typeTokenArgumentNames.getValue(parameter.name.asString())}: dev.kpaths.core.TypeId"
         }
         val constructorParameters = typeTokenNames.values.joinToString(", ") { name ->
           "private val $name: dev.kpaths.core.TypeId"
         }
-        writer.appendLine("public class $generatedIdentifier<$typeParameters> private constructor(")
+        writer.appendLine("public class $generatedIdentifier<${typeParameters.declaration}> private constructor(")
         writer.appendLine("  $constructorParameters,")
-        writer.appendLine(") {")
+        writer.appendLine(")${typeParameters.whereClause} {")
         writer.appendLine("  public companion object {")
-        writer.appendLine("    public fun <$typeParameters> of($tokenParameters): $generatedIdentifier<$typeParameters> =")
+        writer.appendLine("    public fun <${typeParameters.declaration}> of($tokenParameters): $generatedIdentifier<${typeParameters.names}>${typeParameters.whereClause} =")
         writer.appendLine("      $generatedIdentifier(${declaration.typeParameters.joinToString { typeTokenArgumentNames.getValue(it.name.asString()) }})")
         val classTokenParameters = declaration.typeParameters.joinToString(", ") { parameter ->
           "${typeTokenClassArgumentName(parameter.name.asString())}: kotlin.reflect.KClass<${escapeIdentifier(parameter.name.asString())}>"
         }
-        val nonNullTypeParameters = declaration.typeParameters.joinToString(", ") { parameter ->
-          "${escapeIdentifier(parameter.name.asString())} : Any"
-        }
-        writer.appendLine("    public fun <$nonNullTypeParameters> of($classTokenParameters): $generatedIdentifier<$typeParameters> =")
+        val nonNullTypeParameters = renderTypeParameters(declaration.typeParameters, forceNonNull = true)
+        writer.appendLine("    public fun <${nonNullTypeParameters.declaration}> of($classTokenParameters): $generatedIdentifier<${nonNullTypeParameters.names}>${nonNullTypeParameters.whereClause} =")
         writer.appendLine("      $generatedIdentifier(${declaration.typeParameters.joinToString { "dev.kpaths.core.TypeId.from(${typeTokenClassArgumentName(it.name.asString())})" }})")
         writer.appendLine("  }")
       }
@@ -190,10 +188,9 @@ private class KPathsProcessor(
       }
       writer.appendLine("}")
       if (declaration.typeParameters.isNotEmpty()) {
-        val typeParameters = declaration.typeParameters.joinToString { "reified ${escapeIdentifier(it.name.asString())}" }
+        val typeParameters = renderTypeParameters(declaration.typeParameters, reified = true)
         writer.appendLine()
-        val returnTypeParameters = declaration.typeParameters.joinToString { escapeIdentifier(it.name.asString()) }
-        writer.appendLine("public inline fun <$typeParameters> $generatedIdentifier(): $generatedIdentifier<$returnTypeParameters> =")
+        writer.appendLine("public inline fun <${typeParameters.declaration}> $generatedIdentifier(): $generatedIdentifier<${typeParameters.names}>${typeParameters.whereClause} =")
         writer.appendLine("  $generatedIdentifier.of(${declaration.typeParameters.joinToString { "dev.kpaths.core.TypeId.of<${escapeIdentifier(it.name.asString())}>()" }})")
       }
     }
@@ -414,7 +411,8 @@ private class KPathsProcessor(
     val onlyProperty = properties.singleOrNull()?.declaration?.type?.resolve()
     if (
       onlyProperty != null &&
-        (onlyProperty.isMarkedNullable || onlyProperty.declaration is KSTypeParameter)
+        (onlyProperty.isMarkedNullable ||
+          (onlyProperty.declaration as? KSTypeParameter)?.hasNonNullUpperBound() == false)
     ) {
       // CaseKeyPath uses null to represent a failed case match, so a nullable or unconstrained
       // type-parameter focus cannot be represented as a unary case payload path.
@@ -422,6 +420,10 @@ private class KPathsProcessor(
     }
     return CasePayload(casePath, properties)
   }
+
+  /** A type parameter is a valid case-path focus only when its declaration excludes `null`. */
+  private fun KSTypeParameter.hasNonNullUpperBound(): Boolean =
+    bounds.any { bound -> !bound.resolve().isMarkedNullable }
 
   private fun isAccessible(property: KSPropertyDeclaration): Boolean =
     Modifier.PRIVATE !in property.modifiers && Modifier.PROTECTED !in property.modifiers
@@ -468,6 +470,12 @@ private class KPathsProcessor(
             description = "the generated property-path type for case '${casePath.name}'",
           )
         }
+      }
+      if (declaration.typeParameters.isNotEmpty() && generatedCasePayload(casePath) != null) {
+        members += GeneratedMember(
+          name = casePath.name + "CasePath",
+          description = "the generated payload-bearing case-path type for case '${casePath.name}'",
+        )
       }
     }
     if (casePaths.isNotEmpty()) {
@@ -578,17 +586,28 @@ private class KPathsProcessor(
 
     writer.appendLine()
     if (capturesTypeTokens) {
-      writer.appendLine("  public val $caseIdentifier: dev.kpaths.core.CaseKeyPath<$rootKotlinType, ${resolvedCaseType.kotlinType}> =")
-      writer.appendLine("    object : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, ${resolvedCaseType.kotlinType}>() {")
-      writeCasePathBody(
-        writer = writer,
-        indent = "      ",
-        rootKotlinType = rootKotlinType,
-        rootTypeId = rootTypeId,
-        casePath = casePath,
-        resolvedCaseType = resolvedCaseType,
-      )
-      writer.appendLine("    }")
+      if (payload == null) {
+        writer.appendLine("  public val $caseIdentifier: dev.kpaths.core.CaseKeyPath<$rootKotlinType, ${resolvedCaseType.kotlinType}> =")
+        writer.appendLine("    object : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, ${resolvedCaseType.kotlinType}>() {")
+        writeCasePathBody(
+          writer = writer,
+          indent = "      ",
+          rootKotlinType = rootKotlinType,
+          rootTypeId = rootTypeId,
+          casePath = casePath,
+          resolvedCaseType = resolvedCaseType,
+        )
+        writer.appendLine("    }")
+      } else {
+        writeGenericCasePathWithPayload(
+          writer = writer,
+          rootKotlinType = rootKotlinType,
+          rootTypeId = rootTypeId,
+          casePath = casePath,
+          resolvedCaseType = resolvedCaseType,
+          payload = payload,
+        )
+      }
     } else {
       writer.appendLine("  public object $caseIdentifier : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, ${resolvedCaseType.kotlinType}>() {")
       writeCasePathBody(
@@ -650,7 +669,47 @@ private class KPathsProcessor(
     }
   }
 
-  /** Emits a reconstructable case payload path inside a non-generic concrete-case singleton. */
+  /**
+   * A generic generated namespace cannot use a nested object for a payload path: its root type
+   * tokens live on the enclosing namespace instance. An `inner` case-path class captures that
+   * instance while preserving the same `Paths.Loaded.value` call site as a static catalog.
+   */
+  private fun writeGenericCasePathWithPayload(
+    writer: java.io.BufferedWriter,
+    rootKotlinType: String,
+    rootTypeId: String,
+    casePath: CasePath,
+    resolvedCaseType: ResolvedCaseType,
+    payload: CasePayload,
+  ) {
+    val caseIdentifier = escapeIdentifier(casePath.name)
+    val casePathClassIdentifier = escapeIdentifier(casePath.name + "CasePath")
+
+    writer.appendLine("  public val $caseIdentifier: $casePathClassIdentifier = $casePathClassIdentifier()")
+    writer.appendLine()
+    writer.appendLine("  public inner class $casePathClassIdentifier internal constructor() : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, ${resolvedCaseType.kotlinType}>() {")
+    writeCasePathBody(
+      writer = writer,
+      indent = "    ",
+      rootKotlinType = rootKotlinType,
+      rootTypeId = rootTypeId,
+      casePath = casePath,
+      resolvedCaseType = resolvedCaseType,
+    )
+    writeCasePayloadPath(
+      writer = writer,
+      indent = "    ",
+      rootKotlinType = rootKotlinType,
+      rootTypeId = rootTypeId,
+      casePath = casePath,
+      resolvedCaseType = resolvedCaseType,
+      payload = payload,
+      capturesTypeTokens = true,
+    )
+    writer.appendLine("  }")
+  }
+
+  /** Emits a reconstructable case payload path inside a generated concrete-case path. */
   private fun writeCasePayloadPath(
     writer: java.io.BufferedWriter,
     indent: String,
@@ -659,10 +718,11 @@ private class KPathsProcessor(
     casePath: CasePath,
     resolvedCaseType: ResolvedCaseType,
     payload: CasePayload,
+    capturesTypeTokens: Boolean = false,
   ) {
     val properties = payload.properties
     val propertyTypes = properties.map { property ->
-      property.declaration.type.resolve().renderKotlinType()
+      property.declaration.type.resolve().renderKotlinType(resolvedCaseType.typeParameterSubstitutions)
     }
     val focusKotlinType = when (properties.size) {
       1 -> propertyTypes.single()
@@ -671,7 +731,7 @@ private class KPathsProcessor(
       else -> error("Case payloads must contain one to three properties.")
     }
     val focusTypeId = when (properties.size) {
-      1 -> properties.single().declaration.type.resolve().renderTypeId(emptyMap())
+      1 -> properties.single().declaration.type.resolve().renderTypeId(resolvedCaseType.typeTokenSubstitutions)
       2 -> "dev.kpaths.core.TypeId.of<kotlin.Pair<${propertyTypes.joinToString(", ")}>>()"
       3 -> "dev.kpaths.core.TypeId.of<kotlin.Triple<${propertyTypes.joinToString(", ")}>>()"
       else -> error("Case payloads must contain one to three properties.")
@@ -682,36 +742,77 @@ private class KPathsProcessor(
       "payload"
     }
     val memberIdentifier = escapeIdentifier(memberName)
+
+    writer.appendLine()
+    if (capturesTypeTokens) {
+      writer.appendLine("${indent}public val $memberIdentifier: dev.kpaths.core.CaseKeyPath<$rootKotlinType, $focusKotlinType> =")
+      writer.appendLine("${indent}  object : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, $focusKotlinType>() {")
+      writeCasePayloadPathBody(
+        writer = writer,
+        indent = "$indent    ",
+        rootKotlinType = rootKotlinType,
+        rootTypeId = rootTypeId,
+        casePath = casePath,
+        resolvedCaseType = resolvedCaseType,
+        properties = properties,
+        focusKotlinType = focusKotlinType,
+        focusTypeId = focusTypeId,
+      )
+      writer.appendLine("${indent}  }")
+    } else {
+      writer.appendLine("${indent}public object $memberIdentifier : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, $focusKotlinType>() {")
+      writeCasePayloadPathBody(
+        writer = writer,
+        indent = "$indent  ",
+        rootKotlinType = rootKotlinType,
+        rootTypeId = rootTypeId,
+        casePath = casePath,
+        resolvedCaseType = resolvedCaseType,
+        properties = properties,
+        focusKotlinType = focusKotlinType,
+        focusTypeId = focusTypeId,
+      )
+      writer.appendLine("${indent}}")
+    }
+  }
+
+  private fun writeCasePayloadPathBody(
+    writer: java.io.BufferedWriter,
+    indent: String,
+    rootKotlinType: String,
+    rootTypeId: String,
+    casePath: CasePath,
+    resolvedCaseType: ResolvedCaseType,
+    properties: List<PathProperty>,
+    focusKotlinType: String,
+    focusTypeId: String,
+  ) {
     val pathId = properties.fold(
       "dev.kpaths.core.PathId.case($rootTypeId, \"${casePath.name}\")",
     ) { accumulated, property ->
       val propertyName = property.declaration.simpleName.asString()
       "$accumulated.appending(dev.kpaths.core.PathId.property(${resolvedCaseType.typeId}, \"$propertyName\"))"
     }
-
-    writer.appendLine()
-    writer.appendLine("${indent}public object $memberIdentifier : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, $focusKotlinType>() {")
-    writer.appendLine("${indent}  override val __kpaths_id: dev.kpaths.core.PathId = $pathId")
-    writer.appendLine("${indent}  override val __kpaths_valueType: dev.kpaths.core.TypeId = $focusTypeId")
-    writer.appendLine("${indent}  override fun extract(root: $rootKotlinType): $focusKotlinType? = (root as? ${resolvedCaseType.kotlinType})?.let { case ->")
+    writer.appendLine("${indent}override val __kpaths_id: dev.kpaths.core.PathId = $pathId")
+    writer.appendLine("${indent}override val __kpaths_valueType: dev.kpaths.core.TypeId = $focusTypeId")
+    writer.appendLine("${indent}override fun extract(root: $rootKotlinType): $focusKotlinType? = (root as? ${resolvedCaseType.kotlinType})?.let { case ->")
     when (properties.size) {
-      1 -> writer.appendLine("${indent}    case.${escapeIdentifier(properties.single().declaration.simpleName.asString())}")
+      1 -> writer.appendLine("${indent}  case.${escapeIdentifier(properties.single().declaration.simpleName.asString())}")
       2 -> writer.appendLine(
-        "${indent}    kotlin.Pair(${properties.joinToString(", ") { property -> "case.${escapeIdentifier(property.declaration.simpleName.asString())}" }})",
+        "${indent}  kotlin.Pair(${properties.joinToString(", ") { property -> "case.${escapeIdentifier(property.declaration.simpleName.asString())}" }})",
       )
       3 -> writer.appendLine(
-        "${indent}    kotlin.Triple(${properties.joinToString(", ") { property -> "case.${escapeIdentifier(property.declaration.simpleName.asString())}" }})",
+        "${indent}  kotlin.Triple(${properties.joinToString(", ") { property -> "case.${escapeIdentifier(property.declaration.simpleName.asString())}" }})",
       )
     }
-    writer.appendLine("${indent}  }")
+    writer.appendLine("${indent}}")
     val constructionArguments = when (properties.size) {
       1 -> "value"
       2 -> "value.first, value.second"
       3 -> "value.first, value.second, value.third"
       else -> error("Case payloads must contain one to three properties.")
     }
-    writer.appendLine("${indent}  override fun embed(value: $focusKotlinType): $rootKotlinType = ${resolvedCaseType.kotlinType}($constructionArguments)")
-    writer.appendLine("${indent}}")
+    writer.appendLine("${indent}override fun embed(value: $focusKotlinType): $rootKotlinType = ${resolvedCaseType.kotlinType}($constructionArguments)")
   }
 
   /** Emits the generated namespace's finite case catalog and a lookup for a root value's case. */
@@ -770,7 +871,7 @@ private class KPathsProcessor(
     resolvedCaseType: ResolvedCaseType,
     caseProperties: List<PathProperty>,
   ) {
-    val rootTypeParameters = rootDeclaration.typeParameters.joinToString { escapeIdentifier(it.name.asString()) }
+    val rootTypeParameters = renderTypeParameters(rootDeclaration.typeParameters)
     val tokenParameters = rootDeclaration.typeParameters.joinToString(", ") { parameter ->
       "private val ${rootTypeTokenNames.getValue(parameter.name.asString())}: dev.kpaths.core.TypeId"
     }
@@ -780,12 +881,12 @@ private class KPathsProcessor(
       rootTypeTokenNames.getValue(parameter.name.asString())
     }
 
-    writer.appendLine("  public val $namespaceName: $nestedClassName<$rootTypeParameters> =")
+    writer.appendLine("  public val $namespaceName: $nestedClassName<${rootTypeParameters.names}> =")
     writer.appendLine("    $nestedClassName($tokenArguments)")
     writer.appendLine()
-    writer.appendLine("  public class $nestedClassName<$rootTypeParameters> internal constructor(")
+    writer.appendLine("  public class $nestedClassName<${rootTypeParameters.declaration}> internal constructor(")
     writer.appendLine("    $tokenParameters,")
-    writer.appendLine("  ) {")
+    writer.appendLine("  )${rootTypeParameters.whereClause} {")
     caseProperties.forEach { property ->
       writePropertyPath(
         writer = writer,
@@ -982,6 +1083,12 @@ private class KPathsProcessor(
     val description: String,
   )
 
+  private data class RenderedTypeParameters(
+    val declaration: String,
+    val names: String,
+    val whereClause: String,
+  )
+
   private data class GenerationTarget(
     val declaration: KSClassDeclaration,
     val generatedName: String,
@@ -1013,6 +1120,38 @@ private class KPathsProcessor(
       "dev.kpaths.core.TypeId(\"$qualifiedName\", listOf($arguments))"
     }
   }
+
+  /** Renders generic bounds so generated namespaces can use constrained model type parameters. */
+  private fun renderTypeParameters(
+    parameters: List<KSTypeParameter>,
+    reified: Boolean = false,
+    forceNonNull: Boolean = false,
+  ): RenderedTypeParameters {
+    val names = parameters.joinToString { parameter -> escapeIdentifier(parameter.name.asString()) }
+    val constraints = parameters.flatMap { parameter ->
+      val name = escapeIdentifier(parameter.name.asString())
+      val bounds = parameter.bounds
+        .map { it.resolve() }
+        .filterNot { it.isImplicitNullableAnyBound() }
+        .map { bound -> "$name : ${bound.renderKotlinType()}" }
+        .toMutableList()
+      if (forceNonNull && bounds.none { it.endsWith(" : kotlin.Any") || !it.endsWith("?") }) {
+        bounds += "$name : kotlin.Any"
+      }
+      bounds
+    }
+    val declaration = parameters.joinToString { parameter ->
+      val name = escapeIdentifier(parameter.name.asString())
+      if (reified) "reified $name" else name
+    }
+    val whereClause = constraints.takeIf { it.isNotEmpty() }
+      ?.joinToString(prefix = " where ")
+      .orEmpty()
+    return RenderedTypeParameters(declaration, names, whereClause)
+  }
+
+  private fun KSType.isImplicitNullableAnyBound(): Boolean =
+    declaration.qualifiedName?.asString() == "kotlin.Any" && isMarkedNullable
 
   private fun KSType.renderKotlinType(typeParameterSubstitutions: Map<String, String> = emptyMap()): String {
     val typeDeclaration = declaration

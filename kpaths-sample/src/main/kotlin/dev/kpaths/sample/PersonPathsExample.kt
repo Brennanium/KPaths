@@ -103,9 +103,9 @@ sealed interface KeywordCase {
 }
 
 @Pathable
-sealed interface Loadable<out Value> {
+sealed interface Loadable<out Value : Any> {
   data object Idle : Loadable<Nothing>
-  data class Loaded<T>(val value: T) : Loadable<T>
+  data class Loaded<T : Any>(val value: T) : Loadable<T>
 }
 
 @Pathable

@@ -3,6 +3,7 @@ package dev.kpaths.sample
 import dev.kpaths.sample.Request.Navigate as NavigateCase
 import dev.kpaths.sample.Request.Route as RouteCase
 import dev.kpaths.sample.Request.Selected as SelectedCase
+import dev.kpaths.sample.Loadable.Loaded as LoadedCase
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -20,6 +21,7 @@ import dev.kpaths.core.KeyPathBase
 import dev.kpaths.core.get
 import dev.kpaths.core.caseKeyPath
 import dev.kpaths.core.keyPath
+import dev.kpaths.core.matching
 import dev.kpaths.core.modifying
 import dev.kpaths.core.set
 import dev.kpaths.core.setting
@@ -347,9 +349,12 @@ class GeneratedPathsTest {
     val stringPaths = LoadablePaths<String>()
     val integerPaths = LoadablePaths<Int>()
     val loaded: CaseKeyPath<Loadable<String>, Loadable.Loaded<String>> = stringPaths.Loaded
+    val loadedValue: CaseKeyPath<Loadable<String>, String> = stringPaths.Loaded.value
     val value: Loadable<String> = Loadable.Loaded("Blob")
 
     assertEquals(Loadable.Loaded("Blob"), value[stringPaths.Loaded])
+    assertEquals("Blob", value[loadedValue])
+    assertEquals(Loadable.Loaded("Blob Jr."), loadedValue.embed("Blob Jr."))
     assertEquals("Blob", value[stringPaths.Loaded]?.get(keyPath = stringPaths.LoadedPaths.value))
     assertFalse((stringPaths.LoadedPaths.value as Any) is WritableKeyPath<*, *>)
     assertNull(Loadable.Idle[stringPaths.Loaded])
@@ -364,6 +369,13 @@ class GeneratedPathsTest {
     assertEquals(
       stringPaths.Loaded,
       caseKeyPath<Loadable<String>, Loadable.Loaded<String>>(),
+    )
+    assertEquals(
+      loadedValue,
+      caseKeyPath<Loadable<String>, Loadable.Loaded<String>, _>(
+        extract = Loadable.Loaded<String>::value,
+        embed = ::LoadedCase,
+      ),
     )
     assertNotEquals(stringPaths.Loaded.__kpaths_id, integerPaths.Loaded.__kpaths_id)
     assertEquals(
@@ -408,6 +420,18 @@ class GeneratedPathsTest {
       ),
       paths.Error.__kpaths_valueType,
     )
+  }
+
+  @Test
+  fun `matching views a generated case path as a nullable read-only key path`() {
+    val selected = RequestPaths.Selected.matching()
+    val selectedCase = Request.Selected("Blob")
+
+    assertEquals(selectedCase, selected.get(selectedCase))
+    assertNull(selected.get(Request.Navigate("id-1", "settings")))
+    assertEquals(RequestPaths.Selected.__kpaths_id, selected.__kpaths_id)
+    assertEquals(TypeId.of<Request.Selected?>(), selected.__kpaths_valueType)
+    assertEquals(selected, RequestPaths.Selected.matching())
   }
 }
 
