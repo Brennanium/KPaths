@@ -1,43 +1,82 @@
 # Key paths
 
-`KeyPath<Root, Value>` is a total, typed read route: for every `Root`, it produces a `Value`.
-Use it when an algorithm needs to name a property, compose a route, or compare routes without
-holding on to an ad-hoc getter closure.
+KPaths is inspired by [Swift key-path expressions](https://docs.swift.org/latest/documentation/the-swift-programming-language/expressions/#Key-Path-Expression).
+In Swift, `\Person.name` is a compiler-recognized expression that creates a typed route from `Person` to `String`.
+Kotlin has property references rather than key-path expressions, so KPaths uses a factory as the equivalent construction syntax:
 
 ```kotlin
-val title: KeyPath<Article, String> = keyPath(Article::title)
-
-article[title]
-article.get(keyPath = title)
+// Swift: \Person.name
+val name = keyPath(Person::name)
+// KeyPath<Person, String>
 ```
 
-The square-bracket spelling is an operator extension. The named `get(keyPath = …)` spelling is
-useful when explicitness reads better at a call site.
+This factory-first style is the normal way to create a KPaths key path. It works for any accessible Kotlin property, including one declared in another module. `@Pathable` is an optional way to generate a named canonical path when a source-owned model exposes paths repeatedly; see [Generated catalogs](generation.md).
 
-## Choose the capability deliberately
+## A route, not a closure
 
-| Type | Read | Replacement result | Mutates the supplied root? |
-| --- | --- | --- | --- |
-| `KeyPath<Root, Value>` | `get(root)` | none | no |
-| `WritableKeyPath<Root, Value>` | `get(root)` | `set(root, value): Root` | only if its implementation chooses to |
-| `ReferenceWritableKeyPath<Root, Value>` | `get(root)` | returns the same root | yes |
-
-`WritableKeyPath` is the value-style operation. It returns a root, so the caller can preserve the
-old value or assign the replacement explicitly:
+A `KeyPath<Root, Value>` names a total route through a value: every `Root` has exactly one `Value` at that route. It can be read, passed to a generic function, composed, and compared with another path. It is more descriptive than passing an anonymous `(Root) -> Value` getter around.
 
 ```kotlin
-data class Profile(var displayName: String)
+data class Address(var city: String)
+data class Person(val name: String, var address: Address)
 
-val displayName = writableKeyPath(
-  get = Profile::displayName,
-  set = { profile, value -> profile.copy(displayName = value) },
+val name: KeyPath<Person, String> = keyPath(Person::name)
+val person = Person("Blob", Address("Paris"))
+
+person[name]                // "Blob"
+person.get(keyPath = name)  // "Blob"
+```
+
+The square-bracket spelling is Kotlin operator syntax. `get(keyPath = …)` is the same operation with an explicit label, which is often clearer in an API that accepts several inputs.
+
+## Reading and writing
+
+Swift has a hierarchy of `KeyPath`, `WritableKeyPath`, and `ReferenceWritableKeyPath`. KPaths uses the same capability distinction, translated to Kotlin’s update model:
+
+| Type | Read | Write result | Mutation |
+| --- | --- | --- | --- |
+| `KeyPath<Root, Value>` | `get(root)` | none | none |
+| `WritableKeyPath<Root, Value>` | `get(root)` | returns a `Root` | value-style replacement |
+| `ReferenceWritableKeyPath<Root, Value>` | `get(root)` | returns the same `Root` | mutates that instance |
+
+`keyPath(Person::address)` is deliberately read-only even though `address` is declared `var`. Kotlin cannot know whether a caller means to reconstruct a value or mutate an existing reference, so choosing either write capability is explicit.
+
+### Value-style replacement
+
+Use `writableKeyPath` when writing should produce a replacement root. The `get` property reference supplies the route; `set` supplies the reconstruction that Kotlin cannot synthesize through a shared data-class interface.
+
+```kotlin
+val address = writableKeyPath(
+  get = Person::address,
+  set = { person, value -> person.copy(address = value) },
 )
 
-val revised = Profile("Blob").setting(displayName, "Blob Jr.")
+val revised = person.setting(address, Address("Toronto"))
+person  // unchanged
 ```
 
-`ReferenceWritableKeyPath` is the explicit opt-in for a mutable class. Its `setInPlace` operation
-changes the instance it receives; Kotlin also permits the natural assignment spelling:
+`set(keyPath = …, value = …)`, `setting(…)`, and `modifying(…)` all return the resulting root. Assign that result when working with value-style state:
+
+```kotlin
+val revised = person.modifying(address) { current ->
+  current.copy(city = current.city.uppercase())
+}
+```
+
+For a mutable computed property, KPaths can copy first and then invoke the ordinary Kotlin setter on the copy:
+
+```kotlin
+val displayName = writableKeyPath(
+  property = User::displayName,
+  copy = { user -> user.copy() },
+)
+```
+
+The `copy` lambda is required because Kotlin synthesizes `copy()` per data class rather than through a common protocol that a generic path factory can call.
+
+### Reference mutation
+
+Use `referenceWritableKeyPath` when a mutable class is intentionally shared and its existing instance should change:
 
 ```kotlin
 class Session(var token: String)
@@ -49,76 +88,39 @@ session[token] = "new"
 check(session.token == "new")
 ```
 
-Do not treat a `data class` as automatically value-semantic merely because Kotlin supports
-`copy()`: it is still a reference object. KPaths treats generated data-class paths as
-value-style, and warns when a manually-created reference-writable path targets a data class.
+This is the Kotlin counterpart to Swift’s `ReferenceWritableKeyPath`. A data class is still a reference object in Kotlin, but KPaths treats generated data-class paths as value-style. A manual reference-writable path with a data-class root is allowed and emits a runtime warning by default, because it often signals an accidental break from value semantics.
 
-## Property references and custom paths
+## Composing routes
 
-For ordinary stored or computed reads, a Kotlin property reference is the shortest manual path:
+Like Swift key paths, KPaths key paths compose. `then` is the Kotlin-friendly spelling; `appending` is available when the longer name reads better.
 
 ```kotlin
-val length = keyPath(String::length)
-val title = keyPath(ThirdPartyArticle::title)
-```
-
-`keyPath` intentionally returns a read-only path even for a `var`. That prevents accidentally
-choosing reference mutation where a copy-based replacement was intended. Pick one of these
-writable factories instead:
-
-```kotlin
-// You supply value-style reconstruction.
-val name = writableKeyPath(
-  get = Person::name,
-  set = { person, value -> person.copy(name = value) },
+val address = writableKeyPath(
+  get = Person::address,
+  set = { person, value -> person.copy(address = value) },
+)
+val city = writableKeyPath(
+  get = Address::city,
+  set = { address, value -> address.copy(city = value) },
 )
 
-// A computed mutable property can be set after copying a root.
-val label = writableKeyPath(
-  property = Person::label,
-  copy = { person -> person.copy() },
-)
-
-// A mutable class can use its ordinary setter in place.
-val token = referenceWritableKeyPath(Session::token)
+val personCity = address.then(city)
+val revised = person.setting(personCity, "Toronto")
 ```
 
-For a route that is not represented by a property, use a stable root-local name. Equal names on
-the same concrete root type describe equal paths, so choose a name as carefully as a public API
-identifier:
+Two writable paths compose to a `WritableKeyPath`. A reference-writable outer path composed with a writable inner path remains reference-writable. Any route containing a read-only segment is read-only: KPaths will never invent a reconstruction function just to make a composed path writable.
+
+## Whole values, collections, and indexes
+
+`identityKeyPath<Root>()` focuses a whole root, analogous to Swift’s `\Type.self`. Replacing its focus is simply replacing the root value.
 
 ```kotlin
-val normalizedName = keyPath<Person, String>("normalizedName") { person ->
-  person.name.trim().lowercase()
-}
+val wholePerson = identityKeyPath<Person>()
+wholePerson.get(person)              // person
+wholePerson.set(person, revised)     // revised
 ```
 
-The lower-level `PathId` and `TypeId` overloads are for libraries that need to define a
-multi-segment custom identity. Most application code should use a property reference, a generated
-catalog, or the named factory above.
-
-## Composition
-
-Use `then` for Kotlin-friendly composition, or `appending` when the longer spelling is clearer.
-Capabilities compose conservatively:
-
-```kotlin
-val city = PersonPaths.address.then(AddressPaths.city)
-
-person[city]
-person.setting(city, "Toronto")
-```
-
-Two `WritableKeyPath`s compose to a `WritableKeyPath`. A reference-writable outer path preserves
-reference mutation when composed with a writable inner path. Any composition involving a
-read-only component is read-only, because KPaths cannot soundly invent a replacement operation.
-
-## Whole values and collections
-
-`identityKeyPath<Root>()` focuses the full root. Replacing it is simply functional whole-value
-replacement.
-
-KPaths also supplies canonical paths for the unambiguous parts of Kotlin's standard library:
+KPaths provides canonical paths for common Kotlin standard-library routes:
 
 ```kotlin
 StringPaths.at(1).get("Blob")
@@ -130,14 +132,9 @@ val score = MapPaths<String, Int>().at("blob")
 score.set(mapOf("blob" to 1), null) // removes "blob"
 ```
 
-`ListPaths` is read-only. `ArrayPaths`, `MutableListPaths`, primitive-array paths, and
-`MutableMapPaths` are reference-writable because their Kotlin APIs mutate an existing collection.
-For both immutable and mutable map paths, assigning `null` removes the key. That policy is
-intentional even for `Map<Key, Value?>`: KPaths does not attempt to represent the otherwise
-ambiguous distinction between an absent key and a stored null value.
+`ListPaths` is read-only. `ArrayPaths`, `MutableListPaths`, primitive-array paths, and `MutableMapPaths` are reference-writable because their Kotlin APIs mutate an existing collection. An assigned map value of `null` always removes the key, including for `Map<Key, Value?>`; KPaths does not introduce a second representation for “stored null” versus “missing key.”
 
-The indexed callable factories are useful when an API has a `get`/`set` pair but no generated
-catalog:
+When an API exposes indexed `get` and `set` callables, the factories can make that route without an intermediate closure:
 
 ```kotlin
 val second = keyPath(get = List<String>::get, at = 1)
@@ -147,3 +144,35 @@ val editableSecond = referenceWritableKeyPath(
   at = 1,
 )
 ```
+
+## Computed and custom routes
+
+Property references cover stored and computed Kotlin properties. For a route that is not a property, give the factory a stable root-local name:
+
+```kotlin
+val normalizedName = keyPath<Person, String>("normalizedName") { person ->
+  person.name.trim().lowercase()
+}
+```
+
+The name is part of the path’s identity. Two paths with the same root type and custom name compare equal, even if they were constructed separately. Use the lower-level `PathId` and `TypeId` overloads only when a library needs to define an explicit multi-segment identity; the named factory above is the normal escape hatch.
+
+## Generated catalogs
+
+Factories are preferred for one-off and third-party properties:
+
+```kotlin
+val title = keyPath(ThirdPartyArticle::title)
+```
+
+For a source-owned model with paths that form part of its public vocabulary, `@Pathable` generates an autocomplete-friendly catalog:
+
+```kotlin
+@Pathable
+data class Person(val name: String, var address: Address)
+
+PersonPaths.name       // KeyPath<Person, String>
+PersonPaths.address    // WritableKeyPath<Person, Address>
+```
+
+The generated path is a stable singleton, but it is not a different kind of path: it has the same read/write capability and structural equality rules as a factory-created path. Use generated catalogs for discoverability and repetition, not because a property must be annotated before it can participate in KPaths.

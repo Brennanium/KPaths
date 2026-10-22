@@ -1,11 +1,14 @@
 # KPaths
 
-KPaths is a Kotlin path library inspired by Swift key paths and case paths. It provides stable,
-typed property and case paths for ordinary Kotlin models; reducer-based architectures are one
-future use case, not the library's framing. Any accessible Kotlin property or ordinary sealed
-case can become a manual path. Apply `@Pathable` to a source-owned model when you want KSP to
-generate its complete, canonical optics catalog: named property paths, sealed/enum case paths,
-case-property namespaces, and source-aware diagnostics.
+KPaths is a Kotlin path library inspired by [Swift’s key-path
+expressions](https://docs.swift.org/latest/documentation/the-swift-programming-language/expressions/#Key-Path-Expression)
+and [Point-Free’s CasePaths](https://github.com/pointfreeco/swift-case-paths). It provides stable,
+typed property and case paths for ordinary Kotlin models. The preferred construction APIs are the
+factories `keyPath`, `writableKeyPath`, `referenceWritableKeyPath`, `caseKeyPath`, and `casePath`;
+they are Kotlin’s counterpart to Swift’s key-path-expression syntax and work with any accessible
+property or ordinary sealed case. Apply `@Pathable` to a source-owned model when a generated,
+discoverable catalog is a better fit: named property paths, sealed/enum case paths, case-property
+namespaces, and source-aware diagnostics.
 
 ## Modules
 

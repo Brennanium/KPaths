@@ -1,14 +1,17 @@
 # KPaths
 
-KPaths provides typed, comparable routes through Kotlin values. A **key path** reads a property
-or collection element. A writable key path also replaces that focus, either by returning a new
-root or by mutating a reference root. A **case path** matches one variant of a sealed hierarchy
-and can construct that variant again.
+KPaths provides typed, comparable routes through Kotlin values. It is inspired by [Swift’s
+key-path expressions](https://docs.swift.org/latest/documentation/the-swift-programming-language/expressions/#Key-Path-Expression)
+and [Point-Free’s CasePaths](https://github.com/pointfreeco/swift-case-paths).
+
+Swift key paths use `\Type.property` expressions. KPaths uses Kotlin property references and
+factories such as `keyPath(Person::name)` to provide the same role: describe a typed route as a
+value. KPaths case paths extend that idea to sealed cases through `caseKeyPath` and `casePath`.
 
 The library deliberately keeps Kotlin's own language model visible:
 
-- `KProperty1` and `KMutableProperty1` make paths available for accessible properties, including
-  types the application does not own.
+- Factories are the preferred construction API. `KProperty1` and `KMutableProperty1` make paths
+  available for accessible properties, including types the application does not own.
 - `@Pathable` uses KSP only to generate discoverable, canonical catalogs for source-owned types.
 - Data-class updates are modeled as replacement values; mutable classes can opt into explicit
   reference mutation.

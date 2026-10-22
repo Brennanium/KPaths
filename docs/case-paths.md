@@ -1,58 +1,131 @@
 # Case paths
 
-`CasePath<Root, Value>` describes one reconstructable variant of a sealed hierarchy. It has two
-fundamental operations:
+KPaths’ case-path model is inspired by [Point-Free’s CasePaths](https://github.com/pointfreeco/swift-case-paths): case paths extend the useful idea of key paths from Kotlin properties to cases of a sealed hierarchy.
 
-- `match(root)` returns `CaseMatch.NoMatch` or `CaseMatch.Matched(value)`.
-- `embed(value)` constructs the represented case as a `Root`.
+A property path always succeeds because every instance has that property. A case path can fail because a sealed value may currently be a different case. It therefore packages two operations:
 
-The match result is deliberately not nullable. A nullable result cannot distinguish a different
-case from a matching case whose payload itself is `null`.
+- **match** a root and recover its focused case value when it is the represented case;
+- **embed** a focused value into a new root of the represented case.
 
 ```kotlin
-@Pathable
+sealed interface Navigation {
+  data object Home : Navigation
+  data class Document(val document: Document) : Navigation
+}
+
+data class Document(val title: String)
+
+val document = caseKeyPath<Navigation, Navigation.Document, Document>(
+  extract = Navigation.Document::document,
+  embed = ::Navigation.Document,
+)
+```
+
+As `keyPath(Person::name)` is KPaths’ counterpart to Swift’s `\Person.name`, the `caseKeyPath` and `casePath` factories are the normal manual way to construct Kotlin case paths. `@Pathable` can generate named canonical paths for a source-owned sealed root when that is more discoverable; it is not required for ordinary case-path use.
+
+## The usual path: CaseKeyPath
+
+`CaseKeyPath<Root, Value : Any>` is the ordinary non-null case path. Its nullable extraction result is unambiguous: `null` means the root was a different case.
+
+```kotlin
+val navigation: Navigation = Navigation.Document(Document("guide"))
+
+navigation[document]                 // Document("guide")
+Navigation.Home[document]            // null
+navigation.caseMatches(document)     // true
+```
+
+Like a Swift `CaseKeyPath`, it can embed a focused value into a fresh root and update a matching root:
+
+```kotlin
+document.embed(Document("readme"))
+// Navigation.Document(Document("readme"))
+
+document.modify(navigation) { value ->
+  value.copy(title = value.title.uppercase())
+}
+```
+
+`modify` and `replaceIfMatching` leave a nonmatching root unchanged. This makes a case path useful in generic code without first writing a `when` expression at every call site.
+
+### Whole-case paths
+
+When the concrete case object itself is the focus, no extractor or constructor reference is needed. Kotlin can safely cast the root to the requested sealed subtype and embed it by upcast:
+
+```kotlin
+val home = caseKeyPath<Navigation, Navigation.Home>()
+val documentCase = caseKeyPath<Navigation, Navigation.Document>()
+
+Navigation.Home[home]                 // Navigation.Home
+Navigation.Document(Document("guide"))[home] // null
+```
+
+This is why `caseKeyPath<Root, Case>()` takes no `extract` or `embed` arguments. It focuses `Case` itself. A payload path such as `CaseKeyPath<Navigation, Document>` has to name the payload property and how to reconstruct the case, so it uses `extract = …` and `embed = …`.
+
+## Exact paths for nullable focuses
+
+`CasePath<Root, Value>` is the more general abstraction. It returns `CaseMatch<Value>` from `match`, preserving the difference between a different case and a matching case whose focus is `null`.
+
+```kotlin
 sealed interface Event {
   data object Started : Event
   data class Message(val text: String?) : Event
 }
 
-val message = caseKeyPath<Event, Event.Message>()
-val text = casePath<Event, Event.Message, String?>(
+val messageText = casePath<Event, Event.Message, String?>(
   extract = Event.Message::text,
   embed = ::Event.Message,
 )
 
-when (val result = Event.Message(null).match(text)) {
+when (val result = Event.Message(null).match(messageText)) {
   CaseMatch.NoMatch -> error("not a message")
-  is CaseMatch.Matched -> println(result.value) // null, but definitely matched
+  is CaseMatch.Matched -> println(result.value) // null, but it matched
 }
 ```
 
-`root[casePath]` is shorthand for `root.match(casePath)`. If only the predicate matters, use
-`root.caseMatches(casePath)`: it returns `true` for `CaseMatch.Matched(null)`.
+Use `root.match(path)` or `root[path]` for the exact result, and `root.caseMatches(path)` when only the boolean answer matters. `caseMatches` is `true` for `CaseMatch.Matched(null)`.
 
-## CaseKeyPath: the non-null specialization
-
-`CaseKeyPath<Root, Value : Any>` is a `CasePath` for a focus that can never be null. It adds
-`extract(root): Value?`, where `null` can safely mean “this is another case.” Generated whole-case
-paths are normally this type because Kotlin case objects are non-null.
+Do not choose `CasePath` merely because a case contains a nullable field. A whole-case path has a non-null focus even if one of that case’s properties is nullable:
 
 ```kotlin
-val started: CaseKeyPath<Event, Event.Started> = EventPaths.Started
-
-Event.Started[started]          // Event.Started
-Event.Message("hello")[started] // null
+val message = caseKeyPath<Event, Event.Message>()
+// CaseKeyPath<Event, Event.Message>
 ```
 
-`matching()` gives a `CaseKeyPath` a read-only `KeyPath<Root, Value?>` view. It is intentionally
-not available on every `CasePath`: the nullable key-path result would collapse `NoMatch` and
-`Matched(null)`.
+Choose `CasePath` when the path’s *own focus* is nullable and your algorithm must distinguish `NoMatch` from `Matched(null)`. `CaseKeyPath.matching()` intentionally has no exact-path equivalent because `KeyPath<Root, Value?>` would erase that distinction.
+
+## Composing case paths
+
+Case paths compose in the same direction as key paths. `then` is the Kotlin-friendly spelling and `appending` is the explicit alternative.
+
+```kotlin
+sealed interface AccountEvent {
+  data class SignedIn(val account: Account) : AccountEvent
+  data object SignedOut : AccountEvent
+}
+
+data class Account(val id: String)
+
+sealed interface AppEvent {
+  data class Account(val event: AccountEvent) : AppEvent
+  data object Launched : AppEvent
+}
+
+val account = caseKeyPath<AppEvent, AppEvent.Account, AccountEvent>(
+  extract = AppEvent.Account::event,
+  embed = ::AppEvent.Account,
+)
+val signedIn = caseKeyPath<AccountEvent, AccountEvent.SignedIn>()
+
+val appSignedIn = account.then(signedIn)
+// CaseKeyPath<AppEvent, AccountEvent.SignedIn>
+```
+
+Composing non-null `CaseKeyPath`s preserves `CaseKeyPath`. The general `CasePath` overload retains exact matching semantics. A nullable matched focus cannot automatically continue into another path because there may be no value to inspect; use `CaseMatch.requiringValue()` only when deliberately treating a matched null as a nonmatch is correct.
 
 ## Generated case catalogs
 
-Annotating a sealed root produces a whole-case path for every direct variant. A data-class variant
-with one, two, or three accessible primary-constructor properties also gets a direct reconstructable
-payload path:
+Factories are preferred for a one-off case, a third-party sealed hierarchy, or a type that should not take a KSP dependency. For a source-owned root whose cases form a public vocabulary, annotate it with `@Pathable`:
 
 ```kotlin
 @Pathable
@@ -63,53 +136,29 @@ sealed interface Request {
   data class Note(val text: String?) : Request
 }
 
-RequestPaths.Search.value       // CaseKeyPath<Request, String>
+RequestPaths.Search.query       // CaseKeyPath<Request, String>
 RequestPaths.Navigate.payload   // CaseKeyPath<Request, Pair<String, Boolean>>
 RequestPaths.Route.payload      // CaseKeyPath<Request, Triple<String, String, Boolean>>
-RequestPaths.Note.value         // CasePath<Request, String?>
+RequestPaths.Note.text          // CasePath<Request, String?>
 ```
 
-There is no anonymous tuple type beyond `Triple` in Kotlin. Variants with more than three payload
-properties retain their whole-case path and generated property paths; introduce a named payload
-type when that group deserves a first-class route.
+The catalog also has whole-case paths such as `RequestPaths.Search`, a `caseOf(root)` lookup, and `allCasePaths` for generic inspection. These generated paths obey the same matching, embedding, equality, and composition rules as factory-created paths.
 
-## Manual case paths
+Kotlin has no anonymous tuple type beyond `Triple`, so direct generated payload paths intentionally stop at three primary-constructor properties. A larger payload should usually become a named data class; otherwise its whole-case path and individual generated property paths remain available.
 
-Use `caseKeyPath<Root, Case>()` for the whole concrete case of a sealed hierarchy. Constructor and
-property references make the common single-property payload route concise:
+## Factories beyond one payload
+
+The two- and three-property `caseKeyPath` factories use Kotlin’s standard `Pair` and `Triple` rather than inventing new tuple types:
 
 ```kotlin
-sealed interface Navigation
-data class OpenDocument(val document: Document) : Navigation
+data class Navigate(val id: String, val destination: String) : Navigation
 
-val openDocument = caseKeyPath<Navigation, OpenDocument>()
-val document = caseKeyPath<Navigation, OpenDocument, Document>(
-  extract = OpenDocument::document,
-  embed = ::OpenDocument,
+val navigate = caseKeyPath<Navigation, Navigate, String, String>(
+  extract1 = Navigate::id,
+  extract2 = Navigate::destination,
+  embed = ::Navigate,
 )
+// CaseKeyPath<Navigation, Pair<String, String>>
 ```
 
-The exact `casePath` factory has the same property/constructor form and is the right choice when
-the payload may be nullable. Its lower-level overload receives an explicit `CaseMatch`:
-
-```kotlin
-val exact = casePath<Navigation, String?>(
-  id = PathId.custom(TypeId.of<Navigation>(), "optionalDocumentName"),
-  match = { navigation -> /* return CaseMatch.NoMatch or CaseMatch.Matched(value) */ },
-  embed = { name -> /* construct the matching Navigation case */ },
-)
-```
-
-For multi-property cases, `caseKeyPath` has two- and three-property overloads that use `Pair` and
-`Triple` respectively. Their `extract1`, `extract2`, and `extract3` arguments document the
-payload order, and the constructor reference proves how that ordered data reconstructs the case.
-
-## Composition and deliberate null handling
-
-Case paths compose with `then`. When all focuses are non-null, composing `CaseKeyPath`s returns a
-`CaseKeyPath`; the general `CasePath` overload retains exact match semantics.
-
-An exact path with a nullable focus cannot automatically continue into another path: there is no
-root value to inspect when it matches `null`. Handle that decision at the use site. If treating a
-matched null as “do not continue” is correct for an algorithm, `CaseMatch.requiringValue()` makes
-that collapse explicit rather than hiding it in composition.
+There are deliberately no higher-arity overloads. A named payload type gives a large associated-value group a clearer API and its own properties to route through.
