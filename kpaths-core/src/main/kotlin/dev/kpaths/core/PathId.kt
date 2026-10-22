@@ -17,9 +17,11 @@ public class PathId(
     /** The identity route that focuses an entire root value. */
     public fun identity(rootType: TypeId): PathId = PathId(rootType, emptyList())
 
+    /** Identifies a declared property named [name] on [rootType]. */
     public fun property(rootType: TypeId, name: String): PathId =
       PathId(rootType, listOf(PathSegment.Property(name)))
 
+    /** Identifies a sealed or enum case named [name] on [rootType]. */
     public fun case(rootType: TypeId, name: String): PathId =
       PathId(rootType, listOf(PathSegment.Case(name)))
 
@@ -34,6 +36,7 @@ public class PathId(
       PathId(rootType, listOf(PathSegment.Custom(name)))
   }
 
+  /** Returns this route with one additional structural [segment]. */
   public fun appending(segment: PathSegment): PathId =
     PathId(rootType, segments + segment)
 
@@ -56,9 +59,18 @@ public class PathId(
 
 /** A named step in a path's structural identity. */
 public sealed interface PathSegment {
+  /** A declared property route. */
   public data class Property(public val name: String) : PathSegment
+
+  /** A sealed or enum case route. */
   public data class Case(public val name: String) : PathSegment
+
+  /** A caller-defined route that is intentionally distinct from a declared property. */
   public data class Custom(public val name: String) : PathSegment
+
+  /** An indexed collection route. */
   public data class Index(public val value: Int) : PathSegment
+
+  /** A keyed map route. */
   public data class Key(public val value: Any?) : PathSegment
 }

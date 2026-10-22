@@ -385,6 +385,7 @@ private fun <Root : Any, Value> indexedReferenceWritableKeyPath(
 
 /** Standard read-only paths for [CharSequence]. */
 public object CharSequencePaths {
+  /** Reads the sequence length. */
   public val length: KeyPath<CharSequence, Int> = keyPath(
     id = PathId.property(TypeId.of<CharSequence>(), "length"),
     valueType = TypeId.of<Int>(),
@@ -401,6 +402,7 @@ public object CharSequencePaths {
 
 /** Standard read-only paths for [String]. */
 public object StringPaths {
+  /** Reads the string length. */
   public val length: KeyPath<String, Int> = keyPath(
     id = PathId.property(TypeId.of<String>(), "length"),
     valueType = TypeId.of<Int>(),
@@ -420,6 +422,7 @@ public class MapPaths<Key, Value> private constructor(
   private val rootType: TypeId,
   private val valueType: TypeId,
 ) {
+  /** Reads the number of entries. */
   public val size: KeyPath<Map<Key, Value>, Int> = keyPath(
     id = PathId.property(rootType, "size"),
     valueType = TypeId.of<Int>(),
@@ -439,6 +442,7 @@ public class MapPaths<Key, Value> private constructor(
   )
 
   public companion object {
+    /** Creates this catalog when type metadata must be passed explicitly. */
     public fun <Key, Value> of(keyType: TypeId, valueType: TypeId): MapPaths<Key, Value> =
       MapPaths(
         rootType = declaredType("kotlin.collections.Map", keyType, valueType),
@@ -456,6 +460,7 @@ public class MutableMapPaths<Key, Value> private constructor(
   private val rootType: TypeId,
   private val valueType: TypeId,
 ) {
+  /** Reads the number of entries. */
   public val size: KeyPath<MutableMap<Key, Value>, Int> = keyPath(
     id = PathId.property(rootType, "size"),
     valueType = TypeId.of<Int>(),
@@ -476,6 +481,7 @@ public class MutableMapPaths<Key, Value> private constructor(
     )
 
   public companion object {
+    /** Creates this catalog when type metadata must be passed explicitly. */
     public fun <Key, Value> of(keyType: TypeId, valueType: TypeId): MutableMapPaths<Key, Value> =
       MutableMapPaths(
         rootType = declaredType("kotlin.collections.MutableMap", keyType, valueType),
@@ -504,49 +510,73 @@ private fun <Root : Any, Value> primitiveArrayPath(
 
 /** Standard paths for [BooleanArray]. */
 public object BooleanArrayPaths {
+  /** Reads the array size. */
   public val size: KeyPath<BooleanArray, Int> = keyPath(PathId.property(TypeId.of<BooleanArray>(), "size"), TypeId.of<Int>()) { it.size }
+
+  /** Reads and mutates the element at [index] in the same array instance. */
   public fun at(index: Int): ReferenceWritableKeyPath<BooleanArray, Boolean> = primitiveArrayPath(TypeId.of<BooleanArray>(), TypeId.of<Boolean>(), index, BooleanArray::get, BooleanArray::set)
 }
 
 /** Standard paths for [ByteArray]. */
 public object ByteArrayPaths {
+  /** Reads the array size. */
   public val size: KeyPath<ByteArray, Int> = keyPath(PathId.property(TypeId.of<ByteArray>(), "size"), TypeId.of<Int>()) { it.size }
+
+  /** Reads and mutates the element at [index] in the same array instance. */
   public fun at(index: Int): ReferenceWritableKeyPath<ByteArray, Byte> = primitiveArrayPath(TypeId.of<ByteArray>(), TypeId.of<Byte>(), index, ByteArray::get, ByteArray::set)
 }
 
 /** Standard paths for [CharArray]. */
 public object CharArrayPaths {
+  /** Reads the array size. */
   public val size: KeyPath<CharArray, Int> = keyPath(PathId.property(TypeId.of<CharArray>(), "size"), TypeId.of<Int>()) { it.size }
+
+  /** Reads and mutates the element at [index] in the same array instance. */
   public fun at(index: Int): ReferenceWritableKeyPath<CharArray, Char> = primitiveArrayPath(TypeId.of<CharArray>(), TypeId.of<Char>(), index, CharArray::get, CharArray::set)
 }
 
 /** Standard paths for [ShortArray]. */
 public object ShortArrayPaths {
+  /** Reads the array size. */
   public val size: KeyPath<ShortArray, Int> = keyPath(PathId.property(TypeId.of<ShortArray>(), "size"), TypeId.of<Int>()) { it.size }
+
+  /** Reads and mutates the element at [index] in the same array instance. */
   public fun at(index: Int): ReferenceWritableKeyPath<ShortArray, Short> = primitiveArrayPath(TypeId.of<ShortArray>(), TypeId.of<Short>(), index, ShortArray::get, ShortArray::set)
 }
 
 /** Standard paths for [IntArray]. */
 public object IntArrayPaths {
+  /** Reads the array size. */
   public val size: KeyPath<IntArray, Int> = keyPath(PathId.property(TypeId.of<IntArray>(), "size"), TypeId.of<Int>()) { it.size }
+
+  /** Reads and mutates the element at [index] in the same array instance. */
   public fun at(index: Int): ReferenceWritableKeyPath<IntArray, Int> = primitiveArrayPath(TypeId.of<IntArray>(), TypeId.of<Int>(), index, IntArray::get, IntArray::set)
 }
 
 /** Standard paths for [LongArray]. */
 public object LongArrayPaths {
+  /** Reads the array size. */
   public val size: KeyPath<LongArray, Int> = keyPath(PathId.property(TypeId.of<LongArray>(), "size"), TypeId.of<Int>()) { it.size }
+
+  /** Reads and mutates the element at [index] in the same array instance. */
   public fun at(index: Int): ReferenceWritableKeyPath<LongArray, Long> = primitiveArrayPath(TypeId.of<LongArray>(), TypeId.of<Long>(), index, LongArray::get, LongArray::set)
 }
 
 /** Standard paths for [FloatArray]. */
 public object FloatArrayPaths {
+  /** Reads the array size. */
   public val size: KeyPath<FloatArray, Int> = keyPath(PathId.property(TypeId.of<FloatArray>(), "size"), TypeId.of<Int>()) { it.size }
+
+  /** Reads and mutates the element at [index] in the same array instance. */
   public fun at(index: Int): ReferenceWritableKeyPath<FloatArray, Float> = primitiveArrayPath(TypeId.of<FloatArray>(), TypeId.of<Float>(), index, FloatArray::get, FloatArray::set)
 }
 
 /** Standard paths for [DoubleArray]. */
 public object DoubleArrayPaths {
+  /** Reads the array size. */
   public val size: KeyPath<DoubleArray, Int> = keyPath(PathId.property(TypeId.of<DoubleArray>(), "size"), TypeId.of<Int>()) { it.size }
+
+  /** Reads and mutates the element at [index] in the same array instance. */
   public fun at(index: Int): ReferenceWritableKeyPath<DoubleArray, Double> = primitiveArrayPath(TypeId.of<DoubleArray>(), TypeId.of<Double>(), index, DoubleArray::get, DoubleArray::set)
 }
 
@@ -556,17 +586,20 @@ public class PairPaths<First, Second> private constructor(
   firstType: TypeId,
   secondType: TypeId,
 ) {
+  /** Reads the first component. */
   public val first: KeyPath<Pair<First, Second>, First> = keyPath(
     id = PathId.property(rootType, "first"),
     valueType = firstType,
   ) { pair -> pair.first }
 
+  /** Reads the second component. */
   public val second: KeyPath<Pair<First, Second>, Second> = keyPath(
     id = PathId.property(rootType, "second"),
     valueType = secondType,
   ) { pair -> pair.second }
 
   public companion object {
+    /** Creates this catalog when component type metadata must be passed explicitly. */
     public fun <First, Second> of(
       firstType: TypeId,
       secondType: TypeId,
@@ -589,22 +622,26 @@ public class TriplePaths<First, Second, Third> private constructor(
   secondType: TypeId,
   thirdType: TypeId,
 ) {
+  /** Reads the first component. */
   public val first: KeyPath<Triple<First, Second, Third>, First> = keyPath(
     id = PathId.property(rootType, "first"),
     valueType = firstType,
   ) { triple -> triple.first }
 
+  /** Reads the second component. */
   public val second: KeyPath<Triple<First, Second, Third>, Second> = keyPath(
     id = PathId.property(rootType, "second"),
     valueType = secondType,
   ) { triple -> triple.second }
 
+  /** Reads the third component. */
   public val third: KeyPath<Triple<First, Second, Third>, Third> = keyPath(
     id = PathId.property(rootType, "third"),
     valueType = thirdType,
   ) { triple -> triple.third }
 
   public companion object {
+    /** Creates this catalog when component type metadata must be passed explicitly. */
     public fun <First, Second, Third> of(
       firstType: TypeId,
       secondType: TypeId,
@@ -627,6 +664,7 @@ public class ListPaths<Element> private constructor(
   private val rootType: TypeId,
   private val elementType: TypeId,
 ) {
+  /** Reads the list size. */
   public val size: KeyPath<List<Element>, Int> = keyPath(
     id = PathId.property(rootType, "size"),
     valueType = TypeId.of<Int>(),
@@ -642,6 +680,7 @@ public class ListPaths<Element> private constructor(
   ) { list -> list[index] }
 
   public companion object {
+    /** Creates this catalog when element type metadata must be passed explicitly. */
     public fun <Element> of(elementType: TypeId): ListPaths<Element> = ListPaths(
       rootType = declaredType("kotlin.collections.List", elementType),
       elementType = elementType,
@@ -658,6 +697,7 @@ public class ArrayPaths<Element> private constructor(
   private val rootType: TypeId,
   private val elementType: TypeId,
 ) {
+  /** Reads the array size. */
   public val size: KeyPath<Array<Element>, Int> = keyPath(
     id = PathId.property(rootType, "size"),
     valueType = TypeId.of<Int>(),
@@ -675,6 +715,7 @@ public class ArrayPaths<Element> private constructor(
   )
 
   public companion object {
+    /** Creates this catalog when element type metadata must be passed explicitly. */
     public fun <Element> of(elementType: TypeId): ArrayPaths<Element> = ArrayPaths(
       rootType = declaredType("kotlin.Array", elementType),
       elementType = elementType,
@@ -691,6 +732,7 @@ public class MutableListPaths<Element> private constructor(
   private val rootType: TypeId,
   private val elementType: TypeId,
 ) {
+  /** Reads the list size. */
   public val size: KeyPath<MutableList<Element>, Int> = keyPath(
     id = PathId.property(rootType, "size"),
     valueType = TypeId.of<Int>(),
@@ -708,6 +750,7 @@ public class MutableListPaths<Element> private constructor(
   )
 
   public companion object {
+    /** Creates this catalog when element type metadata must be passed explicitly. */
     public fun <Element> of(elementType: TypeId): MutableListPaths<Element> = MutableListPaths(
       rootType = declaredType("kotlin.collections.MutableList", elementType),
       elementType = elementType,

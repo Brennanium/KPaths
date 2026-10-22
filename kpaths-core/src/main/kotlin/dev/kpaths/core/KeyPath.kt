@@ -14,11 +14,13 @@ public interface AnyKeyPath : AnyPath
 
 /** A key path with a known root type and an erased, but always-present, focused value. */
 public interface PartialKeyPath<Root> : AnyKeyPath {
+  /** Reads this path while erasing the focused value's static type. */
   public fun getAny(root: Root): Any?
 }
 
 /** A total, typed read path. */
 public interface KeyPath<Root, Value> : PartialKeyPath<Root> {
+  /** Reads the focused value from [root]. */
   public fun get(root: Root): Value
 
   override fun getAny(root: Root): Any? = get(root)
@@ -48,8 +50,10 @@ public abstract class KeyPathBase<Root, Value> : PathBase(), KeyPath<Root, Value
 
 /** A typed property path that replaces a focus and returns the resulting root. */
 public interface WritableKeyPath<Root, Value> : KeyPath<Root, Value> {
+  /** Replaces the focused value and returns the resulting root. */
   public fun set(root: Root, value: Value): Root
 
+  /** Transforms the focused value and returns the resulting root. */
   public fun modify(root: Root, update: (Value) -> Value): Root =
     set(root, update(get(root)))
 }
@@ -115,6 +119,7 @@ private class AppendedWritableKeyPath<Root, Middle, Value>(
  * path at the type level.
  */
 public interface ReferenceWritableKeyPath<Root : Any, Value> : WritableKeyPath<Root, Value> {
+  /** Replaces the focus by mutating [root] itself. */
   public fun setInPlace(root: Root, value: Value)
 
   override fun set(root: Root, value: Value): Root {

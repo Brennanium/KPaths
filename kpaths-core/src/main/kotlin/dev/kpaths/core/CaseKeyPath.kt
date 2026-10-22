@@ -75,14 +75,19 @@ public interface PartialCaseKeyPath<Root> : AnyCaseKeyPath {
  * unchanged; callers choose explicitly between construction and replacement.
  */
 public interface CasePath<Root, Value> : PartialCaseKeyPath<Root> {
+  /** Returns the exact result of attempting to match [root]. */
   public fun match(root: Root): CaseMatch<Value>
+
+  /** Constructs this path's case with [value] as its focus. */
   public fun embed(value: Value): Root
 
   override fun matchAny(root: Root): CaseMatch<Any?> = match(root)
 
+  /** Replaces a matching focus and leaves a nonmatching [root] unchanged. */
   public fun replaceIfMatching(root: Root, value: Value): Root =
     if (match(root) is CaseMatch.NoMatch) root else embed(value)
 
+  /** Updates a matching focus and leaves a nonmatching [root] unchanged. */
   public fun modify(root: Root, update: (Value) -> Value): Root =
     when (val result = match(root)) {
       CaseMatch.NoMatch -> root

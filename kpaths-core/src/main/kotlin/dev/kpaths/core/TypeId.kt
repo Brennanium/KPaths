@@ -97,7 +97,9 @@ public class TypeId(
 
 /** A type argument, including its use-site variance or a star projection. */
 public data class TypeArgument(
+  /** The use-site variance for this argument. */
   public val variance: TypeVariance,
+  /** The argument type, or `null` only for a star projection. */
   public val type: TypeId?,
 ) {
   init {
@@ -107,20 +109,31 @@ public data class TypeArgument(
   }
 
   public companion object {
+    /** A Kotlin `*` projection. */
     public val star: TypeArgument = TypeArgument(TypeVariance.STAR, null)
 
+    /** An invariant type argument. */
     public fun invariant(type: TypeId): TypeArgument = TypeArgument(TypeVariance.INVARIANT, type)
 
+    /** A Kotlin `in` type argument. */
     public fun `in`(type: TypeId): TypeArgument = TypeArgument(TypeVariance.IN, type)
 
+    /** A Kotlin `out` type argument. */
     public fun out(type: TypeId): TypeArgument = TypeArgument(TypeVariance.OUT, type)
   }
 }
 
 /** Kotlin use-site variance as part of a structural [TypeId]. */
 public enum class TypeVariance {
+  /** No use-site variance. */
   INVARIANT,
+
+  /** Kotlin's `in` projection. */
   IN,
+
+  /** Kotlin's `out` projection. */
   OUT,
+
+  /** Kotlin's `*` projection. */
   STAR,
 }

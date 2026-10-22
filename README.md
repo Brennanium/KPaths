@@ -14,6 +14,17 @@ case-property namespaces, and source-aware diagnostics.
 - `kpaths-ksp` — the Kotlin Symbol Processing generator.
 - `kpaths-sample` — a small compile-time smoke test for the generator.
 
+## Documentation
+
+The guides explain the library's semantics and design choices; Dokka renders the public KDoc into
+an API reference.
+
+- [Key paths](docs/key-paths.md) — reading, functional replacement, reference mutation, and composition.
+- [Case paths](docs/case-paths.md) — matching, construction, nullable payloads, and composition.
+- [Generated catalogs](docs/generation.md) — what `@Pathable` produces and when to use it.
+- [Identity and type metadata](docs/identity.md) — why separately-created equivalent paths compare equal.
+- [API reference](docs/index.md#api-reference) — generate locally with `./gradlew :dokkaGenerate`.
+
 ## First build
 
 This project uses the Gradle wrapper and requires JDK 17 or newer to run Gradle.

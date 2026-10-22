@@ -2,6 +2,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
   alias(libs.plugins.kotlin.jvm)
+  alias(libs.plugins.dokka)
 }
 
 kotlin {
@@ -10,6 +11,12 @@ kotlin {
 
 tasks.withType<JavaCompile>().configureEach {
   options.release.set(11)
+}
+
+dokka {
+  dokkaSourceSets.named("main") {
+    includes.from("src/main/kotlin/dev/kpaths/core/package.md")
+  }
 }
 
 dependencies {
