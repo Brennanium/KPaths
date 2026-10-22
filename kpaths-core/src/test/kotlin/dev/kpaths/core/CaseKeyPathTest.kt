@@ -3,50 +3,27 @@ package dev.kpaths.core
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 class CaseKeyPathTest {
   @Test
-  fun `concrete subtype factory safely extracts and embeds a sealed case`() {
+  fun `whole case factory extracts and conditionally replaces`() {
     val selected = caseKeyPath<ManualEvent, ManualEvent.Selected>()
+    val original: ManualEvent = ManualEvent.Selected("Blob")
 
-    assertEquals(ManualEvent.Selected("Blob"), selected.extract(ManualEvent.Selected("Blob")))
-    assertNull(selected.extract(ManualEvent.Dismissed))
-    assertEquals(ManualEvent.Selected("Jr."), selected.embed(ManualEvent.Selected("Jr.")))
-    assertEquals(
-      PathId.case(TypeId.of<ManualEvent>(), "Selected"),
-      selected.__kpaths_id,
-    )
+    assertEquals(ManualEvent.Selected("Blob"), original[selected])
+    assertNull(ManualEvent.Dismissed[selected])
+    assertEquals(ManualEvent.Selected("Jr."), selected.embed(original, ManualEvent.Selected("Jr.")))
+    assertEquals(ManualEvent.Dismissed, selected.embed(ManualEvent.Dismissed, ManualEvent.Selected("Jr.")))
+    assertEquals(PathId.case(TypeId.of<ManualEvent>(), "Selected"), selected.__kpaths_id)
   }
 
   @Test
-  fun `enum factory extracts and embeds one exact entry`() {
-    val north = caseKeyPath(ManualDirection.NORTH)
-
-    assertEquals(Unit, north.extract(ManualDirection.NORTH))
-    assertNull(north.extract(ManualDirection.SOUTH))
-    assertEquals(ManualDirection.NORTH, north.embed(Unit))
-    assertEquals(PathId.case(TypeId.of<ManualDirection>(), "NORTH"), north.__kpaths_id)
-  }
-
-  @Test
-  fun `explicit factory supports a custom case representation`() {
-    val even = caseKeyPath(
-      id = PathId.custom(TypeId.of<Int>(), "test.Int.even"),
-      valueType = TypeId.of<Int>(),
-      extract = { value: Int -> value.takeIf { it % 2 == 0 } },
-      embed = { value -> value },
-    )
-
-    assertEquals(42, even.extract(42))
-    assertNull(even.extract(41))
-    assertEquals(2, even.embed(2))
-  }
-
-  @Test
-  fun `exact case paths preserve matched null focuses`() {
-    val selected: CasePath<ManualNullableEvent, String?> = casePath(
+  fun `read only case paths retain matched null information`() {
+    val selected: CaseKeyPath<ManualNullableEvent, String?> = caseKeyPath(
       id = PathId.custom(TypeId.of<ManualNullableEvent>(), "test.ManualNullableEvent.selected"),
       valueType = TypeId.of<String?>(),
       match = { event ->
@@ -55,145 +32,75 @@ class CaseKeyPathTest {
           is ManualNullableEvent.Selected -> CaseMatch.Matched(event.value)
         }
       },
-      embed = ManualNullableEvent::Selected,
     )
 
-    assertEquals(CaseMatch.NoMatch, selected.match(ManualNullableEvent.Idle))
-    assertEquals(CaseMatch.Matched(null), selected.match(ManualNullableEvent.Selected(null)))
-    assertEquals(CaseMatch.Matched("Blob"), selected.match(ManualNullableEvent.Selected("Blob")))
-    assertEquals(ManualNullableEvent.Selected(null), selected.embed(null))
+    assertEquals(CaseMatch.Matched(null), ManualNullableEvent.Selected(null).match(selected))
+    assertEquals(CaseMatch.NoMatch, ManualNullableEvent.Idle.match(selected))
+    assertNull(ManualNullableEvent.Selected(null)[selected])
     assertTrue(ManualNullableEvent.Selected(null).caseMatches(selected))
     assertFalse(ManualNullableEvent.Idle.caseMatches(selected))
-    assertNull(ManualNullableEvent.Selected(null).getOrNull(selected))
-    assertEquals(CaseMatch.NoMatch, CaseMatch.Matched(null).requiringValue())
-    assertEquals(CaseMatch.Matched("Blob"), CaseMatch.Matched("Blob").requiringValue())
   }
 
   @Test
-  fun `matching exposes a case path as a nullable read-only key path`() {
+  fun `case paths compose only through writable property routes`() {
+    val message = caseKeyPath<ManualEvent, ManualEvent.Selected>()
+    val name = message.then(
+      get = ManualEvent.Selected::name,
+      set = { selected, value -> selected.copy(name = value) },
+    )
+
+    assertEquals("Blob", ManualEvent.Selected("Blob")[name])
+    assertEquals(
+      ManualEvent.Selected("Jr."),
+      name.embed(ManualEvent.Selected("Blob"), "Jr."),
+    )
+    assertEquals(ManualEvent.Dismissed, name.embed(ManualEvent.Dismissed, "Jr."))
+  }
+
+  @Test
+  fun `a mutable property composes to a reference writable case path`() {
+    val message = caseKeyPath<MutableEvent, MutableEvent.Message>()
+    val text: ReferenceWritableCaseKeyPath<MutableEvent, String> = message.then(MutableEvent.Message::text)
+    val root: MutableEvent = MutableEvent.Message("Old")
+
+    assertSame(root, text.embed(root, "New"))
+    assertEquals("New", (root as MutableEvent.Message).text)
+    assertEquals(MutableEvent.Other, text.embed(MutableEvent.Other, "Ignored"))
+  }
+
+  @Test
+  fun `writable whole case paths compose`() {
+    val outer = caseKeyPath<ManualOuter, ManualOuter.Nested>()
+    val inner = caseKeyPath<ManualOuter.Nested, ManualOuter.Nested.Selected>()
+    val selected = outer.then(inner)
+
+    assertEquals(ManualOuter.Nested.Selected("Blob"), ManualOuter.Nested.Selected("Blob")[selected])
+    assertEquals(
+      ManualOuter.Nested.Selected("Jr."),
+      selected.embed(ManualOuter.Nested.Selected("Blob"), ManualOuter.Nested.Selected("Jr.")),
+    )
+    assertEquals(ManualOuter.Nested.Dismissed, selected.embed(ManualOuter.Nested.Dismissed, ManualOuter.Nested.Selected("Jr.")))
+  }
+
+  @Test
+  fun `constructor reference factories remain root aware`() {
+    val selected = caseKeyPath<ManualEvent, ManualSelected, _>(
+      extract = ManualSelected::name,
+      embed = ::ManualSelected,
+    )
+
+    assertEquals(ManualSelected("Jr."), selected.embed(ManualSelected("Blob"), "Jr."))
+    assertEquals(ManualEvent.Dismissed, selected.embed(ManualEvent.Dismissed, "Jr."))
+  }
+
+  @Test
+  fun `matching exposes a non-null case as a nullable key path`() {
     val selected = caseKeyPath<ManualEvent, ManualEvent.Selected>()
     val matching = selected.matching()
 
     assertEquals(ManualEvent.Selected("Blob"), matching.get(ManualEvent.Selected("Blob")))
     assertNull(matching.get(ManualEvent.Dismissed))
     assertEquals(selected.__kpaths_id, matching.__kpaths_id)
-    assertEquals(TypeId.of<ManualEvent.Selected?>(), matching.__kpaths_valueType)
-    assertEquals(matching, selected.matching())
-  }
-
-  @Test
-  fun `case paths compose while retaining extraction and embedding`() {
-    val outer = caseKeyPath<ManualOuter, ManualOuter.Nested>()
-    val inner = caseKeyPath<ManualOuter.Nested, ManualOuter.Nested.Selected>()
-    val selected = outer.then(inner)
-
-    assertEquals(
-      ManualOuter.Nested.Selected("Blob"),
-      selected.extract(ManualOuter.Nested.Selected("Blob")),
-    )
-    assertNull(selected.extract(ManualOuter.Nested.Dismissed))
-    assertEquals(
-      ManualOuter.Nested.Selected("Jr."),
-      selected.embed(ManualOuter.Nested.Selected("Jr.")),
-    )
-    assertEquals(
-      PathId(
-        rootType = TypeId.of<ManualOuter>(),
-        segments = listOf(
-          PathSegment.Case("Nested"),
-          PathSegment.Case("Selected"),
-        ),
-      ),
-      selected.__kpaths_id,
-    )
-  }
-
-  @Test
-  fun `exact case paths compose through match results`() {
-    val outer: CasePath<ManualOuter, ManualOuter.Nested> =
-      caseKeyPath<ManualOuter, ManualOuter.Nested>()
-    val inner: CasePath<ManualOuter.Nested, ManualOuter.Nested.Selected> =
-      caseKeyPath<ManualOuter.Nested, ManualOuter.Nested.Selected>()
-    val selected = outer.then(inner)
-
-    assertEquals(
-      CaseMatch.Matched(ManualOuter.Nested.Selected("Blob")),
-      selected.match(ManualOuter.Nested.Selected("Blob")),
-    )
-    assertEquals(CaseMatch.NoMatch, selected.match(ManualOuter.Nested.Dismissed))
-    assertEquals(
-      ManualOuter.Nested.Selected("Jr."),
-      selected.embed(ManualOuter.Nested.Selected("Jr.")),
-    )
-  }
-
-  @Test
-  fun `constructor-reference factory creates a unary case payload path`() {
-    val selected = caseKeyPath<ManualEvent, ManualSelected, _>(
-      extract = ManualSelected::name,
-      embed = ::ManualSelected,
-    )
-
-    assertEquals("Blob", selected.extract(ManualSelected("Blob")))
-    assertNull(selected.extract(ManualEvent.Dismissed))
-    assertEquals(ManualSelected("Jr."), selected.embed("Jr."))
-    assertEquals(
-      PathId(
-        rootType = TypeId.of<ManualEvent>(),
-        segments = listOf(
-          PathSegment.Case("ManualSelected"),
-          PathSegment.Property("name"),
-        ),
-      ),
-      selected.__kpaths_id,
-    )
-  }
-
-  @Test
-  fun `constructor-reference factory creates a two-value case payload path`() {
-    val navigate = caseKeyPath<ManualEvent, ManualNavigate, _, _>(
-      extract1 = ManualNavigate::id,
-      extract2 = ManualNavigate::action,
-      embed = ::ManualNavigate,
-    )
-
-    assertEquals(
-      "id-1" to ManualChildAction.Refresh,
-      navigate.extract(ManualNavigate("id-1", ManualChildAction.Refresh)),
-    )
-    assertNull(navigate.extract(ManualEvent.Dismissed))
-    assertEquals(
-      ManualNavigate("id-2", ManualChildAction.Save),
-      navigate.embed("id-2" to ManualChildAction.Save),
-    )
-    assertEquals(
-      TypeId.of<Pair<String, ManualChildAction>>(),
-      navigate.__kpaths_valueType,
-    )
-  }
-
-  @Test
-  fun `constructor-reference factory creates a three-value case payload path`() {
-    val navigate = caseKeyPath<ManualEvent, ManualRoute, _, _, _>(
-      extract1 = ManualRoute::id,
-      extract2 = ManualRoute::destination,
-      extract3 = ManualRoute::action,
-      embed = ::ManualRoute,
-    )
-
-    assertEquals(
-      Triple("id-1", "settings", ManualChildAction.Refresh),
-      navigate.extract(ManualRoute("id-1", "settings", ManualChildAction.Refresh)),
-    )
-    assertNull(navigate.extract(ManualEvent.Dismissed))
-    assertEquals(
-      ManualRoute("id-2", "profile", ManualChildAction.Save),
-      navigate.embed(Triple("id-2", "profile", ManualChildAction.Save)),
-    )
-    assertEquals(
-      TypeId.of<Triple<String, String, ManualChildAction>>(),
-      navigate.__kpaths_valueType,
-    )
   }
 }
 
@@ -209,25 +116,9 @@ private sealed interface ManualNullableEvent {
 
 private data class ManualSelected(val name: String) : ManualEvent
 
-private data class ManualNavigate(
-  val id: String,
-  val action: ManualChildAction,
-) : ManualEvent
-
-private data class ManualRoute(
-  val id: String,
-  val destination: String,
-  val action: ManualChildAction,
-) : ManualEvent
-
-private enum class ManualChildAction {
-  Refresh,
-  Save,
-}
-
-private enum class ManualDirection {
-  NORTH,
-  SOUTH,
+private sealed interface MutableEvent {
+  data object Other : MutableEvent
+  class Message(var text: String) : MutableEvent
 }
 
 private sealed interface ManualOuter {

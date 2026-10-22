@@ -4,7 +4,8 @@ KPaths is a Kotlin path library inspired by [Swift’s key-path
 expressions](https://docs.swift.org/latest/documentation/the-swift-programming-language/expressions/#Key-Path-Expression)
 and [Point-Free’s CasePaths](https://github.com/pointfreeco/swift-case-paths). It provides stable,
 typed property and case paths for ordinary Kotlin models. The preferred construction APIs are the
-factories `keyPath`, `writableKeyPath`, `referenceWritableKeyPath`, `caseKeyPath`, and `casePath`;
+factories `keyPath`, `writableKeyPath`, `referenceWritableKeyPath`, `caseKeyPath`, and
+`writableCaseKeyPath`;
 they are Kotlin’s counterpart to Swift’s key-path-expression syntax and work with any accessible
 property or ordinary sealed case. Apply `@Pathable` to a source-owned model when a generated,
 discoverable catalog is a better fit: named property paths, sealed/enum case paths, case-property
@@ -311,9 +312,10 @@ needed.
 
 ## Sealed case paths
 
-`CasePath` is KPaths' exact match-and-embed abstraction. Its `match` result distinguishes a
-different case from a matching case whose payload is `null`. `CaseKeyPath` is its non-null-focus
-specialization: it adds the familiar nullable extraction and optional `KeyPath` view.
+`CaseKeyPath` is KPaths' conditional sealed-case route. Its `match` result distinguishes a
+different case from a matching case whose focus is `null`; `WritableCaseKeyPath` adds root-aware
+`embed(root, value)`, which updates only an already-matching root. The concrete case type is the
+normal focus, so the whole-case factory is the preferred manual spelling.
 
 Call `root.match(path)` when the result matters, and `root.caseMatches(path)` when only the
 boolean answer matters. In particular, `caseMatches` is `true` for `CaseMatch.Matched(null)`.
@@ -362,16 +364,16 @@ sealed interface Request {
 }
 
 RequestPaths.Selected.value
-// CaseKeyPath<Request, String>
+// WritableCaseKeyPath<Request, String>
 
 RequestPaths.Navigate.payload
-// CaseKeyPath<Request, Pair<String, String>>
+// WritableCaseKeyPath<Request, Pair<String, String>>
 
 RequestPaths.Route.payload
-// CaseKeyPath<Request, Triple<String, String, Boolean>>
+// WritableCaseKeyPath<Request, Triple<String, String, Boolean>>
 
 RequestPaths.Nullable.value
-// CasePath<Request, String?>
+// WritableCaseKeyPath<Request, String?>
 ```
 
 The outer case singleton remains available (`RequestPaths.Navigate`), and the ordinary structural
@@ -379,7 +381,7 @@ property paths remain under `RequestPaths.NavigatePaths.id` and `.destination`. 
 paths are exact, but use `CaseMatch` rather than nullable extraction:
 
 ```kotlin
-when (val result = Request.Nullable(null)[RequestPaths.Nullable.value]) {
+when (val result = Request.Nullable(null).match(RequestPaths.Nullable.value)) {
   CaseMatch.NoMatch -> Unit
   is CaseMatch.Matched -> println(result.value) // String?, exactly preserved
 }
@@ -391,7 +393,8 @@ Request.Nullable(null).getOrNull(RequestPaths.Nullable.value)   // null; intenti
 Cases with more than three constructor properties retain their whole-case and individual-property
 paths; model a dedicated payload data class when that group needs its own path.
 
-Generic sealed roots receive the same direct paths when the focused payload is provably non-null.
+Generic sealed roots receive the same direct paths. Nullable payloads keep their exact
+`CaseMatch` result on the same `CaseKeyPath` family.
 The generated case path is an instance member, so it captures the concrete root type token:
 
 ```kotlin
@@ -401,11 +404,11 @@ sealed interface Loadable<out Value : Any> {
   data class Loaded<T : Any>(val value: T) : Loadable<T>
 }
 
-val loaded: CaseKeyPath<Loadable<String>, String> =
+val loaded: WritableCaseKeyPath<Loadable<String>, String> =
   LoadablePaths<String>().Loaded.value
 ```
 
-An unconstrained generic payload receives an exact `CasePath` instead, since it may be nullable:
+An unconstrained generic payload uses the same path type; call `match` when it may be nullable:
 
 ```kotlin
 @Pathable
@@ -413,12 +416,12 @@ sealed interface Cached<out Value> {
   data class Loaded<T>(val value: T) : Cached<T>
 }
 
-val loaded: CasePath<Cached<String?>, String?> =
+val loaded: WritableCaseKeyPath<Cached<String?>, String?> =
   CachedPaths<String?>().Loaded.value
 ```
 
-`CaseKeyPath` is the right type for ordinary non-null case payloads. Reach for the general
-`CasePath` only when the difference between no matching case and a matched null payload matters.
+Call `match` rather than `extract` or `root[path]` when the difference between no matching case
+and a matched null payload matters.
 
 ## Case matching as a key path
 
@@ -441,9 +444,9 @@ An enum entry has no distinct Kotlin type, so pass its singleton value instead:
 val north = caseKeyPath(Direction.NORTH)
 ```
 
-For custom non-null matching behavior, use `caseKeyPath(id = ..., valueType = ..., extract = ...,
-embed = ...)`. For an exact path, including a nullable focus, use `casePath(id = ...,
-valueType = ..., match = ..., embed = ...)`, where `match` returns `CaseMatch`.
+For custom read-only matching behavior, use `caseKeyPath(id = ..., valueType = ..., match = ...)`.
+For a root-aware conditional write, use `writableCaseKeyPath(id = ..., valueType = ..., match = ...,
+embed = ...)`.
 
 For an ordinary data-class case, constructor references provide a concise manual path factory.
 The property references read the case payload and the constructor reference proves that the case
@@ -535,7 +538,7 @@ enum class Direction { NORTH, SOUTH }
 
 Direction.NORTH[DirectionPaths.NORTH] // Unit
 Direction.SOUTH[DirectionPaths.NORTH] // null
-DirectionPaths.NORTH.embed(Unit)      // Direction.NORTH
+DirectionPaths.NORTH.embed(Direction.NORTH, Unit) // Direction.NORTH
 ```
 
 The first case-path slice supports non-generic sealed classes, sealed interfaces, and enums.

@@ -408,16 +408,8 @@ private class KPathsProcessor(
     if (properties.size != parameters.size) {
       return null
     }
-    val onlyProperty = properties.singleOrNull()?.declaration?.type?.resolve()
-    val requiresExactMatching =
-      onlyProperty?.isMarkedNullable == true ||
-        (onlyProperty?.declaration as? KSTypeParameter)?.hasNonNullUpperBound() == false
-    return CasePayload(casePath, properties, requiresExactMatching)
+    return CasePayload(casePath, properties)
   }
-
-  /** A type parameter is a valid case-path focus only when its declaration excludes `null`. */
-  private fun KSTypeParameter.hasNonNullUpperBound(): Boolean =
-    bounds.any { bound -> !bound.resolve().isMarkedNullable }
 
   private fun isAccessible(property: KSPropertyDeclaration): Boolean =
     Modifier.PRIVATE !in property.modifiers && Modifier.PROTECTED !in property.modifiers
@@ -581,8 +573,8 @@ private class KPathsProcessor(
     writer.appendLine()
     if (capturesTypeTokens) {
       if (payload == null) {
-        writer.appendLine("  public val $caseIdentifier: dev.kpaths.core.CaseKeyPath<$rootKotlinType, ${resolvedCaseType.kotlinType}> =")
-        writer.appendLine("    object : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, ${resolvedCaseType.kotlinType}>() {")
+        writer.appendLine("  public val $caseIdentifier: dev.kpaths.core.WritableCaseKeyPath<$rootKotlinType, ${resolvedCaseType.kotlinType}> =")
+        writer.appendLine("    object : dev.kpaths.core.WritableCaseKeyPathBase<$rootKotlinType, ${resolvedCaseType.kotlinType}>() {")
         writeCasePathBody(
           writer = writer,
           indent = "      ",
@@ -603,7 +595,7 @@ private class KPathsProcessor(
         )
       }
     } else {
-      writer.appendLine("  public object $caseIdentifier : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, ${resolvedCaseType.kotlinType}>() {")
+      writer.appendLine("  public object $caseIdentifier : dev.kpaths.core.WritableCaseKeyPathBase<$rootKotlinType, ${resolvedCaseType.kotlinType}>() {")
       writeCasePathBody(
         writer = writer,
         indent = "    ",
@@ -681,7 +673,7 @@ private class KPathsProcessor(
 
     writer.appendLine("  public val $caseIdentifier: $casePathClassIdentifier = $casePathClassIdentifier()")
     writer.appendLine()
-    writer.appendLine("  public inner class $casePathClassIdentifier internal constructor() : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, ${resolvedCaseType.kotlinType}>() {")
+    writer.appendLine("  public inner class $casePathClassIdentifier internal constructor() : dev.kpaths.core.WritableCaseKeyPathBase<$rootKotlinType, ${resolvedCaseType.kotlinType}>() {")
     writeCasePathBody(
       writer = writer,
       indent = "    ",
@@ -736,16 +728,8 @@ private class KPathsProcessor(
       "payload"
     }
     val memberIdentifier = escapeIdentifier(memberName)
-    val pathInterface = if (payload.requiresExactMatching) {
-      "dev.kpaths.core.CasePath"
-    } else {
-      "dev.kpaths.core.CaseKeyPath"
-    }
-    val pathBase = if (payload.requiresExactMatching) {
-      "dev.kpaths.core.CasePathBase"
-    } else {
-      "dev.kpaths.core.CaseKeyPathBase"
-    }
+    val pathInterface = "dev.kpaths.core.WritableCaseKeyPath"
+    val pathBase = "dev.kpaths.core.WritableCaseKeyPathBase"
 
     writer.appendLine()
     if (capturesTypeTokens) {
@@ -816,7 +800,7 @@ private class KPathsProcessor(
       3 -> "value.first, value.second, value.third"
       else -> error("Case payloads must contain one to three properties.")
     }
-    writer.appendLine("${indent}override fun embed(value: $focusKotlinType): $rootKotlinType = ${resolvedCaseType.kotlinType}($constructionArguments)")
+    writer.appendLine("${indent}override fun embed(root: $rootKotlinType, value: $focusKotlinType): $rootKotlinType = if (root is ${resolvedCaseType.kotlinType}) ${resolvedCaseType.kotlinType}($constructionArguments) else root")
   }
 
   /** Emits the generated namespace's finite case catalog and a lookup for a root value's case. */
@@ -857,12 +841,12 @@ private class KPathsProcessor(
       CaseKind.SEALED_VARIANT -> {
         writer.appendLine("${indent}@Suppress(\"UNCHECKED_CAST\")")
         writer.appendLine("${indent}override fun match(root: $rootKotlinType): dev.kpaths.core.CaseMatch<${resolvedCaseType.kotlinType}> = (root as? ${resolvedCaseType.kotlinType})?.let { dev.kpaths.core.CaseMatch.Matched<${resolvedCaseType.kotlinType}>(it) } ?: dev.kpaths.core.CaseMatch.NoMatch")
-        writer.appendLine("${indent}override fun embed(value: ${resolvedCaseType.kotlinType}): $rootKotlinType = value")
+        writer.appendLine("${indent}override fun embed(root: $rootKotlinType, value: ${resolvedCaseType.kotlinType}): $rootKotlinType = if (root is ${resolvedCaseType.kotlinType}) value else root")
       }
       CaseKind.ENUM_ENTRY -> {
         val enumEntryIdentifier = escapeIdentifier(casePath.name)
         writer.appendLine("${indent}override fun match(root: $rootKotlinType): dev.kpaths.core.CaseMatch<kotlin.Unit> = if (root == $rootKotlinType.$enumEntryIdentifier) dev.kpaths.core.CaseMatch.Matched(kotlin.Unit) else dev.kpaths.core.CaseMatch.NoMatch")
-        writer.appendLine("${indent}override fun embed(value: kotlin.Unit): $rootKotlinType = $rootKotlinType.$enumEntryIdentifier")
+        writer.appendLine("${indent}override fun embed(root: $rootKotlinType, value: kotlin.Unit): $rootKotlinType = if (root == $rootKotlinType.$enumEntryIdentifier) $rootKotlinType.$enumEntryIdentifier else root")
       }
     }
   }
@@ -1080,7 +1064,6 @@ private class KPathsProcessor(
   private data class CasePayload(
     val casePath: CasePath,
     val properties: List<PathProperty>,
-    val requiresExactMatching: Boolean,
   )
 
   private data class GeneratedMember(

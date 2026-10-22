@@ -31,9 +31,9 @@ For accessible properties on an annotated type:
 The `val`/`var` distinction is preserved even for data classes. A `val` never becomes writable
 merely because its containing data class has a `copy` method.
 
-For a sealed root, KSP additionally emits a case catalog. The catalog contains whole-case paths,
-optional direct payload paths, a `caseOf(root)` lookup, and `allCasePaths` for type-erased catalog
-inspection. Enum entries become `CaseKeyPath<Enum, Unit>` paths.
+For a sealed root, KSP additionally emits a case catalog. The catalog contains writable whole-case
+paths, optional direct payload conveniences, a `caseOf(root)` lookup, and `allCasePaths` for
+type-erased catalog inspection. Enum entries become `WritableCaseKeyPath<Enum, Unit>` paths.
 
 ## Static versus generic catalogs
 
