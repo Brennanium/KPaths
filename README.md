@@ -57,6 +57,56 @@ val city = PersonPaths.address.then(AddressPaths.city)
 val updated = person.setting(city, "Toronto")
 ```
 
+### Static and generic generated catalogs
+
+Kotlin has no static generic objects. KSP therefore generates an `object` catalog for a
+non-generic root and a catalog *class* for a generic root:
+
+```kotlin
+@Pathable
+data class Person(val name: String)
+
+PersonPaths.name
+// an object member: KeyPath<Person, String>
+
+@Pathable
+data class Box<Value>(val value: Value)
+
+BoxPaths<String>().value
+// an instance member: KeyPath<Box<String>, String>
+```
+
+`BoxPaths<String>` is the type of a catalog instance, not an expression, so
+`BoxPaths<String>.value` is not valid Kotlin. The `()` invokes KSP's generated inline factory,
+which records `String` in the path's root `TypeId`. An explicit-token form is also available for
+non-reified generic code:
+
+```kotlin
+val paths = BoxPaths.of<String>(TypeId.of<String>())
+paths.value
+```
+
+The root determines whether a catalog is static or instance-based, not the focused property. A
+generic model needs an instance even for a fixed property type, because
+`KeyPath<Box<String>, String>` and `KeyPath<Box<Int>, String>` have different root identities.
+
+Generic bounds are preserved by the generated catalog. For a non-null generic root:
+
+```kotlin
+@Pathable
+sealed interface Loadable<out Value : Any> {
+  data object Idle : Loadable<Nothing>
+  data class Loaded<T : Any>(val value: T) : Loadable<T>
+}
+
+LoadablePaths<String>().Loaded.value
+```
+
+`LoadablePaths<String?>()` is rejected by Kotlin for the same reason that
+`Loadable<String?>` is rejected: `Value : Any` excludes `null`. This bound also makes the unary
+`Loaded.value` case path unambiguous. A generic root without that bound still uses the same
+instance syntax, but only receives direct payload paths whose focus is independently non-null.
+
 ## Paths for any Kotlin type
 
 `@Pathable` is convenience and source generation, not a requirement. Kotlin property references
