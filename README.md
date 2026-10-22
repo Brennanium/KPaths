@@ -280,9 +280,14 @@ needed.
 
 ## Sealed case paths
 
-Sealed variants generate `CaseKeyPath`s that focus the concrete Kotlin case object, rather than a
-tuple-like payload. A failed extraction is `null`; nullable fields remain safely inside the
-non-null matched case object.
+`CasePath` is KPaths' exact match-and-embed abstraction. Its `match` result distinguishes a
+different case from a matching case whose payload is `null`. `CaseKeyPath` is its non-null-focus
+specialization: it adds the familiar nullable extraction and optional `KeyPath` view.
+
+Call `root.match(path)` when the result matters, and `root.caseMatches(path)` when only the
+boolean answer matters. In particular, `caseMatches` is `true` for `CaseMatch.Matched(null)`.
+
+Sealed variants generate `CaseKeyPath`s because their concrete Kotlin case objects are non-null.
 
 ```kotlin
 @Pathable
@@ -320,6 +325,7 @@ accessible primary-constructor properties and can therefore be reconstructed wit
 @Pathable
 sealed interface Request {
   data class Selected(val value: String) : Request
+  data class Nullable(val value: String?) : Request
   data class Navigate(val id: String, val destination: String) : Request
   data class Route(val id: String, val destination: String, val replace: Boolean) : Request
 }
@@ -332,14 +338,27 @@ RequestPaths.Navigate.payload
 
 RequestPaths.Route.payload
 // CaseKeyPath<Request, Triple<String, String, Boolean>>
+
+RequestPaths.Nullable.value
+// CasePath<Request, String?>
 ```
 
 The outer case singleton remains available (`RequestPaths.Navigate`), and the ordinary structural
-property paths remain under `RequestPaths.NavigatePaths.id` and `.destination`. A unary nullable
-property does not receive a canonical payload path because `CaseKeyPath` reserves `null` for a
-failed match; its ordinary key path is still generated. Cases with more than three constructor
-properties likewise retain their whole-case and individual-property paths; model a dedicated
-payload data class when that group needs its own path.
+property paths remain under `RequestPaths.NavigatePaths.id` and `.destination`. Nullable payload
+paths are exact, but use `CaseMatch` rather than nullable extraction:
+
+```kotlin
+when (val result = Request.Nullable(null)[RequestPaths.Nullable.value]) {
+  CaseMatch.NoMatch -> Unit
+  is CaseMatch.Matched -> println(result.value) // String?, exactly preserved
+}
+
+Request.Nullable(null).caseMatches(RequestPaths.Nullable.value) // true
+Request.Nullable(null).getOrNull(RequestPaths.Nullable.value)   // null; intentionally lossy
+```
+
+Cases with more than three constructor properties retain their whole-case and individual-property
+paths; model a dedicated payload data class when that group needs its own path.
 
 Generic sealed roots receive the same direct paths when the focused payload is provably non-null.
 The generated case path is an instance member, so it captures the concrete root type token:
@@ -355,9 +374,20 @@ val loaded: CaseKeyPath<Loadable<String>, String> =
   LoadablePaths<String>().Loaded.value
 ```
 
-An unconstrained `Value` may be nullable, so it intentionally does not receive this direct
-payload path yet. The whole-case path (`LoadablePaths<Value>().Loaded`) and
-`LoadablePaths<Value>().LoadedPaths.value` remain available.
+An unconstrained generic payload receives an exact `CasePath` instead, since it may be nullable:
+
+```kotlin
+@Pathable
+sealed interface Cached<out Value> {
+  data class Loaded<T>(val value: T) : Cached<T>
+}
+
+val loaded: CasePath<Cached<String?>, String?> =
+  CachedPaths<String?>().Loaded.value
+```
+
+`CaseKeyPath` is the right type for ordinary non-null case payloads. Reach for the general
+`CasePath` only when the difference between no matching case and a matched null payload matters.
 
 ## Case matching as a key path
 
@@ -380,9 +410,9 @@ An enum entry has no distinct Kotlin type, so pass its singleton value instead:
 val north = caseKeyPath(Direction.NORTH)
 ```
 
-For custom matching behavior, use `caseKeyPath(id = ..., valueType = ..., extract = ..., embed =
-...)`. The focus must be non-null: `null` always denotes a failed match, while nullable fields
-remain inside a matched case object.
+For custom non-null matching behavior, use `caseKeyPath(id = ..., valueType = ..., extract = ...,
+embed = ...)`. For an exact path, including a nullable focus, use `casePath(id = ...,
+valueType = ..., match = ..., embed = ...)`, where `match` returns `CaseMatch`.
 
 For an ordinary data-class case, constructor references provide a concise manual path factory.
 The property references read the case payload and the constructor reference proves that the case

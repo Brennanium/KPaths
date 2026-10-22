@@ -20,6 +20,27 @@ public operator fun <Root, Value : Any> Root.get(caseKeyPath: CaseKeyPath<Root, 
   caseKeyPath.extract(this)
 
 /**
+ * Exactly matches [casePath] against this root.
+ *
+ * The `operator` modifier makes `root[casePath]` available. Unlike the [CaseKeyPath] overload,
+ * this returns [CaseMatch] so a matched null focus remains distinguishable from another case.
+ */
+public operator fun <Root, Value> Root.get(casePath: CasePath<Root, Value>): CaseMatch<Value> =
+  casePath.match(this)
+
+/** Named spelling of exact case matching. */
+public fun <Root, Value> Root.match(casePath: CasePath<Root, Value>): CaseMatch<Value> =
+  casePath.match(this)
+
+/** Returns whether [casePath] matched this root, including when its matched focus is null. */
+public fun <Root, Value> Root.caseMatches(casePath: CasePath<Root, Value>): Boolean =
+  casePath.match(this) is CaseMatch.Matched
+
+/** Intentionally collapses an unmatched root and a matched null focus. */
+public fun <Root, Value> Root.getOrNull(casePath: CasePath<Root, Value>): Value? =
+  casePath.match(this).valueOrNull
+
+/**
  * Replaces [keyPath]'s focus and returns the resulting root.
  *
  * For a value-style data-class path, the result is a copy and must be assigned by the caller.

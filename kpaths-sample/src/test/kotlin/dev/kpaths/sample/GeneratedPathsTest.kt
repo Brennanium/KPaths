@@ -1,6 +1,7 @@
 package dev.kpaths.sample
 
 import dev.kpaths.sample.Request.Navigate as NavigateCase
+import dev.kpaths.sample.Request.Nullable as NullableCase
 import dev.kpaths.sample.Request.Route as RouteCase
 import dev.kpaths.sample.Request.Selected as SelectedCase
 import dev.kpaths.sample.Loadable.Loaded as LoadedCase
@@ -12,6 +13,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertSame
 import kotlin.test.assertTrue
 import dev.kpaths.core.CaseKeyPath
+import dev.kpaths.core.CaseMatch
+import dev.kpaths.core.CasePath
 import dev.kpaths.core.KeyPath
 import dev.kpaths.core.ReferenceWritableKeyPath
 import dev.kpaths.core.TypeArgument
@@ -20,7 +23,10 @@ import dev.kpaths.core.WritableKeyPath
 import dev.kpaths.core.KeyPathBase
 import dev.kpaths.core.get
 import dev.kpaths.core.caseKeyPath
+import dev.kpaths.core.casePath
+import dev.kpaths.core.caseMatches
 import dev.kpaths.core.keyPath
+import dev.kpaths.core.getOrNull
 import dev.kpaths.core.matching
 import dev.kpaths.core.modifying
 import dev.kpaths.core.set
@@ -253,6 +259,7 @@ class GeneratedPathsTest {
     val typed: CaseKeyPath<Request, String> = RequestPaths.Typed.valueType
     val navigate: CaseKeyPath<Request, Pair<String, String>> = RequestPaths.Navigate.payload
     val route: CaseKeyPath<Request, Triple<String, String, Boolean>> = RequestPaths.Route.payload
+    val nullable: CasePath<Request, String?> = RequestPaths.Nullable.value
 
     assertEquals("Blob", Request.Selected("Blob")[selected])
     assertEquals("id-1", Request.Identified("id-1")[identified])
@@ -260,6 +267,20 @@ class GeneratedPathsTest {
     assertEquals("text", Request.Typed("text")[typed])
     assertEquals(Request.Typed("other"), typed.embed("other"))
     assertNull(Request.Nullable(null)[selected])
+    assertEquals(CaseMatch.Matched(null), Request.Nullable(null)[nullable])
+    assertEquals(CaseMatch.Matched("note"), Request.Nullable("note")[nullable])
+    assertEquals(CaseMatch.NoMatch, Request.Selected("Blob")[nullable])
+    assertTrue(Request.Nullable(null).caseMatches(nullable))
+    assertFalse(Request.Selected("Blob").caseMatches(nullable))
+    assertNull(Request.Nullable(null).getOrNull(nullable))
+    assertEquals(Request.Nullable(null), nullable.embed(null))
+    assertEquals(
+      nullable,
+      casePath<Request, Request.Nullable, _>(
+        extract = Request.Nullable::value,
+        embed = ::NullableCase,
+      ),
+    )
     assertEquals(Request.Selected("Jr."), selected.embed("Jr."))
     assertEquals(
       selected,
@@ -399,10 +420,13 @@ class GeneratedPathsTest {
     val paths = ApiResultPaths<String, Int>()
     val success: CaseKeyPath<ApiResult<String, Int>, ApiResult.Success<String>> = paths.Success
     val error: CaseKeyPath<ApiResult<String, Int>, ApiResult.Error<Int>> = paths.Error
+    val successValue: CasePath<ApiResult<String, Int>, String> = paths.Success.value
     val successState: ApiResult<String, Int> = ApiResult.Success("Blob")
     val errorState: ApiResult<String, Int> = ApiResult.Error(404)
 
     assertEquals("Blob", successState[success]?.get(keyPath = paths.SuccessPaths.value))
+    assertEquals(CaseMatch.Matched("Blob"), successState[successValue])
+    assertEquals(CaseMatch.NoMatch, errorState[successValue])
     assertNull(errorState[success])
     assertEquals(404, errorState[error]?.get(keyPath = paths.ErrorPaths.error))
     assertNull(successState[error])

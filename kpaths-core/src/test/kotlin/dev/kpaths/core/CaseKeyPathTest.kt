@@ -2,7 +2,9 @@ package dev.kpaths.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class CaseKeyPathTest {
   @Test
@@ -43,6 +45,31 @@ class CaseKeyPathTest {
   }
 
   @Test
+  fun `exact case paths preserve matched null focuses`() {
+    val selected: CasePath<ManualNullableEvent, String?> = casePath(
+      id = PathId.custom(TypeId.of<ManualNullableEvent>(), "test.ManualNullableEvent.selected"),
+      valueType = TypeId.of<String?>(),
+      match = { event ->
+        when (event) {
+          ManualNullableEvent.Idle -> CaseMatch.NoMatch
+          is ManualNullableEvent.Selected -> CaseMatch.Matched(event.value)
+        }
+      },
+      embed = ManualNullableEvent::Selected,
+    )
+
+    assertEquals(CaseMatch.NoMatch, selected.match(ManualNullableEvent.Idle))
+    assertEquals(CaseMatch.Matched(null), selected.match(ManualNullableEvent.Selected(null)))
+    assertEquals(CaseMatch.Matched("Blob"), selected.match(ManualNullableEvent.Selected("Blob")))
+    assertEquals(ManualNullableEvent.Selected(null), selected.embed(null))
+    assertTrue(ManualNullableEvent.Selected(null).caseMatches(selected))
+    assertFalse(ManualNullableEvent.Idle.caseMatches(selected))
+    assertNull(ManualNullableEvent.Selected(null).getOrNull(selected))
+    assertEquals(CaseMatch.NoMatch, CaseMatch.Matched(null).requiringValue())
+    assertEquals(CaseMatch.Matched("Blob"), CaseMatch.Matched("Blob").requiringValue())
+  }
+
+  @Test
   fun `matching exposes a case path as a nullable read-only key path`() {
     val selected = caseKeyPath<ManualEvent, ManualEvent.Selected>()
     val matching = selected.matching()
@@ -78,6 +105,25 @@ class CaseKeyPathTest {
         ),
       ),
       selected.__kpaths_id,
+    )
+  }
+
+  @Test
+  fun `exact case paths compose through match results`() {
+    val outer: CasePath<ManualOuter, ManualOuter.Nested> =
+      caseKeyPath<ManualOuter, ManualOuter.Nested>()
+    val inner: CasePath<ManualOuter.Nested, ManualOuter.Nested.Selected> =
+      caseKeyPath<ManualOuter.Nested, ManualOuter.Nested.Selected>()
+    val selected = outer.then(inner)
+
+    assertEquals(
+      CaseMatch.Matched(ManualOuter.Nested.Selected("Blob")),
+      selected.match(ManualOuter.Nested.Selected("Blob")),
+    )
+    assertEquals(CaseMatch.NoMatch, selected.match(ManualOuter.Nested.Dismissed))
+    assertEquals(
+      ManualOuter.Nested.Selected("Jr."),
+      selected.embed(ManualOuter.Nested.Selected("Jr.")),
     )
   }
 
@@ -154,6 +200,11 @@ class CaseKeyPathTest {
 private sealed interface ManualEvent {
   data object Dismissed : ManualEvent
   data class Selected(val name: String) : ManualEvent
+}
+
+private sealed interface ManualNullableEvent {
+  data object Idle : ManualNullableEvent
+  data class Selected(val value: String?) : ManualNullableEvent
 }
 
 private data class ManualSelected(val name: String) : ManualEvent
