@@ -3,6 +3,7 @@ package dev.kpaths.core
 import kotlin.reflect.KMutableProperty1
 import kotlin.reflect.KProperty1
 import kotlin.reflect.KClass
+import kotlin.jvm.JvmName
 
 /** Creates a total read path with an explicitly supplied structural identity and type token. */
 public fun <Root, Value> keyPath(
@@ -43,19 +44,37 @@ public inline fun <reified Root, reified Value> keyPath(
   get = get,
 )
 
-/**
- * Creates a total read path through Kotlin's indexed `get` operation at [at].
- *
- * For example, `keyPath(get = List<String>::get, at = 1)` produces the same structural path as
- * `ListPaths<String>().at(1)`.
- */
-public inline fun <reified Root, reified Value> keyPath(
-  noinline get: (Root, Int) -> Value,
+/** Creates a read path through a [List]'s indexed `get` operation at [at]. */
+@JvmName("listKeyPathAt")
+public inline fun <reified Value> keyPath(
+  noinline get: (List<Value>, Int) -> Value,
   at: Int,
-): KeyPath<Root, Value> = keyPath(
-  id = PathId(TypeId.of<Root>(), listOf(PathSegment.Index(at))),
+): KeyPath<List<Value>, Value> = keyPath(
+  id = PathId(TypeId.of<List<Value>>(), listOf(PathSegment.Index(at))),
   valueType = TypeId.of<Value>(),
-  get = { root -> get(root, at) },
+  get = { list -> get(list, at) },
+)
+
+/** Creates a read path through an [Array]'s indexed `get` operation at [at]. */
+@JvmName("arrayKeyPathAt")
+public inline fun <reified Value> keyPath(
+  noinline get: (Array<Value>, Int) -> Value,
+  at: Int,
+): KeyPath<Array<Value>, Value> = keyPath(
+  id = PathId(TypeId.of<Array<Value>>(), listOf(PathSegment.Index(at))),
+  valueType = TypeId.of<Value>(),
+  get = { array -> get(array, at) },
+)
+
+/** Creates a read path through a [MutableList]'s indexed `get` operation at [at]. */
+@JvmName("mutableListKeyPathAt")
+public inline fun <reified Value> keyPath(
+  noinline get: (MutableList<Value>, Int) -> Value,
+  at: Int,
+): KeyPath<MutableList<Value>, Value> = keyPath(
+  id = PathId(TypeId.of<MutableList<Value>>(), listOf(PathSegment.Index(at))),
+  valueType = TypeId.of<Value>(),
+  get = { list -> get(list, at) },
 )
 
 /** Creates a copy-based writable path with an explicitly supplied structural identity and type token. */
@@ -220,23 +239,53 @@ public inline fun <reified Root : Any, reified Value> referenceWritableKeyPath(
   rootClass = Root::class,
 )
 
-/**
- * Creates an in-place mutable path through Kotlin's indexed `get` and `set` operations at [at].
- *
- * For example, `referenceWritableKeyPath(get = MutableList<String>::get, set =
- * MutableList<String>::set, at = 1)` produces the same structural path as
- * `MutableListPaths<String>().at(1)`.
- */
-public inline fun <reified Root : Any, reified Value> referenceWritableKeyPath(
-  noinline get: (Root, Int) -> Value,
-  noinline set: (Root, Int, Value) -> Unit,
+/** Creates an in-place path through an [Array]'s indexed `get` and `set` operations at [at]. */
+@JvmName("arrayReferenceWritableKeyPathAt")
+public inline fun <reified Value> referenceWritableKeyPath(
+  noinline get: (Array<Value>, Int) -> Value,
+  noinline set: (Array<Value>, Int, Value) -> Unit,
   at: Int,
-): ReferenceWritableKeyPath<Root, Value> = referenceWritableKeyPath(
-  id = PathId(TypeId.of<Root>(), listOf(PathSegment.Index(at))),
+): ReferenceWritableKeyPath<Array<Value>, Value> = referenceWritableKeyPath(
+  id = PathId(TypeId.of<Array<Value>>(), listOf(PathSegment.Index(at))),
   valueType = TypeId.of<Value>(),
-  get = { root -> get(root, at) },
-  set = { root, value -> set(root, at, value) },
-  rootClass = Root::class,
+  get = { array -> get(array, at) },
+  set = { array, value -> set(array, at, value) },
+  rootClass = Array<Value>::class,
+)
+
+/** Creates an in-place path through a [MutableList]'s indexed `get` and `set` operations at [at]. */
+@JvmName("mutableListReferenceWritableKeyPathAt")
+public inline fun <reified Value> referenceWritableKeyPath(
+  noinline get: (MutableList<Value>, Int) -> Value,
+  noinline set: (MutableList<Value>, Int, Value) -> Unit,
+  at: Int,
+): ReferenceWritableKeyPath<MutableList<Value>, Value> = referenceWritableKeyPath(
+  id = PathId(TypeId.of<MutableList<Value>>(), listOf(PathSegment.Index(at))),
+  valueType = TypeId.of<Value>(),
+  get = { list -> get(list, at) },
+  set = { list, value -> set(list, at, value) },
+)
+
+/** Creates a copy-based path through a [Map]'s lookup operation at [key]. */
+public inline fun <reified MapKey, reified Value> writableKeyPath(
+  noinline get: (Map<MapKey, Value>, MapKey) -> Value?,
+  key: MapKey,
+): WritableKeyPath<Map<MapKey, Value>, Value?> = writableKeyPath(
+  id = PathId(TypeId.of<Map<MapKey, Value>>(), listOf(PathSegment.Key(key))),
+  valueType = TypeId.of<Value?>(),
+  get = { map -> get(map, key) },
+  set = { map, value -> if (value == null) map - key else map + (key to value) },
+)
+
+/** Creates an in-place path through a [MutableMap]'s lookup operation at [key]. */
+public inline fun <reified MapKey, reified Value> referenceWritableKeyPath(
+  noinline get: (MutableMap<MapKey, Value>, MapKey) -> Value?,
+  key: MapKey,
+): ReferenceWritableKeyPath<MutableMap<MapKey, Value>, Value?> = referenceWritableKeyPath(
+  id = PathId(TypeId.of<MutableMap<MapKey, Value>>(), listOf(PathSegment.Key(key))),
+  valueType = TypeId.of<Value?>(),
+  get = { map -> get(map, key) },
+  set = { map, value -> if (value == null) map.remove(key) else map[key] = value },
 )
 
 /**

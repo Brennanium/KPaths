@@ -131,18 +131,49 @@ class StandardKeyPathsTest {
   @Test
   fun `indexed callable references create canonical paths with at`() {
     val second = keyPath(get = List<String>::get, at = 1)
+    val arraySecond = keyPath(get = Array<String>::get, at = 1)
+    val mutableSecondRead = keyPath(get = MutableList<String>::get, at = 1)
+    val arraySecondWrite = referenceWritableKeyPath(
+      get = Array<String>::get,
+      set = Array<String>::set,
+      at = 1,
+    )
     val mutableSecond = referenceWritableKeyPath(
       get = MutableList<String>::get,
       set = MutableList<String>::set,
       at = 1,
     )
+    val array = arrayOf("Blob", "Jr.")
     val items = mutableListOf("Blob", "Jr.")
 
     assertEquals("Jr.", second.get(items))
     assertEquals(ListPaths<String>().at(1), second)
+    assertEquals("Jr.", arraySecond.get(array))
+    assertEquals(ArrayPaths<String>().at(1), arraySecond)
+    assertEquals("Jr.", mutableSecondRead.get(items))
+    assertEquals(MutableListPaths<String>().at(1), mutableSecondRead)
+    assertSame(array, arraySecondWrite.set(array, "Revised"))
+    assertEquals(ArrayPaths<String>().at(1), arraySecondWrite)
     assertSame(items, mutableSecond.set(items, "Revised"))
     assertEquals(listOf("Blob", "Revised"), items)
     assertEquals(MutableListPaths<String>().at(1), mutableSecond)
+  }
+
+  @Test
+  fun `map callable references create canonical paths with key`() {
+    val score = writableKeyPath(get = Map<String, Int>::get, key = "score")
+    val mutableScore = referenceWritableKeyPath(
+      get = MutableMap<String, Int>::get,
+      key = "score",
+    )
+    val mutableScores = mutableMapOf("score" to 1)
+
+    assertEquals(MapPaths<String, Int>().at("score"), score)
+    assertEquals(mapOf("score" to 2), score.set(mapOf("score" to 1), 2))
+    assertEquals(emptyMap<String, Int>(), score.set(mapOf("score" to 1), null))
+    assertEquals(MutableMapPaths<String, Int>().at("score"), mutableScore)
+    assertSame(mutableScores, mutableScore.set(mutableScores, null))
+    assertEquals(false, mutableScores.containsKey("score"))
   }
 
   @Test

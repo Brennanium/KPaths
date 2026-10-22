@@ -156,7 +156,23 @@ val setSecond = referenceWritableKeyPath(
 )
 ```
 
-These paths use the same structural `Index` identity as the standard `at` path factories.
+These overloads are deliberately constrained to `List`, `Array`, and `MutableList` roots, and use
+the same structural `Index` identity as the standard `at` path factories. Map helpers similarly
+preserve the standard map policy:
+
+```kotlin
+val score = writableKeyPath(
+  get = Map<String, Int>::get,
+  key = "score",
+)
+
+val mutableScore = referenceWritableKeyPath(
+  get = MutableMap<String, Int>::get,
+  key = "score",
+)
+```
+
+The map factories use a `Key` identity segment and treat an assigned `null` as key removal.
 
 ## Value-style and reference-style roots
 
