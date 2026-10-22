@@ -119,6 +119,6 @@ RequestPaths.Search
 ```
 
 KSP also provides direct payload conveniences for cases with one to three primary-constructor
-properties, but these are optional shortcuts. The [generated sealed-catalog guide](generation.md#sealed-hierarchies-and-generated-case-catalogs)
+properties, but these are optional shortcuts. The [generated sealed-catalog guide](generation.md#generated-casepath-catalogs)
 shows their exact shape, value semantics, generic-root form, and the distinction from
 `RequestPaths.SearchPaths` concrete-case property paths.

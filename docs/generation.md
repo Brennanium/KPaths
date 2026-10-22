@@ -18,7 +18,7 @@ AccountPaths.displayName // WritableKeyPath<Account, String>
 This makes paths discoverable in code completion, avoids repeated property-reference adaptation,
 and gives callers a shared singleton with a stable structural identity.
 
-## What is generated
+## Generated KeyPath catalogs
 
 For accessible properties on an annotated type:
 
@@ -31,7 +31,24 @@ For accessible properties on an annotated type:
 The `val`/`var` distinction is preserved even for data classes. A `val` never becomes writable
 merely because its containing data class has a `copy` method.
 
-## Sealed hierarchies and generated case catalogs
+### Static versus generic property catalogs
+
+Kotlin object declarations cannot capture an outer type argument. KSP therefore uses an object
+for non-generic roots and a catalog class for generic roots:
+
+```kotlin
+@Pathable data class Person(val name: String)
+PersonPaths.name
+
+@Pathable data class Box<Value>(val value: Value)
+BoxPaths<String>().value
+```
+
+The parentheses in `BoxPaths<String>()` create the generated catalog with the concrete generic
+type token. `BoxPaths<String>.value` is a type member access, not an object instance, and is not
+valid Kotlin. In non-reified generic code, use the generated explicit-token `of` factory.
+
+## Generated CasePath catalogs
 
 Annotate the sealed root, not each individual case. KSP treats its direct sealed subtypes as the
 cases of the catalog and preserves their declared Kotlin names exactly:
@@ -178,23 +195,6 @@ val everyCase: List<PartialCaseKeyPath<Request>> = RequestPaths.allCasePaths
 
 `PartialCaseKeyPath` is intentionally type-erased; use a named case member when the focused case
 type matters.
-
-## Static versus generic catalogs
-
-Kotlin object declarations cannot capture an outer type argument. KSP therefore uses an object
-for non-generic roots and a catalog class for generic roots:
-
-```kotlin
-@Pathable data class Person(val name: String)
-PersonPaths.name
-
-@Pathable data class Box<Value>(val value: Value)
-BoxPaths<String>().value
-```
-
-The parentheses in `BoxPaths<String>()` create the generated catalog with the concrete generic
-type token. `BoxPaths<String>.value` is a type member access, not an object instance, and is not
-valid Kotlin. In non-reified generic code, use the generated explicit-token `of` factory.
 
 ## Naming and diagnostics
 
