@@ -92,17 +92,6 @@ public interface WritableCaseKeyPath<Root, Value> : CaseKeyPath<Root, Value> {
     }
 }
 
-/** A [WritableCaseKeyPath] whose embedding mutates a matched concrete case in place. */
-public interface ReferenceWritableCaseKeyPath<Root, Value> : WritableCaseKeyPath<Root, Value> {
-  /** Mutates a matching focus in place and leaves a nonmatching root untouched. */
-  public fun embedInPlace(root: Root, value: Value)
-
-  override fun embed(root: Root, value: Value): Root {
-    embedInPlace(root, value)
-    return root
-  }
-}
-
 /** Appends two writable case paths. */
 public fun <Root, Middle : Any, Value> WritableCaseKeyPath<Root, Middle>.appending(
   next: WritableCaseKeyPath<Middle, Value>,
@@ -153,27 +142,18 @@ public fun <Root, Case : Any, Value> WritableCaseKeyPath<Root, Case>.then(
 ): WritableCaseKeyPath<Root, Value> = appending(next)
 
 /**
- * Follows a matched case through a mutable Kotlin property.
+ * Follows a matched case through a mutable Kotlin property while preserving value semantics.
  *
- * This creates a reference-writable case path: it mutates only the matched concrete case and
- * returns the original root. A bare `KProperty1` deliberately has no matching overload.
+ * [copy] must return an independent replacement case. The property is updated on that copy, and
+ * the outer path then conditionally puts the replacement case back into the root.
  */
 public inline fun <Root, reified Case : Any, reified Value> WritableCaseKeyPath<Root, Case>.then(
   property: KMutableProperty1<Case, Value>,
-): ReferenceWritableCaseKeyPath<Root, Value> {
-  val outer = this
-  return referenceWritableCaseKeyPath(
-    id = outer.__kpaths_id.appending(PathId.property(TypeId.of<Case>(), property.name)),
-    valueType = TypeId.of<Value>(),
-    match = { root -> outer.match(root).map(property::get) },
-    embed = { root, value ->
-      when (val result = outer.match(root)) {
-        CaseMatch.NoMatch -> Unit
-        is CaseMatch.Matched -> property.set(result.value, value)
-      }
-    },
-  )
-}
+  noinline copy: (Case) -> Case,
+): WritableCaseKeyPath<Root, Value> = then(
+  get = property,
+  set = { case, value -> copy(case).also { replacement -> property.set(replacement, value) } },
+)
 
 /**
  * Follows a matched case through a property while supplying its value-semantic replacement.
@@ -193,11 +173,6 @@ public abstract class CaseKeyPathBase<Root, Value> : PathBase(), CaseKeyPath<Roo
 public abstract class WritableCaseKeyPathBase<Root, Value> :
   CaseKeyPathBase<Root, Value>(),
   WritableCaseKeyPath<Root, Value>
-
-/** Base class for generated root-aware reference-writable case paths. */
-public abstract class ReferenceWritableCaseKeyPathBase<Root, Value> :
-  WritableCaseKeyPathBase<Root, Value>(),
-  ReferenceWritableCaseKeyPath<Root, Value>
 
 /** Views a non-null case path as a total, read-only key path whose focus is nullable. */
 public fun <Root, Value : Any> CaseKeyPath<Root, Value>.matching(): KeyPath<Root, Value?> {
@@ -257,35 +232,6 @@ public inline fun <reified Root, reified Value> writableCaseKeyPath(
   noinline match: (Root) -> CaseMatch<Value>,
   noinline embed: (Root, Value) -> Root,
 ): WritableCaseKeyPath<Root, Value> = writableCaseKeyPath(id, TypeId.of<Value>(), match, embed)
-
-/** Creates a root-aware reference-writable case path. */
-public fun <Root, Value> referenceWritableCaseKeyPath(
-  id: PathId,
-  valueType: TypeId,
-  match: (Root) -> CaseMatch<Value>,
-  embed: (Root, Value) -> Unit,
-): ReferenceWritableCaseKeyPath<Root, Value> {
-  val matcher = match
-  val embedder = embed
-  return object : ReferenceWritableCaseKeyPathBase<Root, Value>() {
-    override val __kpaths_id: PathId = id
-    override val __kpaths_valueType: TypeId = valueType
-
-    override fun match(root: Root): CaseMatch<Value> = matcher(root)
-
-    override fun embedInPlace(root: Root, value: Value) {
-      if (matcher(root) is CaseMatch.Matched) embedder(root, value)
-    }
-  }
-}
-
-/** Creates a root-aware reference-writable case path while capturing its complete value token. */
-public inline fun <reified Root, reified Value> referenceWritableCaseKeyPath(
-  id: PathId,
-  noinline match: (Root) -> CaseMatch<Value>,
-  noinline embed: (Root, Value) -> Unit,
-): ReferenceWritableCaseKeyPath<Root, Value> =
-  referenceWritableCaseKeyPath(id, TypeId.of<Value>(), match, embed)
 
 /** Creates the ordinary writable whole-case path for a concrete subtype of a sealed root. */
 public inline fun <reified Root : Any, reified Case : Root> caseKeyPath(): WritableCaseKeyPath<Root, Case> {

@@ -35,7 +35,6 @@ Case paths have the same capability progression as Kotlin property paths, but ev
 | --- | --- |
 | `CaseKeyPath<Root, Value>` | match and extract |
 | `WritableCaseKeyPath<Root, Value>` | additionally replace a matching focus with `embed(root, value)` |
-| `ReferenceWritableCaseKeyPath<Root, Value>` | additionally mutate a matching concrete case in place |
 
 `caseKeyPath<Event, Event.Message>()` returns a writable whole-case path. A path can be stored as the read-only `CaseKeyPath` supertype when an API only needs matching.
 
@@ -60,20 +59,26 @@ messageText.embed(event, "Updated")
 
 The existing matched `Event.Message` supplies `id`, so there is no need for a `String -> Event.Message` constructor.
 
-For a mutable property, the short form creates a reference-writable case path:
+For a mutable property, provide the copying rule explicitly. This keeps an update from mutating a
+case instance that another root reference may share:
 
 ```kotlin
 sealed interface LiveEvent {
   data object Idle : LiveEvent
-  class Message(var text: String) : LiveEvent
+  data class Message(var text: String) : LiveEvent
 }
 
 val text = caseKeyPath<LiveEvent, LiveEvent.Message>()
-  .then(LiveEvent.Message::text)
-// ReferenceWritableCaseKeyPath<LiveEvent, String>
+  .then(
+    property = LiveEvent.Message::text,
+    copy = LiveEvent.Message::copy,
+  )
+// WritableCaseKeyPath<LiveEvent, String>
 ```
 
-Calling `text.embed(root, value)` mutates `text` only when `root` is `LiveEvent.Message`; an `Idle` root is returned untouched. There is deliberately no `.then(KProperty1)` overload for a read-only property.
+`text.embed(root, value)` updates the copied `Message` only when `root` is `LiveEvent.Message`; an
+`Idle` root is returned untouched. There is deliberately no `.then(KProperty1)` overload without
+a replacement rule.
 
 ## Exact nullable matching
 

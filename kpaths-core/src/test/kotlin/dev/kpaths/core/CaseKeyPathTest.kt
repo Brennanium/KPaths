@@ -5,7 +5,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
-import kotlin.test.assertSame
+import kotlin.test.assertNotSame
 import kotlin.test.assertTrue
 
 class CaseKeyPathTest {
@@ -58,13 +58,18 @@ class CaseKeyPathTest {
   }
 
   @Test
-  fun `a mutable property composes to a reference writable case path`() {
+  fun `a mutable property composes through an explicit copy`() {
     val message = caseKeyPath<MutableEvent, MutableEvent.Message>()
-    val text: ReferenceWritableCaseKeyPath<MutableEvent, String> = message.then(MutableEvent.Message::text)
+    val text: WritableCaseKeyPath<MutableEvent, String> = message.then(
+      property = MutableEvent.Message::text,
+      copy = MutableEvent.Message::copy,
+    )
     val root: MutableEvent = MutableEvent.Message("Old")
+    val updated = text.embed(root, "New")
 
-    assertSame(root, text.embed(root, "New"))
-    assertEquals("New", (root as MutableEvent.Message).text)
+    assertNotSame(root, updated)
+    assertEquals("Old", (root as MutableEvent.Message).text)
+    assertEquals("New", (updated as MutableEvent.Message).text)
     assertEquals(MutableEvent.Other, text.embed(MutableEvent.Other, "Ignored"))
   }
 
@@ -118,7 +123,7 @@ private data class ManualSelected(val name: String) : ManualEvent
 
 private sealed interface MutableEvent {
   data object Other : MutableEvent
-  class Message(var text: String) : MutableEvent
+  data class Message(var text: String) : MutableEvent
 }
 
 private sealed interface ManualOuter {
