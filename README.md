@@ -16,14 +16,31 @@ case-property namespaces, and source-aware diagnostics.
 
 ## Documentation
 
-The guides explain the library's semantics and design choices; Dokka renders the public KDoc into
-an API reference.
+The guides are rendered as a single static documentation site, with Dokka's public KDoc reference
+under its `API reference` section.
 
 - [Key paths](docs/key-paths.md) — reading, functional replacement, reference mutation, and composition.
 - [Case paths](docs/case-paths.md) — matching, construction, nullable payloads, and composition.
 - [Generated catalogs](docs/generation.md) — what `@Pathable` produces and when to use it.
 - [Identity and type metadata](docs/identity.md) — why separately-created equivalent paths compare equal.
-- [API reference](docs/index.md#api-reference) — generate locally with `./gradlew :dokkaGenerate`.
+- [Documentation site](docs/index.md) — build locally with `./gradlew docsBuild`.
+
+To preview the complete site, install the pinned documentation dependency and serve the generated
+output:
+
+```sh
+python3 -m venv .venv-docs
+. .venv-docs/bin/activate
+python3 -m pip install -r docs/requirements.txt
+./gradlew docsServe
+```
+
+Then open <http://localhost:8000>. `docsBuild` writes the publishable static site to
+`build/docs/site`, with its Kotlin API reference at `build/docs/site/api`.
+
+`docsBuild` automatically uses `.venv-docs/bin/python` when that local virtual environment
+exists. CI or another virtual-environment location can override it with
+`-PdocsPython=/absolute/path/to/python`.
 
 ## First build
 

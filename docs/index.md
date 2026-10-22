@@ -1,4 +1,4 @@
-# Module KPaths
+# KPaths
 
 KPaths provides typed, comparable routes through Kotlin values. A **key path** reads a property
 or collection element. A writable key path also replaces that focus, either by returning a new
@@ -15,13 +15,21 @@ The library deliberately keeps Kotlin's own language model visible:
 - Exact case matching uses `CaseMatch`, so a matching nullable payload is never confused with a
   different case.
 
-## Start here
+Use the guides in the navigation to learn the model, then open the [API reference](api/index.md) for the
+complete generated KDoc. The reference includes public declarations from `kpaths-core` and
+`kpaths-annotations`, but deliberately excludes processor internals and the sample module.
 
-The repository guides are the best introduction. Read `docs/key-paths.md`,
-`docs/case-paths.md`, `docs/generation.md`, and `docs/identity.md` alongside this reference.
+## Build locally
 
-## API reference
+Install the pinned documentation dependency once, then build the complete static site:
 
-Run `./gradlew :dokkaGenerate` from the repository root. The HTML output is written to
-`build/docs/api`. This reference is generated from the public KDoc in `kpaths-core` and
-`kpaths-annotations`; it deliberately excludes processor internals and the sample module.
+```sh
+python3 -m venv .venv-docs
+. .venv-docs/bin/activate
+python3 -m pip install -r docs/requirements.txt
+./gradlew docsBuild
+```
+
+The result is `build/docs/site`. Run `./gradlew docsServe` to serve that exact output locally at
+<http://localhost:8000>. The tasks automatically use `.venv-docs/bin/python`; use
+`-PdocsPython=/absolute/path/to/python` to choose another interpreter in CI.

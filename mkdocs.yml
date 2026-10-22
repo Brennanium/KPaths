@@ -1,0 +1,37 @@
+site_name: KPaths
+site_description: Typed, comparable property and case paths for Kotlin.
+site_dir: build/docs/site
+
+theme:
+  name: material
+  language: en
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - search.suggest
+    - search.highlight
+    - content.code.copy
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Overview: index.md
+  - Guides:
+      - Key paths: key-paths.md
+      - Case paths: case-paths.md
+      - Generated catalogs: generation.md
+      - Identity and type metadata: identity.md
+  - API reference: api/index.md

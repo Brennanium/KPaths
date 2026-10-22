@@ -10,6 +10,7 @@ The match result is deliberately not nullable. A nullable result cannot distingu
 case from a matching case whose payload itself is `null`.
 
 ```kotlin
+@Pathable
 sealed interface Event {
   data object Started : Event
   data class Message(val text: String?) : Event
