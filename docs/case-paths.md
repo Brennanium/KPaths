@@ -40,6 +40,36 @@ Case paths have the same capability progression as Kotlin property paths, but ev
 
 `embed(root, value)` is the one conditional write operation. It leaves a different case unchanged; `modify(root) { … }` is its update convenience.
 
+## Case paths in Kotlin collection algorithms
+
+Like `KeyPath`, `CaseKeyPath` is directly callable. Its function view is the intentionally lossy
+`(Root) -> Value?` extraction, which makes the standard `mapNotNull` a natural way to collect one
+kind of case:
+
+```kotlin
+val events = listOf<Event>(
+  Event.Started,
+  Event.Message("1", "Hello"),
+  Event.Message("2", "Welcome"),
+)
+
+events.mapNotNull(message)
+// [Event.Message(id="1", text="Hello"), Event.Message(id="2", text="Welcome")]
+```
+
+This is the Kotlin counterpart to Swift’s `compactMap(\.message)`. The returned values are the
+whole concrete `Event.Message` cases, so normal Kotlin property paths can continue the work:
+
+```kotlin
+events
+  .mapNotNull(message)
+  .map(keyPath(Event.Message::text))
+// ["Hello", "Welcome"]
+```
+
+When a case focus itself can be `null`, function invocation and `mapNotNull` deliberately discard
+both nonmatches and matched nulls. Use `match` when that distinction matters.
+
 ## Following a case into a property
 
 Case paths intentionally compose only with another writable route. A bare `KProperty1` is not enough: it can read a member but cannot say how an updated member becomes an updated case.

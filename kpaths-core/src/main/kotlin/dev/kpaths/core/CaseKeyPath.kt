@@ -68,13 +68,22 @@ public interface PartialCaseKeyPath<Root> : AnyCaseKeyPath {
   public fun matches(root: Root): Boolean = matchAny(root) is CaseMatch.Matched
 }
 
-/** A conditional, typed read route through one case of a sealed hierarchy. */
-public interface CaseKeyPath<Root, Value> : PartialCaseKeyPath<Root> {
+/**
+ * A conditional, typed read route through one case of a sealed hierarchy.
+ *
+ * A case path is also its lossy Kotlin function view, from [Root] to `Value?`. It can therefore
+ * be passed directly to APIs such as `mapNotNull`. Use [match] rather than invocation when a
+ * matched null must remain distinguishable from a nonmatching root.
+ */
+public interface CaseKeyPath<Root, Value> : PartialCaseKeyPath<Root>, (Root) -> Value? {
   /** Returns the exact result of attempting to match [root]. */
   public fun match(root: Root): CaseMatch<Value>
 
   /** A lossy convenience projection; use [match] when a matched null must remain distinguishable. */
   public fun extract(root: Root): Value? = match(root).valueOrNull
+
+  /** Invokes this path as its lossy extraction function. */
+  override operator fun invoke(root: Root): Value? = extract(root)
 
   override fun matchAny(root: Root): CaseMatch<Any?> = match(root)
 }

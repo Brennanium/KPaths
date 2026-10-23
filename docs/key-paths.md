@@ -12,7 +12,7 @@ val name = keyPath(Person::name)
 
 This factory-first style is the normal way to create a KPaths key path. It works for any accessible Kotlin property, including one declared in another module. `@Pathable` is an optional way to generate a named canonical path when a source-owned model exposes paths repeatedly; see [Generated catalogs](generation.md).
 
-## A route, not a closure
+## A route that can act as a closure
 
 A `KeyPath<Root, Value>` names a total route through a value: every `Root` has exactly one `Value` at that route. It can be read, passed to a generic function, composed, and compared with another path. It is more descriptive than passing an anonymous `(Root) -> Value` getter around.
 
@@ -28,6 +28,25 @@ person.get(keyPath = name)  // "Blob"
 ```
 
 The square-bracket spelling is Kotlin operator syntax. `get(keyPath = …)` is the same operation with an explicit label, which is often clearer in an API that accepts several inputs.
+
+KPaths also makes a key path directly implement Kotlin’s function type `(Root) -> Value`. That
+means it works anywhere Kotlin expects a read closure, without writing `{ person -> name[person] }`
+or `Person::name` again:
+
+```kotlin
+val people = listOf(
+  Person("Blob", Address("Paris")),
+  Person("Jr.", Address("Toronto")),
+)
+
+people.map(name)                    // ["Blob", "Jr."]
+people.sortedBy(name)               // sorted by name
+people.groupBy(name)                // Map<String, List<Person>>
+```
+
+The path does not become “just a closure” when passed this way. It retains its `PathId`, `TypeId`,
+equality, and composition behavior, so the same `name` value can also be stored or used with
+`person[name]`.
 
 ## Reading and writing
 

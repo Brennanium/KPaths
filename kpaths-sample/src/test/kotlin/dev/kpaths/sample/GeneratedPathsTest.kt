@@ -70,6 +70,28 @@ class GeneratedPathsTest {
   }
 
   @Test
+  fun `generated case and property paths compose into a conditional copy update`() {
+    val title = EditableFeedItemPaths.Article.then(EditableFeedItemPaths.ArticlePaths.title)
+    val original: EditableFeedItem = EditableFeedItem.Article(id = "1", title = "  Hello  ")
+    val items = listOf<EditableFeedItem>(
+      original,
+      EditableFeedItem.Loading,
+      EditableFeedItem.Article(id = "2", title = "Welcome"),
+    )
+
+    assertEquals(listOf("  Hello  ", "Welcome"), items.mapNotNull(title))
+    assertEquals(
+      listOf(
+        EditableFeedItem.Article(id = "1", title = "Hello"),
+        EditableFeedItem.Loading,
+        EditableFeedItem.Article(id = "2", title = "Welcome"),
+      ),
+      items.map { item -> title.modify(item) { value -> value.trim() } },
+    )
+    assertEquals("  Hello  ", (original as EditableFeedItem.Article).title)
+  }
+
+  @Test
   fun `generic whole case paths retain specialized identities`() {
     val strings = LoadablePaths<String>()
     val loaded: WritableCaseKeyPath<Loadable<String>, Loadable.Loaded<String>> = strings.Loaded

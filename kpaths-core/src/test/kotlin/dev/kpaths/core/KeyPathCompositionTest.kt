@@ -38,6 +38,18 @@ class KeyPathCompositionTest {
     assertSame(box, returned)
     assertEquals("Toronto", box.address.city)
   }
+
+  @Test
+  fun `key paths can be passed directly where Kotlin expects a function`() {
+    val city = PersonAddressPath.then(AddressCityPath)
+    val people = listOf(
+      Person(Address("Paris")),
+      Person(Address("Toronto")),
+    )
+
+    assertEquals(listOf("Paris", "Toronto"), people.map(city))
+    assertEquals(people.reversed(), people.sortedByDescending(city))
+  }
 }
 
 private data class Person(val address: Address)

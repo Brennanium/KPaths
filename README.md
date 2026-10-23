@@ -25,6 +25,7 @@ under its `API reference` section.
 
 - [Key paths](docs/key-paths.md) — reading, functional replacement, reference mutation, and composition.
 - [Case paths](docs/case-paths.md) — matching, construction, nullable payloads, and composition.
+- [Path recipes](docs/recipes.md) — collection algorithms, mixed composition, and conditional updates.
 - [Generated catalogs](docs/generation.md) — what `@Pathable` produces and when to use it.
 - [Identity and type metadata](docs/identity.md) — why separately-created equivalent paths compare equal.
 - [Documentation site](docs/index.md) — build locally with `./gradlew docsBuild`.

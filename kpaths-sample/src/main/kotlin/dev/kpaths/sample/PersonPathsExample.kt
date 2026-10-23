@@ -82,6 +82,13 @@ sealed interface Request {
 }
 
 @Pathable
+sealed interface EditableFeedItem {
+  data object Loading : EditableFeedItem
+  data class Article(val id: String, var title: String) : EditableFeedItem
+  data class Notice(val text: String) : EditableFeedItem
+}
+
+@Pathable
 enum class Direction {
   NORTH,
   SOUTH,

@@ -18,10 +18,19 @@ public interface PartialKeyPath<Root> : AnyKeyPath {
   public fun getAny(root: Root): Any?
 }
 
-/** A total, typed read path. */
-public interface KeyPath<Root, Value> : PartialKeyPath<Root> {
+/**
+ * A total, typed read path.
+ *
+ * A key path is also a Kotlin function from [Root] to [Value]. This lets a path participate
+ * directly in APIs such as `map`, `sortedBy`, and `groupBy` while retaining its path identity and
+ * composition capabilities.
+ */
+public interface KeyPath<Root, Value> : PartialKeyPath<Root>, (Root) -> Value {
   /** Reads the focused value from [root]. */
   public fun get(root: Root): Value
+
+  /** Invokes this path as its total read function. */
+  override operator fun invoke(root: Root): Value = get(root)
 
   override fun getAny(root: Root): Any? = get(root)
 }

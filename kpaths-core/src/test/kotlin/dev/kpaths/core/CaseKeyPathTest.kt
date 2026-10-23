@@ -107,6 +107,21 @@ class CaseKeyPathTest {
     assertNull(matching.get(ManualEvent.Dismissed))
     assertEquals(selected.__kpaths_id, matching.__kpaths_id)
   }
+
+  @Test
+  fun `case paths can be passed directly to mapNotNull`() {
+    val selected = caseKeyPath<ManualEvent, ManualEvent.Selected>()
+    val events = listOf<ManualEvent>(
+      ManualEvent.Selected("Blob"),
+      ManualEvent.Dismissed,
+      ManualEvent.Selected("Jr."),
+    )
+
+    assertEquals(
+      listOf(ManualEvent.Selected("Blob"), ManualEvent.Selected("Jr.")),
+      events.mapNotNull(selected),
+    )
+  }
 }
 
 private sealed interface ManualEvent {
