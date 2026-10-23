@@ -23,7 +23,8 @@ Use the guides in the navigation to learn the model, then open the [API referenc
 complete generated KDoc. The reference includes public declarations from `kpaths-core` and
 `kpaths-annotations`, but deliberately excludes processor internals and the sample module.
 
-For practical composition and collection patterns, start with [Path recipes](recipes.md).
+For practical composition and collection patterns, start with [Path recipes](recipes.md). For
+custom routes, indexed/keyed paths, and other escape hatches, see [Advanced paths](advanced-paths.md).
 
 ## Build locally
 

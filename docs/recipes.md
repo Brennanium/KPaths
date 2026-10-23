@@ -163,27 +163,29 @@ The resulting paths are type-erased because the cases have different focused typ
 still stable, comparable values, so they work as map keys or can be compared with
 `FeedItemPaths.Article`, `FeedItemPaths.Loading`, and so on.
 
-## Keep nullable matching exact when necessary
+## Count pending, empty, and populated responses separately
 
-The direct callable view of a case path is ideal for `mapNotNull`, but it is intentionally lossy.
-If a case can contain `null`, use `match` for control flow:
+This recipe is useful when a sealed case carries an optional field and a report needs to distinguish
+all three states—not the usual “pluck the non-null values” behavior:
 
 ```kotlin
+@Pathable
 sealed interface Response {
   data object Pending : Response
-  data class Value(val text: String?) : Response
+  data class Note(val text: String?) : Response
 }
 
-val value = caseKeyPath<Response, Response.Value, String?>(
-  extract = Response.Value::text,
-  embed = ::Response.Value,
-)
+val noteText = ResponsePaths.Note.text
 
-when (val result = Response.Value(null).match(value)) {
-  CaseMatch.NoMatch -> error("not a value response")
-  is CaseMatch.Matched -> println(result.value) // null, and it still matched
-}
+val counts = responses
+  .groupingBy { response ->
+    when (val result = response.match(noteText)) {
+      CaseMatch.NoMatch -> "pending"
+      is CaseMatch.Matched -> if (result.value == null) "empty" else "populated"
+    }
+  }
+  .eachCount()
 ```
 
-Use `extract`, `path(root)`, `root[path]`, or `mapNotNull(path)` only when treating matched null
-the same as no match is the desired behavior.
+`mapNotNull(noteText)` would be perfect if the only question were “which notes have text?” Here it
+would hide both `Pending` and `Note(null)`, so `match` is the right ingredient for the recipe.

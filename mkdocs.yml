@@ -33,6 +33,7 @@ nav:
       - Key paths: key-paths.md
       - Case paths: case-paths.md
       - Path recipes: recipes.md
+      - Advanced paths: advanced-paths.md
       - Generated catalogs: generation.md
       - Identity and type metadata: identity.md
   - API reference: api/index.md
