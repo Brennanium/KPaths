@@ -2,125 +2,74 @@ package dev.kpaths.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
-import kotlin.test.assertIs
 import kotlin.test.assertNull
-import kotlin.test.assertNotSame
 import kotlin.test.assertTrue
 
 class CaseKeyPathTest {
   @Test
-  fun `whole case factory extracts and conditionally replaces`() {
+  fun `whole case paths independently embed`() {
     val selected = caseKeyPath<ManualEvent, ManualEvent.Selected>()
-    val original: ManualEvent = ManualEvent.Selected("Blob")
 
-    assertEquals(ManualEvent.Selected("Blob"), original[selected])
+    assertEquals(ManualEvent.Selected("Jr."), selected.embed(ManualEvent.Selected("Jr.")))
+    assertEquals(ManualEvent.Selected("Blob"), ManualEvent.Selected("Blob")[selected])
     assertNull(ManualEvent.Dismissed[selected])
-    assertEquals(ManualEvent.Selected("Jr."), selected.embed(original, ManualEvent.Selected("Jr.")))
-    assertEquals(ManualEvent.Dismissed, selected.embed(ManualEvent.Dismissed, ManualEvent.Selected("Jr.")))
-    assertEquals(PathId.case(TypeId.of<ManualEvent>(), "Selected"), selected.__kpaths_id)
   }
 
   @Test
-  fun `read only case paths retain matched null information`() {
-    val selected: CaseKeyPath<ManualNullableEvent, String?> = caseKeyPath(
-      id = PathId.custom(TypeId.of<ManualNullableEvent>(), "test.ManualNullableEvent.selected"),
-      valueType = TypeId.of<String?>(),
-      match = { event ->
-        when (event) {
-          ManualNullableEvent.Idle -> CaseMatch.NoMatch
-          is ManualNullableEvent.Selected -> CaseMatch.Matched(event.value)
-        }
-      },
+  fun `manual factories embed unary pair and triple payloads`() {
+    val selected = caseKeyPath<ManualEvent, ManualEvent.Selected, _>(
+      extract = ManualEvent.Selected::name,
+      embed = { value -> ManualEvent.Selected(value) },
+    )
+    val pair = caseKeyPath<MultiEvent, MultiEvent.PairValue, _, _>(
+      extract1 = MultiEvent.PairValue::id,
+      extract2 = MultiEvent.PairValue::action,
+      embed = { id, action -> MultiEvent.PairValue(id, action) },
     )
 
-    assertEquals(CaseMatch.Matched(null), ManualNullableEvent.Selected(null).match(selected))
-    assertEquals(CaseMatch.NoMatch, ManualNullableEvent.Idle.match(selected))
-    assertNull(ManualNullableEvent.Selected(null)[selected])
-    assertTrue(ManualNullableEvent.Selected(null).caseMatches(selected))
-    assertFalse(ManualNullableEvent.Idle.caseMatches(selected))
+    assertEquals(ManualEvent.Selected("Jr."), selected.embed("Jr."))
+    assertEquals(MultiEvent.PairValue("id", "go"), pair.embed("id" to "go"))
   }
 
   @Test
-  fun `case paths compose only through writable property routes`() {
-    val message = caseKeyPath<ManualEvent, ManualEvent.Selected>()
-    val name = message.then(
-      get = ManualEvent.Selected::name,
-      set = { selected, value -> selected.copy(name = value) },
-    )
+  fun `root-scoped factory infers conventional constructor payloads`() {
+    val selected = casePathsOf<FactoryEvent>().pathFor(::FactorySelected)
+    val routed = casePathsOf<FactoryEvent>().pathFor(::FactoryRoute)
 
-    assertEquals("Blob", ManualEvent.Selected("Blob")[name])
-    assertEquals(
-      ManualEvent.Selected("Jr."),
-      name.embed(ManualEvent.Selected("Blob"), "Jr."),
-    )
-    assertEquals(ManualEvent.Dismissed, name.embed(ManualEvent.Dismissed, "Jr."))
+    assertEquals(FactorySelected("Jr."), selected.embed("Jr."))
+    assertEquals("Blob", FactorySelected("Blob")[selected])
+    assertEquals(FactoryRoute("id", "go"), routed.embed("id" to "go"))
   }
 
   @Test
-  fun `a mutable property composes through an explicit copy`() {
-    val message = caseKeyPath<MutableEvent, MutableEvent.Message>()
-    val text: WritableCaseKeyPath<MutableEvent, String> = message.then(
-      property = MutableEvent.Message::text,
-      copy = MutableEvent.Message::copy,
-    )
-    val root: MutableEvent = MutableEvent.Message("Old")
-    val updated = text.embed(root, "New")
+  fun `root-scoped factory substitutes generic payload type tokens`() {
+    val loaded: CaseKeyPath<GenericFactory<String>, String> =
+      casePathsOf<GenericFactory<String>>().pathFor(::GenericLoaded)
 
-    assertNotSame(root, updated)
-    assertEquals("Old", (root as MutableEvent.Message).text)
-    assertEquals("New", (updated as MutableEvent.Message).text)
-    assertEquals(MutableEvent.Other, text.embed(MutableEvent.Other, "Ignored"))
+    assertEquals(TypeId.of<String>(), loaded.__kpaths_valueType)
+    assertEquals(GenericLoaded("Blob"), loaded.embed("Blob"))
   }
 
   @Test
-  fun `writable whole case paths compose`() {
+  fun `case paths compose with independent embedding`() {
     val outer = caseKeyPath<ManualOuter, ManualOuter.Nested>()
     val inner = caseKeyPath<ManualOuter.Nested, ManualOuter.Nested.Selected>()
     val selected = outer.then(inner)
 
+    assertEquals(ManualOuter.Nested.Selected("Jr."), selected.embed(ManualOuter.Nested.Selected("Jr.")))
     assertEquals(ManualOuter.Nested.Selected("Blob"), ManualOuter.Nested.Selected("Blob")[selected])
-    assertEquals(
-      ManualOuter.Nested.Selected("Jr."),
-      selected.embed(ManualOuter.Nested.Selected("Blob"), ManualOuter.Nested.Selected("Jr.")),
-    )
-    assertEquals(ManualOuter.Nested.Dismissed, selected.embed(ManualOuter.Nested.Dismissed, ManualOuter.Nested.Selected("Jr.")))
   }
 
   @Test
-  fun `constructor reference factories remain root aware`() {
-    val selected = caseKeyPath<ManualEvent, ManualSelected, _>(
-      extract = ManualSelected::name,
-      embed = ::ManualSelected,
+  fun `matched null remains distinguishable`() {
+    val nullable = caseKeyPath<NullableEvent, NullableEvent.Selected, _>(
+      extract = NullableEvent.Selected::value,
+      embed = { value -> NullableEvent.Selected(value) },
     )
 
-    assertEquals(ManualSelected("Jr."), selected.embed(ManualSelected("Blob"), "Jr."))
-    assertEquals(ManualEvent.Dismissed, selected.embed(ManualEvent.Dismissed, "Jr."))
-  }
-
-  @Test
-  fun `matching exposes a non-null case as a nullable key path`() {
-    val selected = caseKeyPath<ManualEvent, ManualEvent.Selected>()
-    val matching = selected.matching()
-
-    assertEquals(ManualEvent.Selected("Blob"), matching.get(ManualEvent.Selected("Blob")))
-    assertNull(matching.get(ManualEvent.Dismissed))
-    assertEquals(selected.__kpaths_id, matching.__kpaths_id)
-  }
-
-  @Test
-  fun `case paths can be passed directly to mapNotNull`() {
-    val selected = caseKeyPath<ManualEvent, ManualEvent.Selected>()
-    val events = listOf<ManualEvent>(
-      ManualEvent.Selected("Blob"),
-      ManualEvent.Dismissed,
-      ManualEvent.Selected("Jr."),
-    )
-
-    assertEquals(
-      listOf(ManualEvent.Selected("Blob"), ManualEvent.Selected("Jr.")),
-      events.mapNotNull(selected),
-    )
+    assertEquals(CaseMatch.Matched(null), NullableEvent.Selected(null).match(nullable))
+    assertTrue(NullableEvent.Selected(null).caseMatches(nullable))
+    assertNull(NullableEvent.Idle[nullable])
   }
 }
 
@@ -129,21 +78,24 @@ private sealed interface ManualEvent {
   data class Selected(val name: String) : ManualEvent
 }
 
-private sealed interface ManualNullableEvent {
-  data object Idle : ManualNullableEvent
-  data class Selected(val value: String?) : ManualNullableEvent
+private sealed interface MultiEvent {
+  data class PairValue(val id: String, val action: String) : MultiEvent
 }
 
-private data class ManualSelected(val name: String) : ManualEvent
-
-private sealed interface MutableEvent {
-  data object Other : MutableEvent
-  data class Message(var text: String) : MutableEvent
+private sealed interface NullableEvent {
+  data object Idle : NullableEvent
+  data class Selected(val value: String?) : NullableEvent
 }
 
 private sealed interface ManualOuter {
   sealed interface Nested : ManualOuter {
-    data object Dismissed : Nested
     data class Selected(val name: String) : Nested
   }
 }
+
+sealed interface FactoryEvent
+data class FactorySelected(val value: String) : FactoryEvent
+data class FactoryRoute(val id: String, val action: String) : FactoryEvent
+
+sealed interface GenericFactory<out Value>
+data class GenericLoaded<Value>(val value: Value) : GenericFactory<Value>

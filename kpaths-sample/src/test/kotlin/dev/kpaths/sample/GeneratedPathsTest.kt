@@ -4,9 +4,7 @@ import dev.kpaths.core.CaseKeyPath
 import dev.kpaths.core.CaseMatch
 import dev.kpaths.core.KeyPath
 import dev.kpaths.core.TypeId
-import dev.kpaths.core.WritableCaseKeyPath
 import dev.kpaths.core.WritableKeyPath
-import dev.kpaths.core.caseKeyPath
 import dev.kpaths.core.caseMatches
 import dev.kpaths.core.get
 import dev.kpaths.core.match
@@ -31,68 +29,32 @@ class GeneratedPathsTest {
   }
 
   @Test
-  fun `generated whole case paths conditionally replace their matched cases`() {
-    val connected: WritableCaseKeyPath<Connection, Connection.Connected> = ConnectionPaths.Connected
-    val original: Connection = Connection.Connected(host = "example.com")
+  fun `generated case paths independently embed complete cases and payloads`() {
+    val connected: CaseKeyPath<Connection, Connection.Connected> = ConnectionPaths.Connected
+    val selected: CaseKeyPath<Request, String> = RequestPaths.Selected.value
+    val nullable: CaseKeyPath<Request, String?> = RequestPaths.Nullable.value
 
-    assertEquals(Connection.Connected("example.com"), original[connected])
-    assertNull(Connection.Disconnected[connected])
-    assertEquals(Connection.Connected("updated.example"), connected.embed(original, Connection.Connected("updated.example")))
-    assertEquals(Connection.Disconnected, connected.embed(Connection.Disconnected, Connection.Connected("updated.example")))
-    assertEquals(ConnectionPaths.Connected, ConnectionPaths.caseOf(original))
-  }
-
-  @Test
-  fun `generated case payload paths remain exact and root aware`() {
-    val selected: WritableCaseKeyPath<Request, String> = RequestPaths.Selected.value
-    val nullable: WritableCaseKeyPath<Request, String?> = RequestPaths.Nullable.value
-    val selectedRoot: Request = Request.Selected("Blob")
-
-    assertEquals("Blob", selectedRoot[selected])
-    assertEquals(Request.Selected("Jr."), selected.embed(selectedRoot, "Jr."))
-    assertEquals(Request.Navigate("id", "settings"), selected.embed(Request.Navigate("id", "settings"), "Ignored"))
+    assertEquals(Connection.Connected("updated.example"), connected.embed(Connection.Connected("updated.example")))
+    assertEquals(Request.Selected("Jr."), selected.embed("Jr."))
     assertEquals(CaseMatch.Matched(null), Request.Nullable(null).match(nullable))
-    assertEquals(CaseMatch.NoMatch, Request.Selected("Blob").match(nullable))
     assertTrue(Request.Nullable(null).caseMatches(nullable))
+    assertNull(Request.Selected("Blob")[nullable])
   }
 
   @Test
-  fun `case paths compose through an explicit copy setter for a val property`() {
-    val connected = ConnectionPaths.Connected
-    val host = connected.then(
-      get = Connection.Connected::host,
-      set = { connection, value -> connection.copy(host = value) },
-    )
-    val original: Connection = Connection.Connected(host = "example.com")
+  fun `generated multi-payload cases provide named context-bound routes`() {
+    val destination = RequestPaths.Navigate.destinationFor(id = "settings")
+    val replace = RequestPaths.Route.replaceFor(id = "settings", destination = "privacy")
 
-    assertEquals("example.com", original[host])
-    assertEquals(Connection.Connected("updated.example"), host.embed(original, "updated.example"))
+    assertEquals(Request.Navigate("settings", "privacy"), destination.embed("privacy"))
+    assertEquals("privacy", Request.Navigate("settings", "privacy")[destination])
+    assertNull(Request.Navigate("profile", "privacy")[destination])
+    assertEquals(Request.Route("settings", "privacy", true), replace.embed(true))
+    assertNull(Request.Route("settings", "profile", true)[replace])
   }
 
   @Test
-  fun `generated case and property paths compose into a conditional copy update`() {
-    val title = EditableFeedItemPaths.Article.then(EditableFeedItemPaths.ArticlePaths.title)
-    val original: EditableFeedItem = EditableFeedItem.Article(id = "1", title = "  Hello  ")
-    val items = listOf<EditableFeedItem>(
-      original,
-      EditableFeedItem.Loading,
-      EditableFeedItem.Article(id = "2", title = "Welcome"),
-    )
-
-    assertEquals(listOf("  Hello  ", "Welcome"), items.mapNotNull(title))
-    assertEquals(
-      listOf(
-        EditableFeedItem.Article(id = "1", title = "Hello"),
-        EditableFeedItem.Loading,
-        EditableFeedItem.Article(id = "2", title = "Welcome"),
-      ),
-      items.map { item -> title.modify(item) { value -> value.trim() } },
-    )
-    assertEquals("  Hello  ", (original as EditableFeedItem.Article).title)
-  }
-
-  @Test
-  fun `generated unary case payload paths compose through nested sealed hierarchies`() {
+  fun `generated case paths compose into independently embeddable nested routes`() {
     val renameText = AppEventPaths.Profile.action
       .then(ProfileActionPaths.Editor.action)
       .then(EditorActionPaths.Rename.text)
@@ -101,36 +63,17 @@ class GeneratedPathsTest {
     assertEquals("Blob", original[renameText])
     assertEquals(
       AppEvent.Profile(ProfileAction.Editor(EditorAction.Rename("Jr."))),
-      renameText.embed(original, "Jr."),
+      renameText.embed("Jr."),
     )
-    assertEquals(AppEvent.Dismissed, renameText.embed(AppEvent.Dismissed, "Ignored"))
-    assertEquals(
-      AppEvent.Profile(ProfileAction.Editor(EditorAction.Save)),
-      renameText.embed(AppEvent.Profile(ProfileAction.Editor(EditorAction.Save)), "Ignored"),
-    )
+    assertNull(AppEvent.Dismissed[renameText])
   }
 
   @Test
-  fun `generic whole case paths retain specialized identities`() {
+  fun `generic case paths retain specialized identities`() {
     val strings = LoadablePaths<String>()
-    val loaded: WritableCaseKeyPath<Loadable<String>, Loadable.Loaded<String>> = strings.Loaded
-    val root: Loadable<String> = Loadable.Loaded("Blob")
+    val loaded: CaseKeyPath<Loadable<String>, Loadable.Loaded<String>> = strings.Loaded
 
-    assertEquals(Loadable.Loaded("Blob"), root[loaded])
-    assertEquals(Loadable.Loaded("Jr."), loaded.embed(root, Loadable.Loaded("Jr.")))
+    assertEquals(Loadable.Loaded("Jr."), loaded.embed(Loadable.Loaded("Jr.")))
     assertEquals(TypeId.of<Loadable.Loaded<String>>(), loaded.__kpaths_valueType)
-    assertEquals(loaded, caseKeyPath<Loadable<String>, Loadable.Loaded<String>>())
-  }
-
-  @Test
-  fun `read-only case path factories remain useful for generic matching`() {
-    val selected: CaseKeyPath<Request, Request.Selected> = caseKeyPath(
-      id = RequestPaths.Selected.__kpaths_id,
-      valueType = TypeId.of<Request.Selected>(),
-      match = { root -> if (root is Request.Selected) CaseMatch.Matched(root) else CaseMatch.NoMatch },
-    )
-
-    assertEquals(Request.Selected("Blob"), Request.Selected("Blob")[selected])
-    assertNull(Request.Navigate("id", "settings")[selected])
   }
 }
