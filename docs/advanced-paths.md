@@ -150,7 +150,7 @@ val connections = connectionEvents.mapNotNull(connected)
 ```
 
 When a library must focus something other than one whole concrete subtype, use the lower-level
-`caseKeyPath(id = …, match = …)` or `writableCaseKeyPath(id = …, match = …, embed = …)` factory.
+`caseKeyPath(id = …, match = …, embed = …)` factory.
 Those forms require an explicit stable `PathId`, just as a library-defined custom route must choose
 a stable name. They are intended for library authors; most application code should prefer the
 whole-case factory or an `@Pathable` catalog.

@@ -14,7 +14,7 @@ needs to retain, compose, compare, cache, inspect, or write through the route af
 | Transform a field and return a replacement root | `WritableKeyPath<Root, Value>` | Carries both the getter and typed write-back rule. |
 | Mutate a shared reference intentionally | `ReferenceWritableKeyPath<Root, Value>` | Makes reference mutation explicit in the type. |
 | Handle one branch of a sealed hierarchy | `CaseKeyPath<Root, Case>` | Carries typed matching rather than an ad-hoc nullable extractor. |
-| Update only when a branch matches | `WritableCaseKeyPath<Root, Case>` | Carries conditional replacement of the matching case. |
+| Construct or route a branch payload | `CaseKeyPath<Root, Value>` | Carries matching and independent embedding. |
 
 ## Describe a reusable field, not an anonymous getter
 
@@ -109,7 +109,7 @@ fun <Root, Case : Any, Result> handleCase(
 
 val finishedLocation = caseKeyPath<DownloadEvent, DownloadEvent.Finished, String>(
   extract = DownloadEvent.Finished::location,
-  embed = ::DownloadEvent.Finished,
+  embed = { location -> DownloadEvent.Finished(location) },
 )
 val event: DownloadEvent = DownloadEvent.Finished("/tmp/report.json")
 val location = handleCase(event, finishedLocation) { it }
@@ -117,25 +117,25 @@ val location = handleCase(event, finishedLocation) { it }
 
 Unlike a nullable extraction closure, `match` retains the distinction between “a different case”
 and “a matching case whose focused value is null.” That matters for nullable payload routes; see
-[Case paths](case-paths.md#exact-nullable-matching).
+[Case paths](case-paths.md#extract-embed-compose).
 
-When an API needs to update a matching case, ask for `WritableCaseKeyPath` instead:
+When an API needs to construct or forward a case payload, ask for `CaseKeyPath`. Case paths do
+not modify an existing root: their `embed` direction deliberately constructs the represented
+case from a payload. That makes a generic forwarding operation very small and unambiguous:
 
 ```kotlin
-fun <Root, Case : Any> updateIfMatching(
-  root: Root,
-  path: WritableCaseKeyPath<Root, Case>,
-  transform: (Case) -> Case,
-): Root = path.modify(root, transform)
+fun <Root, Value> lift(
+  path: CaseKeyPath<Root, Value>,
+  value: Value,
+): Root = path.embed(value)
 
 val progress = caseKeyPath<DownloadEvent, DownloadEvent.Progress>()
-val advanced = updateIfMatching(event, progress) {
-  it.copy(percent = (it.percent + 10).coerceAtMost(100))
-}
+val advanced: DownloadEvent = lift(progress, DownloadEvent.Progress(10))
 ```
 
-`Finished` and `Failed` values are returned unchanged. This conditional replacement is a route
-capability, not a convention each caller must remember to implement.
+For product values that must be updated in place conceptually—such as an existing data class with
+one changed field—require a `WritableKeyPath` instead. The separate types prevent an API from
+confusing “replace a field in this root” with “construct this sealed case.”
 
 ## Stable identity enables registries and caches
 

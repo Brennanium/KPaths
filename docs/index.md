@@ -7,7 +7,7 @@ and [Point-Free’s CasePaths](https://github.com/pointfreeco/swift-case-paths).
 Swift key paths use `\Type.property` expressions. KPaths uses Kotlin property references and
 factories such as `keyPath(Person::name)` to provide the same role: describe a typed route as a
 value. KPaths case paths extend that idea to sealed cases through `caseKeyPath` and
-`writableCaseKeyPath`.
+`casePathsOf`.
 
 That distinction matters most at API boundaries. A path can act as a Kotlin getter closure, but
 it does not lose its route identity, write capability, or composition behavior when it does.

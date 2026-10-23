@@ -147,10 +147,10 @@ public inline fun <reified Root, reified Value> caseKeyPath(
   noinline embed: (Value) -> Root,
 ): CaseKeyPath<Root, Value> = caseKeyPath(id, TypeId.of<Value>(), match, embed)
 
-/** Creates the ordinary writable whole-case path for a concrete subtype of a sealed root. */
+/** Creates an independently embeddable whole-case path for a concrete subtype of a sealed root. */
 public inline fun <reified Root : Any, reified Case : Root> caseKeyPath(): CaseKeyPath<Root, Case> {
   val caseName = requireNotNull(Case::class.simpleName) {
-    "Local and anonymous classes cannot form stable case path names. Use a manual writableCaseKeyPath factory."
+    "Local and anonymous classes cannot form stable case path names. Use a manual caseKeyPath factory."
   }
   return caseKeyPath(
     id = PathId.case(TypeId.of<Root>(), caseName),
@@ -160,7 +160,7 @@ public inline fun <reified Root : Any, reified Case : Root> caseKeyPath(): CaseK
   )
 }
 
-/** Creates a writable whole-case path for one [Enum] entry, focused as [Unit]. */
+/** Creates an independently embeddable whole-case path for one [Enum] entry, focused as [Unit]. */
 public inline fun <reified Root> caseKeyPath(
   case: Root,
 ): CaseKeyPath<Root, Unit>
@@ -186,7 +186,7 @@ public inline fun <reified Root : Any, reified Case : Root, reified Value> caseK
   embed = embed,
 )
 
-/** Creates a writable path whose focus is an ordered [Pair] of two case properties. */
+/** Creates an independently embeddable path focused as an ordered [Pair] of two case properties. */
 public inline fun <reified Root : Any, reified Case : Root, reified First, reified Second> caseKeyPath(
   extract1: KProperty1<Case, First>,
   extract2: KProperty1<Case, Second>,
@@ -202,7 +202,7 @@ public inline fun <reified Root : Any, reified Case : Root, reified First, reifi
   )
 }
 
-/** Creates a writable path whose focus is an ordered [Triple] of three case properties. */
+/** Creates an independently embeddable path focused as an ordered [Triple] of three case properties. */
 public inline fun <reified Root : Any, reified Case : Root, reified First, reified Second, reified Third> caseKeyPath(
   extract1: KProperty1<Case, First>,
   extract2: KProperty1<Case, Second>,
