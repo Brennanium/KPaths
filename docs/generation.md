@@ -57,7 +57,7 @@ cases of the catalog and preserves their declared Kotlin names exactly:
 @Pathable
 sealed interface Request {
   data object Cancelled : Request
-  data class Message(val id: String, val text: String) : Request
+  data class Message(val id: String, var text: String) : Request
   data class Retry(var attempt: Int) : Request
 }
 ```
@@ -112,14 +112,19 @@ embedded. That is why `RequestPaths.Retry.attempt` can update `attempt` even if 
 `val`: it replaces `Request.Retry`, rather than setting a property on the existing object.
 
 The generated form is especially useful when the same field-level case path is part of a model’s
-public vocabulary. For a one-off route, the factory form remains clearer:
+public vocabulary. It also composes with the generated concrete-case `WritableKeyPath`, without
+repeating a `copy` rule:
 
 ```kotlin
-val text = caseKeyPath<Request, Request.Message>().then(
-  get = Request.Message::text,
-  set = { message, value -> message.copy(text = value) },
-)
+val text = RequestPaths.Message.then(RequestPaths.MessagePaths.text)
+// WritableCaseKeyPath<Request, String>
 ```
+
+`MessagePaths.text` is writable because `text` is declared `var`; its generated key path copies
+`Request.Message`, changes `text` on the copy, and the outer case path conditionally replaces the
+matching case. If `text` were a `val`, `MessagePaths.text` would be read-only. Use a generated
+direct payload path where it fits, or the explicit `then(get = …, set = …)` form when a `val`
+needs a custom reconstruction rule.
 
 Cases with more than three constructor properties receive their whole-case path and the ordinary
 concrete-case property catalog, but no synthetic payload tuple. Kotlin has `Pair` and `Triple`,
@@ -132,6 +137,9 @@ KSP also creates a sibling `CaseNamePaths` catalog rooted at the concrete case t
 ```kotlin
 RequestPaths.MessagePaths.id
 // KeyPath<Request.Message, String>
+
+RequestPaths.MessagePaths.text
+// WritableKeyPath<Request.Message, String>
 
 RequestPaths.RetryPaths.attempt
 // WritableKeyPath<Request.Retry, Int>
