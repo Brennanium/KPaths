@@ -103,15 +103,19 @@ or more than three constructor values.
 The explicit factory avoids reflection while retaining property names in the `PathId`:
 
 ```kotlin
+import example.Event.Message
+import example.Event.Navigate
+import example.Event.Replace
+
 val text: CaseKeyPath<Event, String> = caseKeyPath(
   extract = Event.Message::text,
-  embed = { value -> Event.Message(value) },
+  embed = ::Message,
 )
 
 val navigate: CaseKeyPath<Event, Pair<String, String>> = caseKeyPath(
   extract1 = Event.Navigate::id,
   extract2 = Event.Navigate::destination,
-  embed = { id, destination -> Event.Navigate(id, destination) },
+  embed = ::Navigate,
 )
 ```
 
@@ -122,7 +126,7 @@ val replace: CaseKeyPath<Event, Triple<String, String, Boolean>> = caseKeyPath(
   extract1 = Event.Replace::id,
   extract2 = Event.Replace::destination,
   extract3 = Event.Replace::animated,
-  embed = { id, destination, animated -> Event.Replace(id, destination, animated) },
+  embed = ::Replace,
 )
 ```
 
