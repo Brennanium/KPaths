@@ -104,6 +104,22 @@ public fun <Root, Middle : Any, Value> KeyPath<Root, Middle?>.thenOptional(
   next: KeyPath<Middle, Value>,
 ): KeyPath<Root, Value?> = appendingOptional(next)
 
+/**
+ * Appends a path after force-unwrapping a nullable focus.
+ *
+ * This is the Kotlin counterpart to a Swift `!` segment in a key path, such as
+ * `\\Person.address!.city`. The returned path has a non-null focus, but reading or writing it
+ * throws [NullPointerException] when the intermediate [Middle] is absent.
+ */
+public fun <Root, Middle : Any, Value> KeyPath<Root, Middle?>.appendingForceUnwrapped(
+  next: KeyPath<Middle, Value>,
+): KeyPath<Root, Value> = ForceUnwrappedAppendedKeyPath(this, next)
+
+/** Kotlin-friendly spelling of [appendingForceUnwrapped]. */
+public fun <Root, Middle : Any, Value> KeyPath<Root, Middle?>.thenForceUnwrapped(
+  next: KeyPath<Middle, Value>,
+): KeyPath<Root, Value> = appendingForceUnwrapped(next)
+
 /** Appends two writable paths, retaining immutable replacement capability. */
 public fun <Root, Middle, Value> WritableKeyPath<Root, Middle>.appending(
   next: WritableKeyPath<Middle, Value>,
@@ -113,6 +129,22 @@ public fun <Root, Middle, Value> WritableKeyPath<Root, Middle>.appending(
 public fun <Root, Middle, Value> WritableKeyPath<Root, Middle>.then(
   next: WritableKeyPath<Middle, Value>,
 ): WritableKeyPath<Root, Value> = appending(next)
+
+/**
+ * Appends a writable path after force-unwrapping a nullable focus.
+ *
+ * Both component paths must be writable. The resulting setter replaces the nested value and then
+ * the outer value; it throws [NullPointerException] rather than silently doing nothing when the
+ * nullable focus is absent.
+ */
+public fun <Root, Middle : Any, Value> WritableKeyPath<Root, Middle?>.appendingForceUnwrapped(
+  next: WritableKeyPath<Middle, Value>,
+): WritableKeyPath<Root, Value> = ForceUnwrappedAppendedWritableKeyPath(this, next)
+
+/** Kotlin-friendly spelling of writable [appendingForceUnwrapped]. */
+public fun <Root, Middle : Any, Value> WritableKeyPath<Root, Middle?>.thenForceUnwrapped(
+  next: WritableKeyPath<Middle, Value>,
+): WritableKeyPath<Root, Value> = appendingForceUnwrapped(next)
 
 private class AppendedKeyPath<Root, Middle, Value>(
   private val outer: KeyPath<Root, Middle>,
@@ -128,10 +160,24 @@ private class OptionalAppendedKeyPath<Root, Middle : Any, Value>(
   private val outer: KeyPath<Root, Middle?>,
   private val inner: KeyPath<Middle, Value>,
 ) : KeyPathBase<Root, Value?>() {
-  override val __kpaths_id: PathId = outer.__kpaths_id.appending(inner.__kpaths_id)
+  override val __kpaths_id: PathId = outer.__kpaths_id
+    .appending(PathSegment.OptionalChain)
+    .appending(inner.__kpaths_id)
   override val __kpaths_valueType: TypeId = inner.__kpaths_valueType.withNullability(true)
 
   override fun get(root: Root): Value? = outer.get(root)?.let(inner::get)
+}
+
+private class ForceUnwrappedAppendedKeyPath<Root, Middle : Any, Value>(
+  private val outer: KeyPath<Root, Middle?>,
+  private val inner: KeyPath<Middle, Value>,
+) : KeyPathBase<Root, Value>() {
+  override val __kpaths_id: PathId = outer.__kpaths_id
+    .appending(PathSegment.ForceUnwrap)
+    .appending(inner.__kpaths_id)
+  override val __kpaths_valueType: TypeId = inner.__kpaths_valueType
+
+  override fun get(root: Root): Value = inner.get(forceUnwrappedValue(outer, root))
 }
 
 private class AppendedWritableKeyPath<Root, Middle, Value>(
@@ -145,6 +191,23 @@ private class AppendedWritableKeyPath<Root, Middle, Value>(
 
   override fun set(root: Root, value: Value): Root =
     outer.set(root, inner.set(outer.get(root), value))
+}
+
+private class ForceUnwrappedAppendedWritableKeyPath<Root, Middle : Any, Value>(
+  private val outer: WritableKeyPath<Root, Middle?>,
+  private val inner: WritableKeyPath<Middle, Value>,
+) : WritableKeyPathBase<Root, Value>() {
+  override val __kpaths_id: PathId = outer.__kpaths_id
+    .appending(PathSegment.ForceUnwrap)
+    .appending(inner.__kpaths_id)
+  override val __kpaths_valueType: TypeId = inner.__kpaths_valueType
+
+  override fun get(root: Root): Value = inner.get(forceUnwrappedValue(outer, root))
+
+  override fun set(root: Root, value: Value): Root {
+    val middle = forceUnwrappedValue(outer, root)
+    return outer.set(root, inner.set(middle, value))
+  }
 }
 
 /**
@@ -182,6 +245,21 @@ public fun <Root : Any, Middle, Value> ReferenceWritableKeyPath<Root, Middle>.th
   next: WritableKeyPath<Middle, Value>,
 ): ReferenceWritableKeyPath<Root, Value> = appending(next)
 
+/**
+ * Appends a writable path after force-unwrapping a nullable reference-owned focus.
+ *
+ * The result preserves reference-writable semantics and throws [NullPointerException] when the
+ * intermediate focus is absent.
+ */
+public fun <Root : Any, Middle : Any, Value> ReferenceWritableKeyPath<Root, Middle?>.appendingForceUnwrapped(
+  next: WritableKeyPath<Middle, Value>,
+): ReferenceWritableKeyPath<Root, Value> = ForceUnwrappedAppendedReferenceWritableKeyPath(this, next)
+
+/** Kotlin-friendly spelling of reference-writable [appendingForceUnwrapped]. */
+public fun <Root : Any, Middle : Any, Value> ReferenceWritableKeyPath<Root, Middle?>.thenForceUnwrapped(
+  next: WritableKeyPath<Middle, Value>,
+): ReferenceWritableKeyPath<Root, Value> = appendingForceUnwrapped(next)
+
 private class AppendedReferenceWritableKeyPath<Root : Any, Middle, Value>(
   private val outer: ReferenceWritableKeyPath<Root, Middle>,
   private val inner: WritableKeyPath<Middle, Value>,
@@ -195,3 +273,27 @@ private class AppendedReferenceWritableKeyPath<Root : Any, Middle, Value>(
     outer.setInPlace(root, inner.set(outer.get(root), value))
   }
 }
+
+private class ForceUnwrappedAppendedReferenceWritableKeyPath<Root : Any, Middle : Any, Value>(
+  private val outer: ReferenceWritableKeyPath<Root, Middle?>,
+  private val inner: WritableKeyPath<Middle, Value>,
+) : ReferenceWritableKeyPathBase<Root, Value>() {
+  override val __kpaths_id: PathId = outer.__kpaths_id
+    .appending(PathSegment.ForceUnwrap)
+    .appending(inner.__kpaths_id)
+  override val __kpaths_valueType: TypeId = inner.__kpaths_valueType
+
+  override fun get(root: Root): Value = inner.get(forceUnwrappedValue(outer, root))
+
+  override fun setInPlace(root: Root, value: Value) {
+    val middle = forceUnwrappedValue(outer, root)
+    outer.setInPlace(root, inner.set(middle, value))
+  }
+}
+
+private fun <Root, Value : Any> forceUnwrappedValue(
+  path: KeyPath<Root, Value?>,
+  root: Root,
+): Value = path.get(root) ?: throw NullPointerException(
+  "KPaths force-unwrapped a null intermediate value at ${path.__kpaths_id}.",
+)

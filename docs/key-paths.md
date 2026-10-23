@@ -160,6 +160,33 @@ through a missing `address` has no universal meaning, and assigning `null` to th
 could mean either “clear `address`” or “leave it alone.” Model that policy explicitly with a
 custom `writableKeyPath` instead.
 
+### Force-unwrapping an optional route
+
+When absence is a programming error, use `thenForceUnwrapped`. It is the explicit, dangerous
+counterpart to Swift’s `!` key-path segment: it has a non-null focus and remains writable when
+both components are writable, but it throws `NullPointerException` if the intermediate optional
+is absent.
+
+```kotlin
+val address = writableKeyPath(
+  get = Person::address,
+  set = { person, value -> person.copy(address = value) },
+)
+val city = writableKeyPath(
+  get = Address::city,
+  set = { address, value -> address.copy(city = value) },
+)
+
+val requiredCity = address.thenForceUnwrapped(city)
+// WritableKeyPath<Person, String>
+
+requiredCity.set(Person(Address("Paris")), "Toronto")
+requiredCity.get(Person(null)) // throws NullPointerException
+```
+
+Prefer `thenOptional` unless your domain guarantees presence. The force-unwrapped route exists
+for invariants and migration boundaries, not as a replacement for modeling optional state.
+
 ## Whole values, collections, and indexes
 
 `identityKeyPath<Root>()` focuses a whole root, analogous to Swift’s `\Type.self`. Replacing its focus is simply replacing the root value.

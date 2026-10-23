@@ -2,6 +2,7 @@ package dev.kpaths.core
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertSame
 
 class KeyPathCompositionTest {
@@ -62,11 +63,68 @@ class KeyPathCompositionTest {
     assertEquals(
       PathId(
         TypeId.of<OptionalPerson>(),
-        listOf(PathSegment.Property("address"), PathSegment.Property("city")),
+        listOf(
+          PathSegment.Property("address"),
+          PathSegment.OptionalChain,
+          PathSegment.Property("city"),
+        ),
       ),
       optionalCity.__kpaths_id,
     )
     assertEquals(TypeId.of<String?>(), optionalCity.__kpaths_valueType)
+  }
+
+  @Test
+  fun `force-unwrapped paths retain writable replacement and fail for an absent intermediate`() {
+    val address = writableKeyPath(
+      get = OptionalPerson::address,
+      set = { person, value -> person.copy(address = value) },
+    )
+    val city = writableKeyPath(
+      get = OptionalAddress::city,
+      set = { address, value -> address.copy(city = value) },
+    )
+    val forcedCity: WritableKeyPath<OptionalPerson, String> = address.thenForceUnwrapped(city)
+
+    assertEquals("Paris", forcedCity.get(OptionalPerson(OptionalAddress("Paris"))))
+    assertEquals(
+      OptionalPerson(OptionalAddress("Toronto")),
+      forcedCity.set(OptionalPerson(OptionalAddress("Paris")), "Toronto"),
+    )
+    assertFailsWith<NullPointerException> {
+      forcedCity.get(OptionalPerson(null))
+    }
+    assertFailsWith<NullPointerException> {
+      forcedCity.set(OptionalPerson(null), "Toronto")
+    }
+    assertEquals(
+      PathId(
+        TypeId.of<OptionalPerson>(),
+        listOf(
+          PathSegment.Property("address"),
+          PathSegment.ForceUnwrap,
+          PathSegment.Property("city"),
+        ),
+      ),
+      forcedCity.__kpaths_id,
+    )
+  }
+
+  @Test
+  fun `force-unwrapped composition preserves reference-writable roots`() {
+    val city = writableKeyPath(
+      get = OptionalAddress::city,
+      set = { address, value -> address.copy(city = value) },
+    )
+    val forcedCity: ReferenceWritableKeyPath<OptionalAddressBox, String> =
+      BoxOptionalAddressPath.thenForceUnwrapped(city)
+    val box = OptionalAddressBox(OptionalAddress("Paris"))
+
+    assertSame(box, forcedCity.set(box, "Toronto"))
+    assertEquals("Toronto", box.address?.city)
+    assertFailsWith<NullPointerException> {
+      forcedCity.set(OptionalAddressBox(null), "Ottawa")
+    }
   }
 }
 
@@ -79,6 +137,8 @@ private data class OptionalPerson(val address: OptionalAddress?)
 private data class OptionalAddress(val city: String)
 
 private class AddressBox(var address: Address)
+
+private class OptionalAddressBox(var address: OptionalAddress?)
 
 private object PersonAddressPath : WritableKeyPathBase<Person, Address>() {
   override val __kpaths_id: PathId = PathId.property(TypeId("dev.kpaths.core.Person"), "address")
@@ -112,6 +172,20 @@ private object BoxAddressPath : ReferenceWritableKeyPathBase<AddressBox, Address
   override fun get(root: AddressBox): Address = root.address
 
   override fun setInPlace(root: AddressBox, value: Address) {
+    root.address = value
+  }
+}
+
+private object BoxOptionalAddressPath : ReferenceWritableKeyPathBase<OptionalAddressBox, OptionalAddress?>() {
+  override val __kpaths_id: PathId = PathId.property(
+    TypeId("dev.kpaths.core.OptionalAddressBox"),
+    "address",
+  )
+  override val __kpaths_valueType: TypeId = TypeId.of<OptionalAddress?>()
+
+  override fun get(root: OptionalAddressBox): OptionalAddress? = root.address
+
+  override fun setInPlace(root: OptionalAddressBox, value: OptionalAddress?) {
     root.address = value
   }
 }

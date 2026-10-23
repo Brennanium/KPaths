@@ -73,4 +73,10 @@ public sealed interface PathSegment {
 
   /** A keyed map route. */
   public data class Key(public val value: Any?) : PathSegment
+
+  /** A conditional optional-chaining step. */
+  public data object OptionalChain : PathSegment
+
+  /** A force-unwrapping step that fails when its intermediate value is null. */
+  public data object ForceUnwrap : PathSegment
 }
