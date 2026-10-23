@@ -13,9 +13,16 @@ interface CaseKeyPath<Root, Value> {
 `embed` always constructs a root, independent of any existing root—just like Swift CasePaths:
 
 ```kotlin
+@Pathable
 sealed interface Event {
   data object Started : Event
   data class Message(val text: String) : Event
+  data class Navigate(val id: String, val destination: String) : Event
+  data class Replace(
+    val id: String,
+    val destination: String,
+    val animated: Boolean,
+  ) : Event
 }
 
 val message = caseKeyPath<Event, Event.Message>()
@@ -25,32 +32,126 @@ Event.Started[message]                 // null
 
 There is no `WritableCaseKeyPath`: a genuine CaseKeyPath always embeds a complete case. `val`/`var` capability distinctions belong to ordinary Kotlin KeyPaths.
 
-## Create CaseKeyPaths
+## Choose a CaseKeyPath factory
 
-For an ordinary data-class case, use the concise reflection-backed factory. Import a nested case so its constructor can be referenced directly:
+For a source-owned sealed hierarchy used repeatedly, `@Pathable` is the preferred choice. The
+annotated `Event` above gets canonical CaseKeyPaths without runtime shape discovery:
+
+```kotlin
+EventPaths.Message.text
+// CaseKeyPath<Event, String>
+
+EventPaths.Navigate.destinationFor(id = "settings")
+// CaseKeyPath<Event, String>
+```
+
+For one-off and external hierarchies, choose the smallest manual factory that fully describes the
+case:
+
+| Need | Factory | Use it when |
+| --- | --- | --- |
+| Reuse a source-owned case | generated `EventPaths.Message.text` | Preferred: canonical, discoverable, no reflection. |
+| Match and embed the complete concrete case | `caseKeyPath<Root, Case>()` | The case object itself is the desired focus. |
+| Match one enum entry | `caseKeyPath(Entry)` | A Kotlin `enum` entry has no associated payload. |
+| Reflect a conventional data-class constructor | `casePathsOf<Root>().pathFor(::Case)` | A one-off data case has one to three stored constructor properties. |
+| Match and embed one payload property | `caseKeyPath(extract, embed)` | A `KProperty1` and one-argument constructor or embedder describe the case. |
+| Match and embed two or three payload properties | `caseKeyPath(extract1, extract2[, extract3], embed)` | A `Pair` or `Triple` is an acceptable focus. |
+| Define a nonstandard case algorithm | `caseKeyPath(id, valueType, match, embed)` | A library needs full control of identity, matching, and embedding. |
+
+### Whole cases and enum entries
+
+The whole-case factory has no reflection and no constructor requirement:
+
+```kotlin
+val message: CaseKeyPath<Event, Event.Message> =
+  caseKeyPath<Event, Event.Message>()
+
+message.embed(Event.Message("Hello"))
+```
+
+For a Kotlin enum, the focused value is `Unit` because the entry itself is already fully known:
+
+```kotlin
+enum class Compass { NORTH, SOUTH }
+
+val north: CaseKeyPath<Compass, Unit> = caseKeyPath(Compass.NORTH)
+north.embed(Unit) // Compass.NORTH
+```
+
+### Reflection-backed constructor factories
+
+`casePathsOf<Root>().pathFor(::Case)` is the short manual factory for a conventional data-class
+case. Import a nested case so Kotlin can use its constructor reference directly:
 
 ```kotlin
 import example.Event.Message
+import example.Event.Navigate
 
-val message = casePathsOf<Event>().pathFor(::Message)
+val text: CaseKeyPath<Event, String> =
+  casePathsOf<Event>().pathFor(::Message)
+val navigate: CaseKeyPath<Event, Pair<String, String>> =
+  casePathsOf<Event>().pathFor(::Navigate)
 ```
 
-It validates and caches the primary-constructor shape once. Unary cases focus their property; binary and ternary cases focus Kotlin’s `Pair` and `Triple`.
+It reflects and validates the constructor shape once. Unary cases focus their one property; binary
+and ternary cases focus `Pair` and `Triple`. Prefer a generated catalog when this CaseKeyPath is
+on a hot or repeated path, and use an explicit factory for non-data cases, computed extraction,
+or more than three constructor values.
 
-For a frequently used CaseKeyPath, computed extraction, or an unusual model, provide both directions explicitly:
+### Explicit payload factories
+
+The explicit factory avoids reflection while retaining property names in the `PathId`:
 
 ```kotlin
-val text = caseKeyPath<Event, Event.Message, String>(
+val text: CaseKeyPath<Event, String> = caseKeyPath(
   extract = Event.Message::text,
-  embed = ::Message,
+  embed = { value -> Event.Message(value) },
+)
+
+val navigate: CaseKeyPath<Event, Pair<String, String>> = caseKeyPath(
+  extract1 = Event.Navigate::id,
+  extract2 = Event.Navigate::destination,
+  embed = { id, destination -> Event.Navigate(id, destination) },
 )
 ```
 
-`@Pathable` is preferred for source-owned models used repeatedly. It generates direct access and canonical singleton identity:
+The three-property overload is the same shape and focuses `Triple<First, Second, Third>`:
 
 ```kotlin
-EventPaths.Message.text // CaseKeyPath<Event, String>
+val replace: CaseKeyPath<Event, Triple<String, String, Boolean>> = caseKeyPath(
+  extract1 = Event.Replace::id,
+  extract2 = Event.Replace::destination,
+  extract3 = Event.Replace::animated,
+  embed = { id, destination, animated -> Event.Replace(id, destination, animated) },
+)
 ```
+
+For a case with four or more primary-constructor values, use the whole-case CaseKeyPath, create a
+named payload data class, or write a focused custom CaseKeyPath. KPaths intentionally does not
+invent an anonymous tuple type beyond `Triple`.
+
+### Fully custom CaseKeyPaths
+
+The low-level factory is for library-defined matching and embedding behavior. It is not the normal
+application API, because it requires an explicit stable `PathId` and `TypeId`:
+
+```kotlin
+sealed interface Signal {
+  data object Ping : Signal
+}
+
+val ping: CaseKeyPath<Signal, Unit> = caseKeyPath(
+  id = PathId.case(TypeId.of<Signal>(), "Ping"),
+  valueType = TypeId.of<Unit>(),
+  match = { signal ->
+    if (signal is Signal.Ping) CaseMatch.Matched(Unit) else CaseMatch.NoMatch
+  },
+  embed = { Signal.Ping },
+)
+```
+
+When the root and focus types are reified, the overload without `valueType` captures that token
+automatically. Generated catalogs and the higher-level factories should remain the default.
 
 ## Extract, embed, compose
 

@@ -10,7 +10,69 @@ val name = keyPath(Person::name)
 // KeyPath<Person, String>
 ```
 
-This factory-first style is the normal way to create a KeyPath. It works for any accessible Kotlin property, including one declared in another module. `@Pathable` is an optional way to generate a named canonical KeyPath when a source-owned model exposes KeyPaths repeatedly; see [Generated catalogs](generation.md).
+This factory-first style is the normal way to create a KeyPath. It works for any accessible Kotlin property, including one declared in another module. For source-owned models whose KeyPaths are used repeatedly, `@Pathable` generates canonical KeyPaths; see [Generated catalogs](generation.md).
+
+## Choose a KeyPath factory
+
+Use a property-reference factory by default. It preserves Kotlin’s own property name and lets
+KPaths derive stable identity and complete type metadata:
+
+```kotlin
+val name: KeyPath<Person, String> = keyPath(Person::name)
+```
+
+For a source-owned type with a public, frequently used KeyPath vocabulary, prefer a generated
+catalog instead:
+
+```kotlin
+@Pathable
+data class Person(val name: String, var address: Address)
+
+PersonPaths.name    // KeyPath<Person, String>
+PersonPaths.address // WritableKeyPath<Person, Address>
+```
+
+The remaining factories are deliberate escape hatches:
+
+| Need | Factory | Use it when |
+| --- | --- | --- |
+| Read an accessible property | `keyPath(Person::name)` | Default choice, including third-party types. |
+| Reuse source-owned KeyPaths | `PersonPaths.name` | The model is annotated and the KeyPath is part of its normal vocabulary. |
+| Read a computed or derived value | `keyPath(name, get)` | No property reference represents the read. |
+| Replace part of an immutable value | `writableKeyPath(get, set)` | You can state how a new focus produces a new root. |
+| Set a mutable computed property on a copied root | `writableKeyPath(property, copy)` | A `KMutableProperty1` exists and copying first is the desired value semantics. |
+| Mutate an intentionally shared class | `referenceWritableKeyPath(property)` | The root is reference-owned and in-place mutation is intentional. |
+| Bind an index or map key | indexed/keyed `keyPath` or `writableKeyPath` factories | The selector is a Kotlin `get`/`set` operation rather than a property. |
+| Define library-level identity explicitly | the `PathId` and `TypeId` overloads | A library must control every identity segment or lacks reified type information. |
+
+`asKeyPath()` and `asReferenceWritableKeyPath()` are equivalent extension spellings for the
+property-reference factories. They are conveniences, not a separate KeyPath model.
+
+### Derived KeyPaths
+
+Use the named `keyPath` factory when a derived value has no `KProperty1`:
+
+```kotlin
+val normalizedName: KeyPath<Person, String> = keyPath("normalizedName") { person ->
+  person.name.trim().lowercase()
+}
+```
+
+The name is part of the KeyPath’s `PathId`. Use a stable, root-local name; two separately-created
+KeyPaths with the same root type and name compare equal.
+
+The `PathId` overload is lower level. It is for library authors who need a custom multi-segment
+identity or who must pass an explicit `TypeId`:
+
+```kotlin
+val normalizedName: KeyPath<Person, String> = keyPath(
+  id = PathId.custom(TypeId.of<Person>(), "normalizedName"),
+  valueType = TypeId.of<String>(),
+  get = { person -> person.name.trim().lowercase() },
+)
+```
+
+Application code should normally use the named factory instead.
 
 ## A KeyPath that can act as a closure
 
@@ -91,6 +153,12 @@ val revised = person.modifying(address) { current ->
 For a mutable computed property, KPaths can copy first and then invoke the ordinary Kotlin setter on the copy:
 
 ```kotlin
+data class User(var rawName: String) {
+  var displayName: String
+    get() = rawName.trim()
+    set(value) { rawName = value }
+}
+
 val displayName = writableKeyPath(
   property = User::displayName,
   copy = { user -> user.copy() },
@@ -98,6 +166,20 @@ val displayName = writableKeyPath(
 ```
 
 The `copy` lambda is required because Kotlin synthesizes `copy()` per data class rather than through a common protocol that a generic path factory can call.
+
+When neither a `KProperty1` nor a `KMutableProperty1` describes the value, use the named
+`writableKeyPath` overload and provide both directions:
+
+```kotlin
+val normalizedName: WritableKeyPath<User, String> = writableKeyPath(
+  name = "normalizedName",
+  get = { user -> user.displayName.lowercase() },
+  set = { user, value -> user.copy(rawName = value.trim()) },
+)
+```
+
+Use the `PathId` overload only for the same narrow library-author case as the read-only KeyPath
+factory: custom structural identity or an explicit `TypeId`.
 
 ### Reference mutation
 
@@ -114,6 +196,21 @@ check(session.token == "new")
 ```
 
 This is the Kotlin counterpart to Swift’s `ReferenceWritableKeyPath`. A data class is still a reference object in Kotlin, but KPaths treats generated data-class KeyPaths as value-style. A manual `ReferenceWritableKeyPath` with a data-class root is allowed and emits a runtime warning by default, because it often signals an accidental break from value semantics.
+
+For a derived in-place value without a mutable property reference, use the named factory and make
+the mutation explicit:
+
+```kotlin
+class Progress(var completed: Int, var total: Int)
+
+val fraction: ReferenceWritableKeyPath<Progress, Double> = referenceWritableKeyPath(
+  name = "fraction",
+  get = { progress -> progress.completed.toDouble() / progress.total },
+  set = { progress, value -> progress.completed = (progress.total * value).toInt() },
+)
+```
+
+This form is only for reference semantics. A value-style model should use `writableKeyPath(get, set)` instead.
 
 ## Composing KeyPaths
 
