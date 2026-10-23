@@ -9,6 +9,12 @@ factories such as `keyPath(Person::name)` to provide the same role: describe a t
 value. KPaths case paths extend that idea to sealed cases through `caseKeyPath` and
 `writableCaseKeyPath`.
 
+That distinction matters most at API boundaries. A path can act as a Kotlin getter closure, but
+it does not lose its route identity, write capability, or composition behavior when it does.
+Reusable APIs can therefore accept a `KeyPath`, `WritableKeyPath`, or case-path type when they
+need more than one immediate read. See [Route-aware APIs](route-aware-apis.md) for the practical
+patterns: reusable field selection, nested updates, case routing, and stable cache keys.
+
 The library deliberately keeps Kotlin's own language model visible:
 
 - Factories are the preferred construction API. `KProperty1` and `KMutableProperty1` make paths
@@ -25,6 +31,7 @@ complete generated KDoc. The reference includes public declarations from `kpaths
 
 For practical composition and collection patterns, start with [Path recipes](recipes.md). For
 custom routes, indexed/keyed paths, and other escape hatches, see [Advanced paths](advanced-paths.md).
+For designing an API that consumes paths rather than opaque closures, see [Route-aware APIs](route-aware-apis.md).
 
 ## Build locally
 

@@ -33,6 +33,10 @@ This is the closest Kotlin spelling of Swift code such as
 `books.filter(\.finished).map(\.title)`. Unlike a one-off lambda, `title` is still a comparable,
 composable value that can be reused elsewhere.
 
+That becomes important when the selected field itself is configuration—for example a reusable
+sort rule, visible table column, or saved report definition. The [route-aware API guide](route-aware-apis.md#describe-a-reusable-field-not-an-anonymous-getter)
+shows how to retain a path at those boundaries rather than erase it to a closure.
+
 ## Compose a deeply nested value update once
 
 Generated writable KeyPaths make nested immutable updates reusable rather than repeatedly nesting
@@ -60,6 +64,10 @@ directly:
 ```kotlin
 val cities = members.map(memberCity)
 ```
+
+The exact same `memberCity` can be passed to a generic update utility that accepts a
+`WritableKeyPath<Member, String>`; it does not need special knowledge of the nesting. See
+[Require write-back when an operation updates part of a value](route-aware-apis.md#require-write-back-when-an-operation-updates-part-of-a-value).
 
 For a third-party or one-off model, create the same route with `writableKeyPath(get = …, set = …)`
 and compose it with `then`.

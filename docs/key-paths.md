@@ -48,6 +48,12 @@ The path does not become “just a closure” when passed this way. It retains i
 equality, and composition behavior, so the same `name` value can also be stored or used with
 `person[name]`.
 
+This is why reusable APIs should accept `KeyPath<Root, Value>` when they need to keep track of a
+field, rather than immediately erasing it to `(Root) -> Value`. A path-aware API can compare
+selected fields, compose an additional route, and use the route portion in a registry or cache.
+See [Route-aware APIs](route-aware-apis.md) for complete API designs and the boundary between a
+path and an ordinary closure.
+
 ## Reading and writing
 
 Swift has a hierarchy of `KeyPath`, `WritableKeyPath`, and `ReferenceWritableKeyPath`. KPaths uses the same capability distinction, translated to Kotlin’s update model:
@@ -128,6 +134,10 @@ val revised = person.setting(personCity, "Toronto")
 ```
 
 Two writable paths compose to a `WritableKeyPath`. A reference-writable outer path composed with a writable inner path remains reference-writable. Any route containing a read-only segment is read-only: KPaths will never invent a reconstruction function just to make a composed path writable.
+
+This capability is useful in generic update APIs. A function accepting
+`WritableKeyPath<Root, Value>` can update a shallow or deeply nested field with the same
+implementation, while a `KeyPath` parameter correctly refuses an operation that needs write-back.
 
 ## Optional property routes
 

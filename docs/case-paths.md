@@ -40,6 +40,11 @@ Case paths have the same capability progression as Kotlin property paths, but ev
 
 `embed(root, value)` is the one conditional write operation. It leaves a different case unchanged; `modify(root) { … }` is its update convenience.
 
+This lets a generic API declare whether it only handles a case (`CaseKeyPath`) or conditionally
+updates it (`WritableCaseKeyPath`). It does not have to accept a nullable extraction closure and
+an unrelated reconstruction closure. [Route-aware APIs](route-aware-apis.md#route-sealed-values-without-repeating-when)
+shows both forms.
+
 ## Case paths in Kotlin collection algorithms
 
 Like `KeyPath`, `CaseKeyPath` is directly callable. Its function view is the intentionally lossy

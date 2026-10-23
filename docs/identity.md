@@ -51,3 +51,27 @@ a nested chain of object identities.
 Most code never constructs a `PathId` directly. Use generated catalogs, property references, or
 named manual factories. The low-level `PathId` APIs exist for library authors defining a custom
 route whose identity must remain stable across modules or call sites.
+
+## Why identity changes API design
+
+A closure can perform a read, but Kotlin offers no meaningful structural equality or hash for two
+closures. An API that accepts `(Root) -> Value` therefore cannot know whether two callers selected
+the same field. It cannot safely deduplicate registrations, reuse a prepared route, or construct
+a stable identifier from that selection.
+
+Paths solve that narrow problem without making arbitrary closures pretend to be comparable:
+
+```kotlin
+data class Book(val title: String)
+
+val visibleColumns = linkedSetOf<AnyKeyPath>()
+visibleColumns += keyPath(Book::title)
+visibleColumns += keyPath(Book::title)
+
+check(visibleColumns.size == 1)
+```
+
+This makes a path a good component of a subscription, route, prepared-query, or configuration key.
+When caching a computed **value**, include the input identity or version too; a path identifies the
+route being read, not one particular root value. See [Route-aware APIs](route-aware-apis.md) for
+the broader design patterns.

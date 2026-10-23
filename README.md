@@ -26,6 +26,7 @@ under its `API reference` section.
 - [Key paths](docs/key-paths.md) — reading, functional replacement, reference mutation, and composition.
 - [Case paths](docs/case-paths.md) — matching, construction, nullable payloads, and composition.
 - [Path recipes](docs/recipes.md) — collection algorithms, mixed composition, and conditional updates.
+- [Route-aware APIs](docs/route-aware-apis.md) — designing reusable APIs around typed routes, write-back, case handling, and stable identity.
 - [Advanced paths](docs/advanced-paths.md) — custom, indexed, keyed, and whole-value routes.
 - [Generated catalogs](docs/generation.md) — what `@Pathable` produces and when to use it.
 - [Identity and type metadata](docs/identity.md) — why separately-created equivalent paths compare equal.
