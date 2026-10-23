@@ -86,10 +86,10 @@ For `ReferenceWritableKeyPath`, the same `update` signature is valid, but its re
 mutable root instance. That capability is explicit at the call site and can be restricted by an
 API that requires value-style replacement instead.
 
-## Route sealed values without repeating `when`
+## Route a case payload without repeating `when`
 
-A case path gives an API a named, typed branch of a sealed hierarchy. The API can handle only
-that branch and remain correct if unrelated cases are added later:
+A case path gives an API a named, typed branch *and its payload*. The API can handle only that
+payload and remain correct if unrelated cases are added later:
 
 ```kotlin
 sealed interface DownloadEvent {
@@ -107,8 +107,12 @@ fun <Root, Case : Any, Result> handleCase(
   is CaseMatch.Matched -> handler(match.value)
 }
 
-val finished = caseKeyPath<DownloadEvent, DownloadEvent.Finished>()
-val location = handleCase(event, finished) { it.location }
+val finishedLocation = caseKeyPath<DownloadEvent, DownloadEvent.Finished, String>(
+  extract = DownloadEvent.Finished::location,
+  embed = ::DownloadEvent.Finished,
+)
+val event: DownloadEvent = DownloadEvent.Finished("/tmp/report.json")
+val location = handleCase(event, finishedLocation) { it }
 ```
 
 Unlike a nullable extraction closure, `match` retains the distinction between “a different case”

@@ -72,9 +72,10 @@ The exact same `memberCity` can be passed to a generic update utility that accep
 For a third-party or one-off model, create the same route with `writableKeyPath(get = …, set = …)`
 and compose it with `then`.
 
-## Extract one kind of sealed case
+## Extract a case payload
 
-Case paths focus the whole concrete case. That makes collection extraction particularly natural:
+Case paths earn their keep when the data inside a case becomes the focus of an algorithm. A
+whole-case route can compose with a property route to collect or conditionally update that data:
 
 ```kotlin
 @Pathable
@@ -84,19 +85,37 @@ sealed interface FeedItem {
   data class Notice(val text: String) : FeedItem
 }
 
-val articles: List<FeedItem.Article> = items.mapNotNull(FeedItemPaths.Article)
-val titles: List<String> = articles.map(FeedItemPaths.ArticlePaths.title)
+val articleTitle = FeedItemPaths.Article
+  .then(FeedItemPaths.ArticlePaths.title)
+// WritableCaseKeyPath<FeedItem, String>
+
+val titles: List<String> = items.mapNotNull(articleTitle)
 ```
 
-The first line is a typed filter-and-extract in one operation. `Loading` and `Notice` disappear;
-the compiler knows each remaining value is `FeedItem.Article`.
-
-For a small, read-only query, a factory needs no annotation:
+`articleTitle` is a typed filter-and-project in one operation. `Loading` and `Notice` disappear;
+the compiler knows every remaining value is a `String` title. The same route can update only
+matching articles while preserving their `id`:
 
 ```kotlin
-val article = caseKeyPath<FeedItem, FeedItem.Article>()
-val articles = items.mapNotNull(article)
+val normalized = items.map { item ->
+  articleTitle.modify(item) { title -> title.trim() }
+}
 ```
+
+For a one-property case, the direct factory makes the payload focus without any annotation:
+
+```kotlin
+val noticeText = caseKeyPath<FeedItem, FeedItem.Notice, String>(
+  extract = FeedItem.Notice::text,
+  embed = ::FeedItem.Notice,
+)
+
+val notices: List<String> = items.mapNotNull(noticeText)
+```
+
+That direct form is appropriate when the constructor can supply every required case value. For a
+multi-property case such as `Article`, the whole-case-plus-`then` form above is better because it
+retains the matched article’s `id`.
 
 ## Compose case matching with generated KeyPaths
 

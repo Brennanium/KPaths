@@ -94,10 +94,12 @@ message.embed(Request.Cancelled, Request.Message("1", "Ignored"))
 In particular, `embed` is a conditional replacement, not a way to switch a `Cancelled` root into
 the `Message` case. This keeps generated paths consistent with every other `WritableCaseKeyPath`.
 
-### Generated case payload conveniences
+### Generated case payload paths
 
-For a data-class case with one to three accessible primary-constructor properties, KSP also
-generates a direct property/payload case path beneath the whole-case member:
+The whole-case path establishes the matching boundary; generated payload paths make the data
+inside that case directly usable in collection and generic algorithms. For a data-class case with
+one to three accessible primary-constructor properties, KSP generates a direct
+property/payload case path beneath the whole-case member:
 
 ```kotlin
 RequestPaths.Retry.attempt
@@ -108,8 +110,10 @@ RequestPaths.Message.payload
 ```
 
 These paths match the outer case, read their focus, and reconstruct a replacement case when
-embedded. That is why `RequestPaths.Retry.attempt` can update `attempt` even if it had been a
-`val`: it replaces `Request.Retry`, rather than setting a property on the existing object.
+embedded. This is the KPaths counterpart to extracting an associated value with a Swift case key
+path: `items.mapNotNull(RequestPaths.Retry.attempt)` produces the attempts directly. That is why
+`RequestPaths.Retry.attempt` can update `attempt` even if it had been a `val`: it replaces
+`Request.Retry`, rather than setting a property on the existing object.
 
 The generated form is especially useful when the same field-level case path is part of a model’s
 public vocabulary. It also composes with the generated concrete-case `WritableKeyPath`, without
