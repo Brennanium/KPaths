@@ -116,6 +116,69 @@ This is the important distinction between these two generated paths:
 | `FeedItemPaths.ArticlePaths.title` | `FeedItem.Article` | replace `title` on an already-known `Article` |
 | `articleTitle` | `FeedItem` | conditionally replace `title` through the case |
 
+## Follow nested sealed cases
+
+Generated direct payload paths are especially useful when one sealed case wraps the next action or
+event. Each unary `action` path extracts and reconstructs its wrapper, so even `val` action
+properties can form one deeply nested route:
+
+```kotlin
+@Pathable
+sealed interface AppEvent {
+  data object Dismissed : AppEvent
+  data class Profile(val action: ProfileAction) : AppEvent
+}
+
+@Pathable
+sealed interface ProfileAction {
+  data object Back : ProfileAction
+  data class Editor(val action: EditorAction) : ProfileAction
+}
+
+@Pathable
+sealed interface EditorAction {
+  data class Rename(val text: String) : EditorAction
+  data object Save : EditorAction
+}
+
+val renameText = AppEventPaths.Profile.action
+  .then(ProfileActionPaths.Editor.action)
+  .then(EditorActionPaths.Rename.text)
+// WritableCaseKeyPath<AppEvent, String>
+```
+
+`renameText` matches only `Profile(Editor(Rename(...)))`. It can collect text from many events or
+conditionally replace it, recreating every wrapper on the successful route back out:
+
+```kotlin
+val names = events.mapNotNull(renameText)
+val revised = renameText.embed(
+  AppEvent.Profile(ProfileAction.Editor(EditorAction.Rename("Blob"))),
+  "Jr.",
+)
+// AppEvent.Profile(ProfileAction.Editor(EditorAction.Rename("Jr.")))
+```
+
+If a wrapper also has metadata—say `Profile(val id: String, val action: ProfileAction)`—the
+current generated convenience for that two-value payload is `AppEventPaths.Profile.payload` as a
+`Pair`. For a named nested action route, make the one explicit copying boundary and continue
+composing:
+
+```kotlin
+val profileAction = AppEventPaths.Profile.then(
+  get = AppEvent.Profile::action,
+  set = { profile, action -> profile.copy(action = action) },
+)
+
+val renameText = profileAction
+  .then(ProfileActionPaths.Editor.action)
+  .then(EditorActionPaths.Rename.text)
+```
+
+This is a promising place for future KSP ergonomics: generating an individual reconstructing case
+path for every primary-constructor property would remove that explicit boundary for multi-property
+cases too.
+
 ## Cross a property, then a case, then another property
 
 Composition can mix writable KeyPaths and writable CaseKeyPaths. This expresses a nested route

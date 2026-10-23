@@ -92,6 +92,25 @@ class GeneratedPathsTest {
   }
 
   @Test
+  fun `generated unary case payload paths compose through nested sealed hierarchies`() {
+    val renameText = AppEventPaths.Profile.action
+      .then(ProfileActionPaths.Editor.action)
+      .then(EditorActionPaths.Rename.text)
+    val original: AppEvent = AppEvent.Profile(ProfileAction.Editor(EditorAction.Rename("Blob")))
+
+    assertEquals("Blob", original[renameText])
+    assertEquals(
+      AppEvent.Profile(ProfileAction.Editor(EditorAction.Rename("Jr."))),
+      renameText.embed(original, "Jr."),
+    )
+    assertEquals(AppEvent.Dismissed, renameText.embed(AppEvent.Dismissed, "Ignored"))
+    assertEquals(
+      AppEvent.Profile(ProfileAction.Editor(EditorAction.Save)),
+      renameText.embed(AppEvent.Profile(ProfileAction.Editor(EditorAction.Save)), "Ignored"),
+    )
+  }
+
+  @Test
   fun `generic whole case paths retain specialized identities`() {
     val strings = LoadablePaths<String>()
     val loaded: WritableCaseKeyPath<Loadable<String>, Loadable.Loaded<String>> = strings.Loaded

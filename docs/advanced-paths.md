@@ -126,8 +126,10 @@ sealed interface Destination {
 
 val editor = caseKeyPath<Destination, Destination.Editor>()
 val maybeEditor: KeyPath<Destination, Destination.Editor?> = editor.matching()
+val maybeDraft = maybeEditor.thenOptional(keyPath(Destination.Editor::draft))
 
 val visibleEditors = destinations.map(maybeEditor)
+val visibleDrafts = destinations.mapNotNull(maybeDraft)
 ```
 
 The bridge is read-only. Writing a nullable case view would need a universal meaning for assigning

@@ -89,6 +89,24 @@ sealed interface EditableFeedItem {
 }
 
 @Pathable
+sealed interface AppEvent {
+  data object Dismissed : AppEvent
+  data class Profile(val action: ProfileAction) : AppEvent
+}
+
+@Pathable
+sealed interface ProfileAction {
+  data object Back : ProfileAction
+  data class Editor(val action: EditorAction) : ProfileAction
+}
+
+@Pathable
+sealed interface EditorAction {
+  data class Rename(val text: String) : EditorAction
+  data object Save : EditorAction
+}
+
+@Pathable
 enum class Direction {
   NORTH,
   SOUTH,

@@ -50,11 +50,33 @@ class KeyPathCompositionTest {
     assertEquals(listOf("Paris", "Toronto"), people.map(city))
     assertEquals(people.reversed(), people.sortedByDescending(city))
   }
+
+  @Test
+  fun `nullable key paths optionally compose as a read-only route`() {
+    val address = keyPath(OptionalPerson::address)
+    val city = keyPath(OptionalAddress::city)
+    val optionalCity: KeyPath<OptionalPerson, String?> = address.thenOptional(city)
+
+    assertEquals("Paris", optionalCity.get(OptionalPerson(OptionalAddress("Paris"))))
+    assertEquals(null, optionalCity.get(OptionalPerson(null)))
+    assertEquals(
+      PathId(
+        TypeId.of<OptionalPerson>(),
+        listOf(PathSegment.Property("address"), PathSegment.Property("city")),
+      ),
+      optionalCity.__kpaths_id,
+    )
+    assertEquals(TypeId.of<String?>(), optionalCity.__kpaths_valueType)
+  }
 }
 
 private data class Person(val address: Address)
 
 private data class Address(val city: String)
+
+private data class OptionalPerson(val address: OptionalAddress?)
+
+private data class OptionalAddress(val city: String)
 
 private class AddressBox(var address: Address)
 

@@ -129,6 +129,37 @@ val revised = person.setting(personCity, "Toronto")
 
 Two writable paths compose to a `WritableKeyPath`. A reference-writable outer path composed with a writable inner path remains reference-writable. Any route containing a read-only segment is read-only: KPaths will never invent a reconstruction function just to make a composed path writable.
 
+## Optional property routes
+
+A nullable focus is still a normal, total KeyPath: every root has the property, but its value may
+be absent. Its nullability is retained in the focused `TypeId`:
+
+```kotlin
+data class Address(val city: String)
+data class Person(val address: Address?)
+
+val address = keyPath(Person::address)
+// KeyPath<Person, Address?>
+```
+
+Use `thenOptional` to read through a nullable focus. It is the Kotlin equivalent of a read-only
+Swift optional-chaining key path:
+
+```kotlin
+val city = address.thenOptional(keyPath(Address::city))
+// KeyPath<Person, String?>
+
+city(Person(Address("Paris"))) // "Paris"
+city(Person(null))             // null
+
+val presentCities = people.mapNotNull(city)
+```
+
+`thenOptional` is deliberately read-only, even if both component paths are writable. A write
+through a missing `address` has no universal meaning, and assigning `null` to the final focus
+could mean either “clear `address`” or “leave it alone.” Model that policy explicitly with a
+custom `writableKeyPath` instead.
+
 ## Whole values, collections, and indexes
 
 `identityKeyPath<Root>()` focuses a whole root, analogous to Swift’s `\Type.self`. Replacing its focus is simply replacing the root value.

@@ -87,6 +87,23 @@ public fun <Root, Middle, Value> KeyPath<Root, Middle>.then(
   next: KeyPath<Middle, Value>,
 ): KeyPath<Root, Value> = appending(next)
 
+/**
+ * Optionally appends a read path after a nullable focus.
+ *
+ * This is the Kotlin equivalent of a read-only optional-chaining key path. A missing [Middle]
+ * produces a null focus; otherwise [next] reads the contained value. The result deliberately
+ * remains read-only because there is no universal meaning for setting through a missing optional
+ * focus or assigning null to the final focus.
+ */
+public fun <Root, Middle : Any, Value> KeyPath<Root, Middle?>.appendingOptional(
+  next: KeyPath<Middle, Value>,
+): KeyPath<Root, Value?> = OptionalAppendedKeyPath(this, next)
+
+/** Kotlin-friendly spelling of optional key-path [appendingOptional]. */
+public fun <Root, Middle : Any, Value> KeyPath<Root, Middle?>.thenOptional(
+  next: KeyPath<Middle, Value>,
+): KeyPath<Root, Value?> = appendingOptional(next)
+
 /** Appends two writable paths, retaining immutable replacement capability. */
 public fun <Root, Middle, Value> WritableKeyPath<Root, Middle>.appending(
   next: WritableKeyPath<Middle, Value>,
@@ -105,6 +122,16 @@ private class AppendedKeyPath<Root, Middle, Value>(
   override val __kpaths_valueType: TypeId = inner.__kpaths_valueType
 
   override fun get(root: Root): Value = inner.get(outer.get(root))
+}
+
+private class OptionalAppendedKeyPath<Root, Middle : Any, Value>(
+  private val outer: KeyPath<Root, Middle?>,
+  private val inner: KeyPath<Middle, Value>,
+) : KeyPathBase<Root, Value?>() {
+  override val __kpaths_id: PathId = outer.__kpaths_id.appending(inner.__kpaths_id)
+  override val __kpaths_valueType: TypeId = inner.__kpaths_valueType.withNullability(true)
+
+  override fun get(root: Root): Value? = outer.get(root)?.let(inner::get)
 }
 
 private class AppendedWritableKeyPath<Root, Middle, Value>(
