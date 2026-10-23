@@ -2,12 +2,12 @@ package dev.kpaths.core
 
 import kotlin.reflect.KProperty1
 
-/** Type-erased metadata common to all case paths. */
+/** Type-erased metadata common to all [CaseKeyPath]s. */
 public interface AnyCaseKeyPath : AnyPath
 
-/** The exact outcome of attempting to match a case path against a root value. */
+/** The exact outcome of attempting to match a [CaseKeyPath] against a root value. */
 public sealed interface CaseMatch<out Value> {
-  /** The root was not the case represented by this path. */
+  /** The root was not the case represented by this [CaseKeyPath]. */
   public data object NoMatch : CaseMatch<Nothing>
 
   /** The root matched, including when [value] itself is `null`. */
@@ -55,7 +55,7 @@ public fun <Value : Any> CaseMatch<Value?>.requiringValue(): CaseMatch<Value> = 
   is CaseMatch.Matched -> value?.let { CaseMatch.Matched<Value>(it) } ?: CaseMatch.NoMatch
 }
 
-/** A type-erased-value case path with a known root. */
+/** A type-erased-value [CaseKeyPath] with a known root. */
 public interface PartialCaseKeyPath<Root> : AnyCaseKeyPath {
   /** Matches while retaining the distinction between an unmatched root and a matched null. */
   public fun matchAny(root: Root): CaseMatch<Any?>
@@ -68,9 +68,9 @@ public interface PartialCaseKeyPath<Root> : AnyCaseKeyPath {
 }
 
 /**
- * A conditional, typed read route through one case of a sealed hierarchy.
+ * A conditional, typed read through one case of a sealed hierarchy.
  *
- * A case path is also its lossy Kotlin function view, from [Root] to `Value?`. It can therefore
+ * A [CaseKeyPath] is also its lossy Kotlin function view, from [Root] to `Value?`. It can therefore
  * be passed directly to APIs such as `mapNotNull`. Use [match] rather than invocation when a
  * matched null must remain distinguishable from a nonmatching root.
  */
@@ -84,13 +84,13 @@ public interface CaseKeyPath<Root, Value> : PartialCaseKeyPath<Root>, (Root) -> 
   /** Embeds [value] in a newly constructed root, independent of any existing root value. */
   public fun embed(value: Value): Root
 
-  /** Invokes this path as its lossy extraction function. */
+  /** Invokes this [CaseKeyPath] as its lossy extraction function. */
   override operator fun invoke(root: Root): Value? = extract(root)
 
   override fun matchAny(root: Root): CaseMatch<Any?> = match(root)
 }
 
-/** Appends two case paths, retaining independent embedding through both cases. */
+/** Appends two [CaseKeyPath]s, retaining independent embedding through both cases. */
 public fun <Root, Middle, Value> CaseKeyPath<Root, Middle>.appending(
   next: CaseKeyPath<Middle, Value>,
 ): CaseKeyPath<Root, Value> {
@@ -103,15 +103,15 @@ public fun <Root, Middle, Value> CaseKeyPath<Root, Middle>.appending(
   )
 }
 
-/** Kotlin-friendly spelling of case-path [appending]. */
+/** Kotlin-friendly spelling of [CaseKeyPath] [appending]. */
 public fun <Root, Middle, Value> CaseKeyPath<Root, Middle>.then(
   next: CaseKeyPath<Middle, Value>,
 ): CaseKeyPath<Root, Value> = appending(next)
 
-/** Base class for generated read-only case paths with structural path identity. */
+/** Base class for generated read-only [CaseKeyPath]s with structural identity. */
 public abstract class CaseKeyPathBase<Root, Value> : PathBase(), CaseKeyPath<Root, Value>
 
-/** Views a non-null case path as a total, read-only key path whose focus is nullable. */
+/** Views a non-null [CaseKeyPath] as a total, read-only [KeyPath] whose focus is nullable. */
 public fun <Root, Value : Any> CaseKeyPath<Root, Value>.matching(): KeyPath<Root, Value?> {
   val casePath = this
   return object : KeyPathBase<Root, Value?>() {
@@ -122,7 +122,7 @@ public fun <Root, Value : Any> CaseKeyPath<Root, Value>.matching(): KeyPath<Root
   }
 }
 
-/** Creates a read-only exact case path. */
+/** Creates a read-only exact [CaseKeyPath]. */
 public fun <Root, Value> caseKeyPath(
   id: PathId,
   valueType: TypeId,
@@ -140,14 +140,14 @@ public fun <Root, Value> caseKeyPath(
   }
 }
 
-/** Creates a read-only exact case path while capturing its complete focus type token. */
+/** Creates a read-only exact [CaseKeyPath] while capturing its complete focus type token. */
 public inline fun <reified Root, reified Value> caseKeyPath(
   id: PathId,
   noinline match: (Root) -> CaseMatch<Value>,
   noinline embed: (Value) -> Root,
 ): CaseKeyPath<Root, Value> = caseKeyPath(id, TypeId.of<Value>(), match, embed)
 
-/** Creates an independently embeddable whole-case path for a concrete subtype of a sealed root. */
+/** Creates an independently embeddable whole-case [CaseKeyPath] for a concrete subtype of a sealed root. */
 public inline fun <reified Root : Any, reified Case : Root> caseKeyPath(): CaseKeyPath<Root, Case> {
   val caseName = requireNotNull(Case::class.simpleName) {
     "Local and anonymous classes cannot form stable case path names. Use a manual caseKeyPath factory."
@@ -160,7 +160,7 @@ public inline fun <reified Root : Any, reified Case : Root> caseKeyPath(): CaseK
   )
 }
 
-/** Creates an independently embeddable whole-case path for one [Enum] entry, focused as [Unit]. */
+/** Creates an independently embeddable whole-case [CaseKeyPath] for one [Enum] entry, focused as [Unit]. */
 public inline fun <reified Root> caseKeyPath(
   case: Root,
 ): CaseKeyPath<Root, Unit>
@@ -174,7 +174,7 @@ public inline fun <reified Root> caseKeyPath(
   )
 }
 
-/** Creates an independently embeddable path for one case payload property. */
+/** Creates an independently embeddable [CaseKeyPath] for one case payload property. */
 public inline fun <reified Root : Any, reified Case : Root, reified Value> caseKeyPath(
   extract: KProperty1<Case, Value>,
   noinline embed: (Value) -> Case,
@@ -186,7 +186,7 @@ public inline fun <reified Root : Any, reified Case : Root, reified Value> caseK
   embed = embed,
 )
 
-/** Creates an independently embeddable path focused as an ordered [Pair] of two case properties. */
+/** Creates an independently embeddable [CaseKeyPath] focused as an ordered [Pair] of two case properties. */
 public inline fun <reified Root : Any, reified Case : Root, reified First, reified Second> caseKeyPath(
   extract1: KProperty1<Case, First>,
   extract2: KProperty1<Case, Second>,
@@ -202,7 +202,7 @@ public inline fun <reified Root : Any, reified Case : Root, reified First, reifi
   )
 }
 
-/** Creates an independently embeddable path focused as an ordered [Triple] of three case properties. */
+/** Creates an independently embeddable [CaseKeyPath] focused as an ordered [Triple] of three case properties. */
 public inline fun <reified Root : Any, reified Case : Root, reified First, reified Second, reified Third> caseKeyPath(
   extract1: KProperty1<Case, First>,
   extract2: KProperty1<Case, Second>,

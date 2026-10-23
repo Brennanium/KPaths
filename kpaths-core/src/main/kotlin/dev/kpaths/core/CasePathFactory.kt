@@ -11,16 +11,16 @@ import kotlin.reflect.full.primaryConstructor
 import kotlin.reflect.typeOf
 
 /**
- * A root-scoped factory for conventional data-class case paths.
+ * A root-scoped factory for conventional data-class [CaseKeyPath]s.
  *
  * Obtain one with [casePathsOf]. [pathFor] reflects the referenced constructor once to locate its
- * stored primary-constructor properties. Prefer generated catalogs for frequently used paths.
+ * stored primary-constructor properties. Prefer generated catalogs for frequently used CaseKeyPaths.
  */
 public class CasePathFactory<Root>(
   private val rootType: TypeId,
   private val rootKType: KType,
 ) {
-  /** Creates a path for a unary data-class case constructor. */
+  /** Creates a [CaseKeyPath] for a unary data-class case constructor. */
   public fun <Case : Root, Value> pathFor(
     constructor: (Value) -> Case,
   ): CaseKeyPath<Root, Value> {
@@ -42,7 +42,7 @@ public class CasePathFactory<Root>(
     )
   }
 
-  /** Creates a path for a binary data-class case constructor, focused as an ordered [Pair]. */
+  /** Creates a [CaseKeyPath] for a binary data-class case constructor, focused as an ordered [Pair]. */
   public fun <Case : Root, First, Second> pathFor(
     constructor: (First, Second) -> Case,
   ): CaseKeyPath<Root, Pair<First, Second>> {
@@ -67,7 +67,7 @@ public class CasePathFactory<Root>(
     )
   }
 
-  /** Creates a path for a ternary data-class case constructor, focused as an ordered [Triple]. */
+  /** Creates a [CaseKeyPath] for a ternary data-class case constructor, focused as an ordered [Triple]. */
   public fun <Case : Root, First, Second, Third> pathFor(
     constructor: (First, Second, Third) -> Case,
   ): CaseKeyPath<Root, Triple<First, Second, Third>> {
@@ -89,7 +89,7 @@ public class CasePathFactory<Root>(
   }
 }
 
-/** Starts a reflection-backed case-path factory while retaining [Root]'s complete [TypeId]. */
+/** Starts a reflection-backed [CaseKeyPath] factory while retaining [Root]'s complete [TypeId]. */
 @OptIn(ExperimentalStdlibApi::class)
 public inline fun <reified Root> casePathsOf(): CasePathFactory<Root> =
   CasePathFactory(TypeId.of<Root>(), typeOf<Root>())

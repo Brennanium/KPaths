@@ -1,12 +1,13 @@
 # Identity and type metadata
 
-KPaths are values. Two independently-created paths that describe the same route should compare
+KeyPaths and CaseKeyPaths are values. Two independently-created values that describe the same
+KeyPath or CaseKeyPath should compare
 equal and have the same hash code; equality must not depend on which closure instance happens to
 implement a getter.
 
-Every path therefore carries two public, read-only pieces of metadata:
+Every KeyPath and CaseKeyPath therefore carries two public, read-only pieces of metadata:
 
-- `PathId` identifies the root type and ordered route segments.
+- `PathId` identifies the root type and ordered KeyPath or CaseKeyPath segments.
 - `TypeId` identifies the focused type, retaining generic arguments, variance, and nullability.
 
 The library-reserved metadata properties are named `__kpaths_id` and `__kpaths_valueType`. They
@@ -22,8 +23,8 @@ check(first.hashCode() == second.hashCode())
 ```
 
 The name in a manual named factory is therefore semantic, not a display label. Choose a stable,
-root-local name. If two distinct paths share a name and root type, they claim the same identity;
-if the same conceptual path gets different names, it will not compare equal.
+root-local name. If two distinct KeyPaths share a name and root type, they claim the same identity;
+if the same conceptual KeyPath gets different names, it will not compare equal.
 
 ## Why `TypeId` is richer than `KClass`
 
@@ -45,21 +46,21 @@ type metadata that Swift can often recover from its runtime generic metadata.
 ## Structural segments
 
 `PathId` has property, case, index, key, and custom segments. Composition appends segments while
-retaining the original root type. This is why a composed route has one stable identity rather than
+retaining the original root type. This is why a composed KeyPath or CaseKeyPath has one stable identity rather than
 a nested chain of object identities.
 
 Most code never constructs a `PathId` directly. Use generated catalogs, property references, or
 named manual factories. The low-level `PathId` APIs exist for library authors defining a custom
-route whose identity must remain stable across modules or call sites.
+KeyPath or CaseKeyPath whose identity must remain stable across modules or call sites.
 
 ## Why identity changes API design
 
 A closure can perform a read, but Kotlin offers no meaningful structural equality or hash for two
 closures. An API that accepts `(Root) -> Value` therefore cannot know whether two callers selected
-the same field. It cannot safely deduplicate registrations, reuse a prepared route, or construct
+the same field. It cannot safely deduplicate registrations, reuse a prepared KeyPath, or construct
 a stable identifier from that selection.
 
-Paths solve that narrow problem without making arbitrary closures pretend to be comparable:
+KeyPaths and CaseKeyPaths solve that narrow problem without making arbitrary closures pretend to be comparable:
 
 ```kotlin
 data class Book(val title: String)
@@ -71,7 +72,7 @@ visibleColumns += keyPath(Book::title)
 check(visibleColumns.size == 1)
 ```
 
-This makes a path a good component of a subscription, route, prepared-query, or configuration key.
-When caching a computed **value**, include the input identity or version too; a path identifies the
-route being read, not one particular root value. See [Route-aware APIs](route-aware-apis.md) for
+This makes a KeyPath or CaseKeyPath a good component of a subscription, prepared-query, or configuration key.
+When caching a computed **value**, include the input identity or version too; a KeyPath identifies the
+field being read, not one particular root value. See [KeyPath and CaseKeyPath API design](route-aware-apis.md) for
 the broader design patterns.

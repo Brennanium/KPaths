@@ -4,11 +4,11 @@ KPaths brings typed, composable, structurally identifiable KeyPaths and CasePath
 
 ## Modules
 
-- `kpaths-core`: path types, factories, composition, identity, and standard routes.
+- `kpaths-core`: KeyPath and CaseKeyPath types, factories, composition, identity, and standard-library KeyPaths.
 - `kpaths-annotations`: `@Pathable`.
 - `kpaths-ksp`: generated catalogs.
 
-## Key paths
+## KeyPaths
 
 Use property references for any Kotlin type—no annotation is required:
 
@@ -22,7 +22,7 @@ val city = writableKeyPath(
 )
 ```
 
-`KeyPath` reads, `WritableKeyPath` returns a revised value for value-semantic models, and `ReferenceWritableKeyPath` is for intentional in-place class mutation. Paths have structural `PathId` equality and hashability, so they can safely be used as stable API values and cache keys.
+`KeyPath` reads, `WritableKeyPath` returns a revised value for value-semantic models, and `ReferenceWritableKeyPath` is for intentional in-place class mutation. KeyPaths have structural `PathId` equality and hashability, so they can safely be used as stable API values and cache keys.
 
 Annotate frequent source-owned models to generate canonical catalogs:
 
@@ -34,7 +34,7 @@ PersonPaths.name
 PersonPaths.city
 ```
 
-## Case paths
+## CaseKeyPaths
 
 A `CaseKeyPath<Root, Value>` matches a sealed case, extracts its associated data, and independently constructs a root from that data:
 
@@ -51,7 +51,7 @@ Event.Started[message]           // null
 message.embed(Event.Message("Updated"))
 ```
 
-There is one case-path type. Unlike property paths, case payloads are reconstructed as complete cases, so there is no read-only/writable hierarchy.
+There is one `CaseKeyPath` type. Unlike KeyPaths, CaseKeyPaths reconstruct complete cases, so there is no read-only/writable hierarchy.
 
 For a conventional unannotated data-class case, use the reflection-backed shorthand:
 
@@ -62,7 +62,7 @@ val text = casePathsOf<Event>().pathFor(::Message)
 text.embed("Hello") // Event.Message("Hello")
 ```
 
-For a non-reflective or custom route, use the explicit factory:
+For a non-reflective or custom `CaseKeyPath`, use the explicit factory:
 
 ```kotlin
 val text = caseKeyPath<Event, Event.Message, String>(
@@ -71,7 +71,7 @@ val text = caseKeyPath<Event, Event.Message, String>(
 )
 ```
 
-For source-owned roots, generated paths are the preferred repeated-use form:
+For source-owned roots, generated CaseKeyPaths are the preferred repeated-use form:
 
 ```kotlin
 @Pathable
@@ -85,7 +85,7 @@ RequestPaths.Navigate.destinationFor(id = "settings")
 // Request.Navigate("settings", "privacy")
 ```
 
-Case paths compose and retain independent embedding:
+CaseKeyPaths compose and retain independent embedding:
 
 ```kotlin
 val nested = AppEventPaths.Profile.action
@@ -99,7 +99,7 @@ Use `match` rather than nullable extraction whenever a matched `null` must remai
 
 ## Documentation
 
-The full guides cover [Key paths](docs/key-paths.md), [Case paths](docs/case-paths.md), [generated catalogs](docs/generation.md), [path recipes](docs/recipes.md), [advanced paths](docs/advanced-paths.md), and [route-aware APIs](docs/route-aware-apis.md).
+The full guides cover [KeyPaths](docs/key-paths.md), [CaseKeyPaths](docs/case-paths.md), [generated catalogs](docs/generation.md), [KeyPath and CaseKeyPath recipes](docs/recipes.md), [advanced KeyPaths](docs/advanced-paths.md), and [KeyPath and CaseKeyPath API design](docs/route-aware-apis.md).
 
 Build the project and documentation with:
 
@@ -109,4 +109,4 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew check docsBuild
 
 ## Acknowledgments
 
-KPaths is strongly inspired by Swift’s KeyPath system and Point-Free’s CasePaths library. Their APIs demonstrate how first-class routes make generic algorithms and compositional application models substantially clearer.
+KPaths is strongly inspired by Swift’s KeyPath system and Point-Free’s CasePaths library. Their APIs demonstrate how first-class KeyPaths and CaseKeyPaths make generic algorithms and compositional application models substantially clearer.

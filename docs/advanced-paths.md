@@ -1,39 +1,33 @@
-# Advanced paths
+# Advanced KeyPaths
 
-The normal KPaths story is deliberately small: make a route with a property reference or a
-whole-case factory, then compose it. This guide covers the escape hatches that let a library or
-application model routes which Kotlin cannot express as a simple property reference.
+The usual KPaths API is small: create a `KeyPath` from a Kotlin property reference, or create a `WritableKeyPath` by also supplying its replacement behavior. This guide covers KeyPath factories for values Kotlin cannot express as a simple property reference. For sealed cases, see [CaseKeyPaths](case-paths.md).
 
-## Define a named derived route
+## Define a named derived KeyPath
 
-Swift can place computed properties and custom subscripts inside a key-path expression. In Kotlin,
-the equivalent is a named custom factory. The name is not cosmetic: it becomes the stable,
-root-local identity of the route.
+Swift can place computed properties and custom subscripts inside a key-path expression. In Kotlin, create the equivalent `KeyPath` with a stable custom name. That name contributes to the `KeyPath`’s identity, so it describes one conceptual read—not merely a display label.
 
 ```kotlin
 data class Person(val displayName: String)
 
-val normalizedName = keyPath<Person, String>("normalizedName") { person ->
-  person.displayName.trim().lowercase()
-}
+val normalizedName: KeyPath<Person, String> =
+  keyPath("normalizedName") { person ->
+    person.displayName.trim().lowercase()
+  }
 
 normalizedName(Person("  Blob  ")) // "blob"
 listOf(Person("  Blob  ")).map(normalizedName) // ["blob"]
 ```
 
-Two independently created paths with the same root type and name compare equal. Choose a name
-that describes one stable conceptual route; do not reuse it for unrelated computations.
+Two independently created `KeyPath`s with the same root type and name compare equal. Do not reuse a name for unrelated computations.
 
-## Make a derived route writable
+## Define a named WritableKeyPath
 
-A computed path becomes writable when the application can define its inverse or replacement
-behavior. `writableKeyPath` is Kotlin’s equivalent of supplying the getter and setter portions of
-a custom Swift subscript:
+A computed value becomes a `WritableKeyPath` only when the application can state how a replacement value produces a replacement root. This is Kotlin’s equivalent of supplying the getter and setter portions of a custom Swift subscript:
 
 ```kotlin
 data class Person(val displayName: String)
 
-val normalizedName = writableKeyPath<Person, String>(
+val normalizedName: WritableKeyPath<Person, String> = writableKeyPath(
   name = "normalizedName",
   get = { person -> person.displayName.trim().lowercase() },
   set = { person, value -> person.copy(displayName = value.trim()) },
@@ -43,62 +37,56 @@ val revised = normalizedName.set(Person("  Blob  "), "  BLOB JR.  ")
 // Person(displayName = "BLOB JR.")
 ```
 
-The resulting path composes exactly like a generated one:
+It composes exactly like a generated `WritableKeyPath`:
 
 ```kotlin
 data class Account(var owner: Person)
 
-val owner = writableKeyPath(
+val owner: WritableKeyPath<Account, Person> = writableKeyPath(
   get = Account::owner,
   set = { account, value -> account.copy(owner = value) },
 )
 
-val accountOwnerName = owner.then(normalizedName)
-// WritableKeyPath<Account, String>
+val accountOwnerName: WritableKeyPath<Account, String> = owner.then(normalizedName)
 ```
 
-The custom segment retains its own identity inside the composed path, so equivalent paths remain
-equal even when built at different call sites.
+## Create indexed KeyPaths
 
-## Model subscript-like indexed routes
-
-The indexed factories are the Kotlin analogue of a Swift route such as `\[Contact][1].email`.
-They bind the index when the path is created, rather than closing over a mutable index variable:
+The indexed factories are Kotlin’s counterpart to a Swift key path such as `\[Contact][1].email`. They capture the index in a `KeyPath` rather than closing over a mutable variable:
 
 ```kotlin
 data class Contact(val email: String)
 
-val secondContact = keyPath(get = List<Contact>::get, at = 1)
-val secondEmail = secondContact.then(keyPath(Contact::email))
-// KeyPath<List<Contact>, String>
+val secondContact: KeyPath<List<Contact>, Contact> =
+  keyPath(get = List<Contact>::get, at = 1)
+val secondEmail: KeyPath<List<Contact>, String> =
+  secondContact.then(keyPath(Contact::email))
 
 secondEmail(listOf(Contact("first@example.com"), Contact("second@example.com")))
 // "second@example.com"
 ```
 
-For mutable collections, use the explicit reference-writable indexed factory because Kotlin’s
-`MutableList` API updates the existing list instance:
+For a `MutableList`, use `referenceWritableKeyPath` because Kotlin’s collection API changes the existing list instance:
 
 ```kotlin
-val secondContact = referenceWritableKeyPath(
-  get = MutableList<Contact>::get,
-  set = MutableList<Contact>::set,
-  at = 1,
-)
+val secondContact: ReferenceWritableKeyPath<MutableList<Contact>, Contact> =
+  referenceWritableKeyPath(
+    get = MutableList<Contact>::get,
+    set = MutableList<Contact>::set,
+    at = 1,
+  )
 
 secondContact.set(mutableListOf(Contact("a"), Contact("b")), Contact("revised"))
 ```
 
-KPaths also provides `ListPaths`, `ArrayPaths`, `MutableListPaths`, and primitive-array catalog
-variants when a named standard route is more readable than the factory form.
+`ListPaths`, `ArrayPaths`, `MutableListPaths`, and primitive-array catalogs provide the same standard KeyPaths with named accessors.
 
-## Model a keyed map route
+## Create keyed Map KeyPaths
 
-The map factory is the analogue of a keyed Swift subscript. Its focus is nullable because Kotlin
-map lookup can miss; assigning `null` removes the key:
+The map factory is the equivalent of a keyed Swift subscript. Its `WritableKeyPath` focus is nullable because lookup may miss; assigning `null` removes the key:
 
 ```kotlin
-val showTips = writableKeyPath(
+val showTips: WritableKeyPath<Map<String, Boolean>, Boolean?> = writableKeyPath(
   get = Map<String, Boolean>::get,
   key = "showTips",
 )
@@ -110,60 +98,15 @@ val removed = showTips.set(enabled, null)
 // emptyMap()
 ```
 
-This is intentionally a copy-based route for `Map`; use `referenceWritableKeyPath` with
-`MutableMap<String, Boolean>::get` when mutation of a shared mutable map is the intended model.
-
-## Bridge a case path into a read-only optional KeyPath
-
-`matching()` views a non-null whole-case path as an ordinary nullable KeyPath. This is useful when
-an API is written in terms of KeyPaths but the source model is a sealed hierarchy:
-
-```kotlin
-sealed interface Destination {
-  data object Home : Destination
-  data class Editor(val draft: String) : Destination
-}
-
-val editor = caseKeyPath<Destination, Destination.Editor>()
-val maybeEditor: KeyPath<Destination, Destination.Editor?> = editor.matching()
-val maybeDraft = maybeEditor.thenOptional(keyPath(Destination.Editor::draft))
-
-val visibleEditors = destinations.map(maybeEditor)
-val visibleDrafts = destinations.mapNotNull(maybeDraft)
-```
-
-The bridge is read-only. Writing a nullable case view would need a universal meaning for assigning
-`null`—leave the current case alone, remove it, or select a different case—and KPaths deliberately
-does not guess.
-
-For extraction from a collection, pass the case path itself to `mapNotNull(editor)` instead. That
-is shorter and gives a non-null `List<Destination.Editor>`.
-
-## Build a manual case route for an external hierarchy
-
-The whole-case `caseKeyPath<Root, Case>()` factory already works for any accessible concrete
-subtype, including one declared in another module:
-
-```kotlin
-val connected = caseKeyPath<Connection, Connection.Connected>()
-val connections = connectionEvents.mapNotNull(connected)
-```
-
-When a library must focus something other than one whole concrete subtype, use the lower-level
-`caseKeyPath(id = …, match = …, embed = …)` factory.
-Those forms require an explicit stable `PathId`, just as a library-defined custom route must choose
-a stable name. They are intended for library authors; most application code should prefer the
-whole-case factory or an `@Pathable` catalog.
+This is a copy-based `WritableKeyPath` for `Map`. Use `referenceWritableKeyPath` with `MutableMap<String, Boolean>::get` only when mutation of a shared mutable map is intentional.
 
 ## Focus the whole value
 
-`identityKeyPath<Root>()` is the equivalent of Swift’s `\.self`. It is a writable route whose
-replacement is simply the new root value:
+`identityKeyPath<Root>()` is the equivalent of Swift’s `\.self`. It is a `WritableKeyPath<Root, Root>` whose replacement simply becomes the new root value:
 
 ```kotlin
-val wholePerson = identityKeyPath<Person>()
+val wholePerson: WritableKeyPath<Person, Person> = identityKeyPath()
 val replacement = wholePerson.set(oldPerson, newPerson)
 ```
 
-It is useful in generic code that accepts any `WritableKeyPath<Root, Value>` and occasionally
-needs to operate on the entire root as its focus.
+It is useful in generic code accepting `WritableKeyPath<Root, Value>` that sometimes needs to focus the complete root.

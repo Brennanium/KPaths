@@ -1,6 +1,6 @@
-# Case paths
+# CaseKeyPaths
 
-KPaths’ case paths are inspired by [Point-Free’s CasePaths](https://github.com/pointfreeco/swift-case-paths). A `CaseKeyPath<Root, Value>` is a reusable, hashable route that matches one sealed case and focuses a value associated with it. It makes extraction, construction, composition, and generic APIs possible without repeating local `when` expressions.
+KPaths’ CaseKeyPaths are inspired by [Point-Free’s CasePaths](https://github.com/pointfreeco/swift-case-paths). A `CaseKeyPath<Root, Value>` is a reusable, hashable value that matches one sealed case and focuses a value associated with it. It makes extraction, construction, composition, and generic APIs possible without repeating local `when` expressions.
 
 ```kotlin
 interface CaseKeyPath<Root, Value> {
@@ -23,9 +23,9 @@ message.embed(Event.Message("Hello")) // Event.Message("Hello")
 Event.Started[message]                 // null
 ```
 
-There is no `WritableCaseKeyPath`: a genuine case path always embeds a complete case. `val`/`var` capability distinctions belong to ordinary Kotlin property paths.
+There is no `WritableCaseKeyPath`: a genuine CaseKeyPath always embeds a complete case. `val`/`var` capability distinctions belong to ordinary Kotlin KeyPaths.
 
-## Create paths
+## Create CaseKeyPaths
 
 For an ordinary data-class case, use the concise reflection-backed factory. Import a nested case so its constructor can be referenced directly:
 
@@ -37,7 +37,7 @@ val message = casePathsOf<Event>().pathFor(::Message)
 
 It validates and caches the primary-constructor shape once. Unary cases focus their property; binary and ternary cases focus Kotlin’s `Pair` and `Triple`.
 
-For a hot path, computed extraction, or an unusual model, provide both directions explicitly:
+For a frequently used CaseKeyPath, computed extraction, or an unusual model, provide both directions explicitly:
 
 ```kotlin
 val text = caseKeyPath<Event, Event.Message, String>(
@@ -54,7 +54,7 @@ EventPaths.Message.text // CaseKeyPath<Event, String>
 
 ## Extract, embed, compose
 
-Case paths are callable as their intentionally lossy `(Root) -> Value?` extraction:
+CaseKeyPaths are callable as their intentionally lossy `(Root) -> Value?` extraction:
 
 ```kotlin
 events.mapNotNull(EventPaths.Message.text)
@@ -80,9 +80,9 @@ renameText.embed("Jr.")
 // AppEvent.Profile(ProfileAction.Editor(EditorAction.Rename("Jr.")))
 ```
 
-## Multi-value cases and bound routes
+## Multi-value cases and bound CaseKeyPaths
 
-KSP generates a named context-bound route for every property of a two- or three-value case:
+KSP generates a named context-bound `CaseKeyPath` factory for every property of a two- or three-value case:
 
 ```kotlin
 @Pathable
@@ -106,4 +106,4 @@ val loaded: CaseKeyPath<Loadable<String>, String> =
   casePathsOf<Loadable<String>>().pathFor(::Loaded)
 ```
 
-Generated `LoadablePaths<String>().Loaded.value` carries the same concrete identity. Both manual and generated paths compare and hash structurally by `PathId`; generated catalogs remain the most ergonomic no-reflection form.
+Generated `LoadablePaths<String>().Loaded.value` carries the same concrete identity. Both manual and generated CaseKeyPaths compare and hash structurally by `PathId`; generated catalogs remain the most ergonomic no-reflection form.

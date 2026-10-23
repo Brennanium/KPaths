@@ -1,5 +1,5 @@
 site_name: KPaths
-site_description: Typed, comparable property and case paths for Kotlin.
+site_description: Typed, comparable KeyPaths and CaseKeyPaths for Kotlin.
 site_dir: build/docs/site
 
 theme:
@@ -30,11 +30,11 @@ markdown_extensions:
 nav:
   - Overview: index.md
   - Guides:
-      - Key paths: key-paths.md
-      - Case paths: case-paths.md
-      - Path recipes: recipes.md
-      - Route-aware APIs: route-aware-apis.md
-      - Advanced paths: advanced-paths.md
+      - KeyPaths: key-paths.md
+      - CaseKeyPaths: case-paths.md
+      - KeyPath and CaseKeyPath recipes: recipes.md
+      - KeyPath and CaseKeyPath API design: route-aware-apis.md
+      - Advanced KeyPaths: advanced-paths.md
       - Generated catalogs: generation.md
       - Identity and type metadata: identity.md
   - API reference: api/index.md

@@ -1,10 +1,10 @@
 package dev.kpaths.core
 
 /**
- * The structural identity of a generated path.
+ * The structural identity of a generated KeyPath or CaseKeyPath.
  *
- * Equality and hashing deliberately describe the route, not a closure or allocation that happens
- * to implement it. Generated paths use stable fully-qualified type names and ordered segments.
+ * Equality and hashing deliberately describe the KeyPath or CaseKeyPath, not a closure or allocation
+ * that happens to implement it. Generated paths use stable fully-qualified type names and ordered segments.
  */
 public class PathId(
   public val rootType: TypeId,
@@ -14,7 +14,7 @@ public class PathId(
   public val segments: List<PathSegment> = segments.toList()
 
   public companion object {
-    /** The identity route that focuses an entire root value. */
+    /** The identity KeyPath that focuses an entire root value. */
     public fun identity(rootType: TypeId): PathId = PathId(rootType, emptyList())
 
     /** Identifies a declared property named [name] on [rootType]. */
@@ -26,25 +26,25 @@ public class PathId(
       PathId(rootType, listOf(PathSegment.Case(name)))
 
     /**
-     * An explicitly named route for a manual or computed path.
+     * An explicitly named KeyPath segment for a manual or computed KeyPath.
      *
-     * Use a stable, library-qualified name when paths may need to compare equal across call
-     * sites. A custom route deliberately remains distinct from a stored property of the same
+     * Use a stable, library-qualified name when KeyPaths may need to compare equal across call
+     * sites. A custom KeyPath deliberately remains distinct from a stored property of the same
      * spelling.
      */
     public fun custom(rootType: TypeId, name: String): PathId =
       PathId(rootType, listOf(PathSegment.Custom(name)))
   }
 
-  /** Returns this route with one additional structural [segment]. */
+  /** Returns this [PathId] with one additional structural [segment]. */
   public fun appending(segment: PathSegment): PathId =
     PathId(rootType, segments + segment)
 
   /**
-   * Appends a path rooted at this path's focus.
+   * Appends a [PathId] rooted at this PathId's focus.
    *
    * The Kotlin type system proves that the roots line up for the public composition APIs. The
-   * result intentionally retains the outer path's root type.
+   * result intentionally retains the outer KeyPath or CaseKeyPath root type.
    */
   public fun appending(path: PathId): PathId =
     PathId(rootType, segments + path.segments)
@@ -57,21 +57,21 @@ public class PathId(
   override fun toString(): String = "PathId(rootType=$rootType, segments=$segments)"
 }
 
-/** A named step in a path's structural identity. */
+/** A named step in a KeyPath or CaseKeyPath structural identity. */
 public sealed interface PathSegment {
-  /** A declared property route. */
+  /** A declared property KeyPath segment. */
   public data class Property(public val name: String) : PathSegment
 
-  /** A sealed or enum case route. */
+  /** A sealed or enum CaseKeyPath segment. */
   public data class Case(public val name: String) : PathSegment
 
-  /** A caller-defined route that is intentionally distinct from a declared property. */
+  /** A caller-defined KeyPath segment intentionally distinct from a declared property. */
   public data class Custom(public val name: String) : PathSegment
 
-  /** An indexed collection route. */
+  /** An indexed collection KeyPath segment. */
   public data class Index(public val value: Int) : PathSegment
 
-  /** A keyed map route. */
+  /** A keyed map KeyPath segment. */
   public data class Key(public val value: Any?) : PathSegment
 
   /** A conditional optional-chaining step. */

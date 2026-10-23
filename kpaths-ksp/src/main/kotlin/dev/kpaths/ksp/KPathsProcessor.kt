@@ -773,7 +773,7 @@ private class KPathsProcessor(
     )
   }
 
-  /** Emits named, context-bound payload routes such as `actionFor(id)`. */
+  /** Emits named, context-bound payload CaseKeyPaths such as `actionFor(id)`. */
   private fun writeBoundCasePayloadPaths(
     writer: java.io.BufferedWriter,
     indent: String,

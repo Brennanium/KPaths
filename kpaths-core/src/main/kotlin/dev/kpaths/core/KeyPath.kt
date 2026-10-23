@@ -39,7 +39,7 @@ public interface KeyPath<Root, Value> : PartialKeyPath<Root>, (Root) -> Value {
  * Base class for generated paths.
  *
  * A [PathId] includes property-versus-case segments, so structural identity remains distinct for
- * a property route and a case route even when their spelling happens to be the same.
+ * a property KeyPath and a CaseKeyPath even when their spelling happens to be the same.
  */
 public abstract class PathBase : AnyPath {
   final override fun equals(other: Any?): Boolean =

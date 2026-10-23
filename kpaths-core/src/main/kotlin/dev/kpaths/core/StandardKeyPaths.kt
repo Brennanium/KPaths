@@ -127,7 +127,7 @@ public inline fun <reified Root, reified Value> writableKeyPath(
  * Adapts a property reference into a copy-based writable path with an explicitly supplied
  * reconstruction operation.
  *
- * [get] provides the readable property route, while [set] defines how a replacement value forms
+ * [get] provides the readable property KeyPath, while [set] defines how a replacement value forms
  * a new root. This supports computed read-only properties when the caller can supply an inverse.
  */
 public fun <Root, Value> writableKeyPath(

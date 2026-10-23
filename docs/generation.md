@@ -1,6 +1,6 @@
 # Generated catalogs
 
-`@Pathable` generates a `TypeNamePaths` catalog for data classes, ordinary classes, sealed roots, and enums. Property paths follow Kotlin mutability: `val` is `KeyPath`; data-class `var` is copy-based `WritableKeyPath`; class `var` is `ReferenceWritableKeyPath`.
+`@Pathable` generates a `TypeNamePaths` catalog for data classes, ordinary classes, sealed roots, and enums. Generated property KeyPaths follow Kotlin mutability: `val` is `KeyPath`; data-class `var` is copy-based `WritableKeyPath`; class `var` is `ReferenceWritableKeyPath`.
 
 For a sealed root, every direct subtype gets a canonical `CaseKeyPath`:
 
@@ -18,7 +18,7 @@ RequestPaths.Message
 RequestPaths.Message.embed(Request.Message("1", "Hello"))
 ```
 
-Data-class cases with one to three primary-constructor properties also receive direct payload paths:
+Data-class cases with one to three primary-constructor properties also receive direct payload CaseKeyPaths:
 
 ```kotlin
 RequestPaths.Retry.attempt
@@ -28,7 +28,7 @@ RequestPaths.Message.payload
 // CaseKeyPath<Request, Pair<String, String>>
 ```
 
-They extract only from their case and independently construct that case when embedded. Two- and three-property cases additionally get named bound routes:
+They extract only from their case and independently construct that case when embedded. Two- and three-property cases additionally get named bound `CaseKeyPath` factories:
 
 ```kotlin
 RequestPaths.Message.textFor(id = "1")
@@ -36,7 +36,7 @@ RequestPaths.Message.textFor(id = "1")
 // Request.Message("1", "Updated")
 ```
 
-Each `propertyFor(...)` binds the other payload properties, matches only that context, and focuses the named property. Cases with more than three properties get a whole-case path and concrete-case property catalog, but no synthetic tuple route.
+Each `propertyFor(...)` binds the other payload properties, matches only that context, and focuses the named property. Cases with more than three properties get a whole-case `CaseKeyPath` and concrete-case property catalog, but no synthetic tuple CaseKeyPath.
 
 Generic sealed roots use a catalog instance so their full `TypeId` is retained:
 
@@ -45,6 +45,6 @@ LoadablePaths<String>().Loaded.value
 // CaseKeyPath<Loadable<String>, String>
 ```
 
-Catalogs expose `allCasePaths` and `caseOf(root)` as `PartialCaseKeyPath<Root>` for type-erased inspection. Use a named path whenever the payload type matters.
+Catalogs expose `allCasePaths` and `caseOf(root)` as `PartialCaseKeyPath<Root>` for type-erased inspection. Use a named CaseKeyPath whenever the payload type matters.
 
 The default catalog name is `TypeNamePaths`; `@Pathable("CustomPaths")` chooses another name. KSP diagnoses public naming collisions and preserves declared identifiers where Kotlin permits them.
