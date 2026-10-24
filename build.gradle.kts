@@ -2,9 +2,10 @@ plugins {
   alias(libs.plugins.kotlin.multiplatform) apply false
   alias(libs.plugins.ksp) apply false
   alias(libs.plugins.dokka)
+  alias(libs.plugins.vanniktech.maven.publish) apply false
 }
 
-group = "dev.kpaths"
+group = "io.github.brennanium"
 version = providers.gradleProperty("VERSION_NAME").get()
 
 allprojects {
@@ -64,6 +65,25 @@ tasks.register<Sync>("docsBuild") {
   dependsOn(mkdocsBuild)
   from(layout.buildDirectory.dir("docs/api"))
   into(docsSiteDirectory.map { it.dir("api") })
+}
+
+tasks.register("verifyMavenPublications") {
+  group = "verification"
+  description = "Validates Maven Central POM metadata for every published KPaths artifact."
+  dependsOn(
+    ":kpaths-annotations:checkPomFileForKotlinMultiplatformPublication",
+    ":kpaths-annotations:checkPomFileForJvmPublication",
+    ":kpaths-annotations:checkPomFileForIosArm64Publication",
+    ":kpaths-annotations:checkPomFileForIosSimulatorArm64Publication",
+    ":kpaths-core:checkPomFileForKotlinMultiplatformPublication",
+    ":kpaths-core:checkPomFileForJvmPublication",
+    ":kpaths-core:checkPomFileForIosArm64Publication",
+    ":kpaths-core:checkPomFileForIosSimulatorArm64Publication",
+    ":kpaths-reflection-jvm:checkPomFileForKotlinMultiplatformPublication",
+    ":kpaths-reflection-jvm:checkPomFileForJvmPublication",
+    ":kpaths-ksp:checkPomFileForKotlinMultiplatformPublication",
+    ":kpaths-ksp:checkPomFileForJvmPublication",
+  )
 }
 
 tasks.register<Exec>("docsServe") {

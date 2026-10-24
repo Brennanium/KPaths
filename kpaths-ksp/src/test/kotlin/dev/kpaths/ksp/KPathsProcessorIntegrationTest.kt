@@ -316,7 +316,10 @@ class KPathsProcessorIntegrationTest {
       artifacts
         .filter { artifact ->
           artifact.fileName.toString().let { name ->
-            name.startsWith("$moduleName-jvm-") && name.endsWith(".jar") && !name.endsWith("-sources.jar")
+            name.startsWith("$moduleName-jvm-") &&
+              name.endsWith(".jar") &&
+              !name.endsWith("-sources.jar") &&
+              !name.endsWith("-javadoc.jar")
           }
         }
         .findFirst()

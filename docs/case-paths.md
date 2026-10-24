@@ -85,7 +85,7 @@ case. It is a JVM-only convenience that needs the separate artifact. This isolat
 shape discovery from the core API; the remaining Kotlin Multiplatform work is tracked separately:
 
 ```kotlin
-implementation("dev.kpaths:kpaths-reflection-jvm:0.1.0")
+implementation("io.github.brennanium:kpaths-reflection-jvm:0.1.0")
 ```
 
 Import a nested case so Kotlin can use its constructor reference directly:

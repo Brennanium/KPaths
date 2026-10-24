@@ -63,7 +63,7 @@ For a conventional unannotated data-class case on the JVM, add the optional refl
 use the reflection-backed shorthand:
 
 ```kotlin
-implementation("dev.kpaths:kpaths-reflection-jvm:0.1.0")
+implementation("io.github.brennanium:kpaths-reflection-jvm:0.1.0")
 ```
 
 ```kotlin

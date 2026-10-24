@@ -30,6 +30,7 @@ jobs:
           :kpaths-reflection-jvm:jvmTest
           :kpaths-ksp:jvmTest
           :kpaths-sample:jvmTest
+          verifyMavenPublications
           docsBuild
 
   ios:
