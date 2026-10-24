@@ -9,19 +9,25 @@ kotlin {
   jvm {
     compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
   }
+  iosArm64()
+  iosSimulatorArm64()
 
   sourceSets {
-    jvmMain {
+    commonMain {
       kotlin.srcDir("src/main/kotlin")
       dependencies {
         implementation(project(":kpaths-annotations"))
         implementation(project(":kpaths-core"))
       }
     }
-    jvmTest {
+    commonTest {
       kotlin.srcDir("src/test/kotlin")
       dependencies {
         implementation(kotlin("test"))
+      }
+    }
+    jvmTest {
+      dependencies {
         implementation(libs.junit.jupiter)
         runtimeOnly("org.junit.platform:junit-platform-launcher")
       }
@@ -31,6 +37,8 @@ kotlin {
 
 dependencies {
   add("kspJvm", project(":kpaths-ksp"))
+  add("kspIosArm64", project(":kpaths-ksp"))
+  add("kspIosSimulatorArm64", project(":kpaths-ksp"))
 }
 
 tasks.named<Test>("jvmTest") {

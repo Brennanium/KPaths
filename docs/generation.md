@@ -6,6 +6,22 @@ Catalogs are a discoverability and repeated-use feature, not a prerequisite for 
 [KeyPaths guide](key-paths.md) for direct property factories, and the [CaseKeyPaths guide](case-paths.md)
 for the factory choices available to unannotated or third-party sealed hierarchies.
 
+## Multiplatform source sets
+
+`@Pathable` can be placed in `commonMain`, but KSP runs for each compilation target. Configure the
+processor for every target that compiles those models:
+
+```kotlin
+dependencies {
+  add("kspJvm", project(":kpaths-ksp"))
+  add("kspIosArm64", project(":kpaths-ksp"))
+  add("kspIosSimulatorArm64", project(":kpaths-ksp"))
+}
+```
+
+This produces the same catalog API for each target. KSP itself runs on the JVM during the build;
+the generated catalogs use `kpaths-core` and can run on Kotlin/Native.
+
 For a sealed root, every direct subtype gets a canonical `CaseKeyPath`:
 
 ```kotlin
