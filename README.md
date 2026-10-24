@@ -132,3 +132,7 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew check docsBuild
 ## Acknowledgments
 
 KPaths is strongly inspired by Swift’s KeyPath system and Point-Free’s CasePaths library. Their APIs demonstrate how first-class KeyPaths and CaseKeyPaths make generic algorithms and compositional application models substantially clearer.
+
+## License
+
+KPaths is released under the [MIT License](LICENSE).

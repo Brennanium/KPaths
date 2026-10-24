@@ -19,10 +19,8 @@ assembly.
 Maven Central requires immutable coordinates, complete POM metadata, source and API-documentation
 artifacts, and signatures. Before enabling publication, the maintainers must:
 
-1. Choose and add the project's open-source license.
-2. Register and verify the `dev.kpaths` namespace in the [Central Publisher Portal](https://central.sonatype.com/).
-3. Decide the canonical public source repository URL and maintainer identity for the POM.
-4. Create a Portal user token and an ASCII-armored signing key; store them as repository secrets.
+1. Register and verify the `dev.kpaths` namespace in the [Central Publisher Portal](https://central.sonatype.com/).
+2. Create a Portal user token and an ASCII-armored signing key; store them as repository secrets.
 
 The release workflow will use those secrets only on a protected tag or manual release dispatch. Do
 not store Portal tokens or signing keys in this repository or `gradle.properties`.
