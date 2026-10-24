@@ -1,12 +1,18 @@
 # KPaths
 
-KPaths brings typed, composable, structurally identifiable KeyPaths and CasePaths to Kotlin. It is inspired by [Swift KeyPaths](https://docs.swift.org/latest/documentation/the-swift-programming-language/expressions/#Key-Path-Expression) and [Point-Free’s CasePaths](https://github.com/pointfreeco/swift-case-paths), while using Kotlin-native property references, sealed hierarchies, KSP, and reified type tokens.
+KPaths brings typed, composable, structurally identifiable KeyPaths and CaseKeyPaths to Kotlin. It is inspired by [Swift KeyPaths](https://docs.swift.org/latest/documentation/the-swift-programming-language/expressions/#Key-Path-Expression) and [Point-Free’s CasePaths](https://github.com/pointfreeco/swift-case-paths), while using Kotlin-native property references, sealed hierarchies, KSP, and reified type tokens.
 
 ## Modules
 
-- `kpaths-core`: KeyPath and CaseKeyPath types, factories, composition, identity, and standard-library KeyPaths.
+- `kpaths-core`: KeyPath and CaseKeyPath types, explicit factories, composition, identity, and standard-library KeyPaths.
 - `kpaths-annotations`: `@Pathable`.
 - `kpaths-ksp`: generated catalogs.
+- `kpaths-reflection-jvm`: optional JVM-only constructor-discovery factories.
+
+`kpaths-core` and `kpaths-annotations` support Kotlin/JVM (including Android) and Kotlin/Native
+for iOS. `kpaths-ksp` is a JVM-based build-time processor; it can generate catalogs for supported
+multiplatform source sets. The reflection-backed `casePathsOf(...).pathFor(...)` shorthand remains
+JVM-only because it depends on Kotlin reflection.
 
 ## KeyPaths
 
@@ -22,7 +28,7 @@ val city = writableKeyPath(
 )
 ```
 
-`KeyPath` reads, `WritableKeyPath` returns a revised value for value-semantic models, and `ReferenceWritableKeyPath` is for intentional in-place class mutation. KeyPaths have structural `PathId` equality and hashability, so they can safely be used as stable API values and cache keys.
+`KeyPath` reads, `WritableKeyPath` returns a revised value for value-semantic models, and `ReferenceWritableKeyPath` is for intentional in-place class mutation. See the [KeyPaths guide](docs/key-paths.md) for factory selection, composition, nullable paths, and standard-library paths.
 
 Annotate frequent source-owned models to generate canonical catalogs:
 
@@ -51,9 +57,14 @@ Event.Started[message]           // null
 message.embed(Event.Message("Updated"))
 ```
 
-There is one `CaseKeyPath` type. Unlike KeyPaths, CaseKeyPaths reconstruct complete cases, so there is no read-only/writable hierarchy.
+There is one `CaseKeyPath` type. Unlike KeyPaths, CaseKeyPaths reconstruct complete cases, so there is no read-only/writable hierarchy. The [CaseKeyPaths guide](docs/case-paths.md) explains whole-case, payload, reflection-backed, and generated factories.
 
-For a conventional unannotated data-class case, use the reflection-backed shorthand:
+For a conventional unannotated data-class case on the JVM, add the optional reflection artifact and
+use the reflection-backed shorthand:
+
+```kotlin
+implementation("dev.kpaths:kpaths-reflection-jvm:0.1.0-SNAPSHOT")
+```
 
 ```kotlin
 import example.Event.Message
@@ -61,6 +72,10 @@ import example.Event.Message
 val text = casePathsOf<Event>().pathFor(::Message)
 text.embed("Hello") // Event.Message("Hello")
 ```
+
+`casePathsOf` intentionally does not live in `kpaths-core`: it needs Kotlin/JVM's full runtime
+shape discovery. Generated catalogs and explicit `caseKeyPath` factories do not need this optional
+artifact.
 
 For a non-reflective or custom `CaseKeyPath`, use the explicit factory:
 
@@ -99,7 +114,14 @@ Use `match` rather than nullable extraction whenever a matched `null` must remai
 
 ## Documentation
 
-The full guides cover [KeyPaths](docs/key-paths.md), [CaseKeyPaths](docs/case-paths.md), [generated catalogs](docs/generation.md), [KeyPath and CaseKeyPath recipes](docs/recipes.md), [advanced KeyPaths](docs/advanced-paths.md), and [KeyPath and CaseKeyPath API design](docs/route-aware-apis.md).
+Start with the [documentation overview](docs/index.md). From there:
+
+- [KeyPaths](docs/key-paths.md) covers the normal property-reference and writable-path APIs.
+- [CaseKeyPaths](docs/case-paths.md) covers sealed-case matching, embedding, and composition.
+- [Generated catalogs](docs/generation.md) explains what `@Pathable` adds.
+- [Recipes](docs/recipes.md) and [API design](docs/route-aware-apis.md) show reusable patterns.
+- [Advanced KeyPaths](docs/advanced-paths.md) and [identity and type metadata](docs/identity.md) cover escape hatches.
+- The generated [API reference](docs/api/index.md) is the source of truth for overloads and KDoc.
 
 Build the project and documentation with:
 

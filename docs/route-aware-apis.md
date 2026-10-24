@@ -6,7 +6,9 @@ a case. That makes it useful at an API boundary where an ordinary closure would 
 information the API needs.
 
 Kotlin closures remain excellent for a one-off computation. Prefer a KeyPath or CaseKeyPath
-parameter when an API needs to retain, compose, compare, cache, inspect, or use it after accepting it.
+parameter when an API needs to retain, compose, compare, cache, inspect, or use it after accepting it. This
+guide assumes familiarity with the construction APIs in [KeyPaths](key-paths.md) and [CaseKeyPaths](case-paths.md);
+it is about designing consumers of those values.
 
 | API needs | Accept | Why a closure alone is insufficient |
 | --- | --- | --- |
@@ -189,4 +191,5 @@ match and embed a sealed case.
 The difference is most valuable at reusable boundaries: generic utilities, model-driven UI,
 saved configuration, subscriptions, sealed-case construction, and nested value updates. At those
 boundaries, a KeyPath or CaseKeyPath turns a convention spread across closures into a checked,
-composable, comparable value.
+composable, comparable value. For compact applications of these ideas, return to [recipes](recipes.md);
+for the exact equality contract, read [identity and type metadata](identity.md).

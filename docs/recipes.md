@@ -5,7 +5,7 @@ KPaths provides two related values for two different jobs:
 - A `KeyPath` reads a value from every root; a `WritableKeyPath` can also return a revised root.
 - A `CaseKeyPath` matches one sealed case, extracts its associated value, and embeds that value in a newly constructed root.
 
-These examples use those concrete types throughout and do not require a particular UI or state-management framework.
+These examples use those concrete types throughout and do not require a particular UI or state-management framework. For factory selection and capability rules, read [KeyPaths](key-paths.md) and [CaseKeyPaths](case-paths.md) first; this page concentrates on combinations you can reuse.
 
 ## Pass a KeyPath to Kotlin collection functions
 
@@ -69,15 +69,20 @@ val notices: List<String> = items.mapNotNull(noticeText)
 
 `noticeText` extracts text only from `Notice`; its callable view returns `null` for `Loading` and `Article`. `noticeText.embed("Maintenance tonight")` independently constructs `FeedItem.Notice("Maintenance tonight")`.
 
-The manual factory creates the same `CaseKeyPath` when a generated catalog is not appropriate:
+For an external hierarchy, the explicit factory creates the same kind of CaseKeyPath without reflection:
 
 ```kotlin
-val noticeText: CaseKeyPath<FeedItem, String> =
-  caseKeyPath<FeedItem, FeedItem.Notice, String>(
-    extract = FeedItem.Notice::text,
-    embed = { text -> FeedItem.Notice(text) },
-  )
+import example.FeedItem.Notice
+
+val noticeText: CaseKeyPath<FeedItem, String> = caseKeyPath(
+  extract = FeedItem.Notice::text,
+  embed = ::Notice,
+)
 ```
+
+The nested-case import permits the concise constructor reference. The full
+[explicit-factory section](case-paths.md#explicit-payload-factories) covers `Pair` and `Triple`
+payloads as well.
 
 ## Bind the other values in a multi-value case
 
@@ -160,7 +165,7 @@ val counts = items
 // Map<PartialCaseKeyPath<FeedItem>, Int>
 ```
 
-The `PartialCaseKeyPath` values are type-erased because the cases have different focused types, but they remain comparable and hashable.
+The `PartialCaseKeyPath` values are type-erased because the cases have different focused types, but they remain comparable and hashable. See [identity and type metadata](identity.md) for what their identity represents.
 
 ## Create indexed and keyed KeyPaths
 
@@ -183,4 +188,4 @@ val enabled = showTips.set(emptyMap(), true)
 val removed = showTips.set(enabled, null) // null removes the map key
 ```
 
-See [Advanced KeyPaths](advanced-paths.md) for named computed KeyPaths and explicit reference-mutable collection KeyPaths.
+See [Advanced KeyPaths](advanced-paths.md) for named computed KeyPaths and explicit reference-mutable collection KeyPaths. The [API reference](api/index.md) lists the complete indexed and keyed overloads.

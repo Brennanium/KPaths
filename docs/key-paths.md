@@ -46,7 +46,8 @@ The remaining factories are deliberate escape hatches:
 | Define library-level identity explicitly | the `PathId` and `TypeId` overloads | A library must control every identity segment or lacks reified type information. |
 
 `asKeyPath()` and `asReferenceWritableKeyPath()` are equivalent extension spellings for the
-property-reference factories. They are conveniences, not a separate KeyPath model.
+property-reference factories. They are conveniences, not a separate KeyPath model. The generated
+[API reference](api/index.md) lists every overload.
 
 ### Derived KeyPaths
 
@@ -195,7 +196,7 @@ session[token] = "new"
 check(session.token == "new")
 ```
 
-This is the Kotlin counterpart to Swift’s `ReferenceWritableKeyPath`. A data class is still a reference object in Kotlin, but KPaths treats generated data-class KeyPaths as value-style. A manual `ReferenceWritableKeyPath` with a data-class root is allowed and emits a runtime warning by default, because it often signals an accidental break from value semantics.
+This is the Kotlin counterpart to Swift’s `ReferenceWritableKeyPath`. A data class is still a reference object in Kotlin, but KPaths treats generated data-class KeyPaths as value-style. On the JVM, a manual `ReferenceWritableKeyPath` with a data-class root is allowed and emits a runtime warning by default, because it often signals an accidental break from value semantics. Kotlin/Native cannot inspect the `data` modifier at runtime, so it safely omits that diagnostic; generated data-class paths remain copy-based on every platform.
 
 For a derived in-place value without a mutable property reference, use the named factory and make
 the mutation explicit:
@@ -230,7 +231,7 @@ val personCity = address.then(city)
 val revised = person.setting(personCity, "Toronto")
 ```
 
-Two writable KeyPaths compose to a `WritableKeyPath`. A reference-writable outer KeyPath composed with a writable inner KeyPath remains reference-writable. Any composition containing a read-only KeyPath is read-only: KPaths will never invent a reconstruction function just to make a composed KeyPath writable.
+Two writable KeyPaths compose to a `WritableKeyPath`. A reference-writable outer KeyPath composed with a writable inner KeyPath remains reference-writable. Any composition containing a read-only KeyPath is read-only: KPaths will never invent a reconstruction function just to make a composed KeyPath writable. The [API reference](api/index.md) documents the complete `then` overload set.
 
 This capability is useful in generic update APIs. A function accepting
 `WritableKeyPath<Root, Value>` can update a shallow or deeply nested field with the same
@@ -329,34 +330,11 @@ val editableSecond = referenceWritableKeyPath(
 )
 ```
 
-## Computed and custom KeyPaths
+## Where to go next
 
-Property references cover stored and computed Kotlin properties. For a KeyPath that is not based on a property, give the factory a stable root-local name:
-
-```kotlin
-val normalizedName = keyPath<Person, String>("normalizedName") { person ->
-  person.name.trim().lowercase()
-}
-```
-
-The name is part of the KeyPath’s identity. Two KeyPaths with the same root type and custom name compare equal, even if they were constructed separately. Use the lower-level `PathId` and `TypeId` overloads only when a library needs to define an explicit multi-segment identity; the named factory above is the normal escape hatch.
-
-## Generated catalogs
-
-Factories are preferred for one-off and third-party properties:
-
-```kotlin
-val title = keyPath(ThirdPartyArticle::title)
-```
-
-For a source-owned model with KeyPaths that form part of its public vocabulary, `@Pathable` generates an autocomplete-friendly catalog:
-
-```kotlin
-@Pathable
-data class Person(val name: String, var address: Address)
-
-PersonPaths.name       // KeyPath<Person, String>
-PersonPaths.address    // WritableKeyPath<Person, Address>
-```
-
-The generated KeyPath is a stable singleton, but it is not a different kind of KeyPath: it has the same read/write capability and structural equality rules as a factory-created KeyPath. Use generated catalogs for discoverability and repetition, not because a property must be annotated before it can participate in KPaths.
+This guide owns the ordinary property-reference and writable-path story. For named derived,
+indexed, keyed, and whole-value paths, continue to [Advanced KeyPaths](advanced-paths.md). For the
+generated-catalog naming, diagnostics, and sealed-case surface of `@Pathable`, continue to
+[Generated catalogs](generation.md). For why `PathId` and `TypeId` make these values comparable,
+read [Identity and type metadata](identity.md); the [API-design guide](route-aware-apis.md) shows
+how to retain that information in your own APIs.

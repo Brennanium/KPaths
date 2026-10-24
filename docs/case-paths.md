@@ -53,7 +53,7 @@ case:
 | Reuse a source-owned case | generated `EventPaths.Message.text` | Preferred: canonical, discoverable, no reflection. |
 | Match and embed the complete concrete case | `caseKeyPath<Root, Case>()` | The case object itself is the desired focus. |
 | Match one enum entry | `caseKeyPath(Entry)` | A Kotlin `enum` entry has no associated payload. |
-| Reflect a conventional data-class constructor | `casePathsOf<Root>().pathFor(::Case)` | A one-off data case has one to three stored constructor properties. |
+| Reflect a conventional data-class constructor (JVM) | `casePathsOf<Root>().pathFor(::Case)` | Add `kpaths-reflection-jvm`; a one-off data case has one to three stored constructor properties. |
 | Match and embed one payload property | `caseKeyPath(extract, embed)` | A `KProperty1` and one-argument constructor or embedder describe the case. |
 | Match and embed two or three payload properties | `caseKeyPath(extract1, extract2[, extract3], embed)` | A `Pair` or `Triple` is an acceptable focus. |
 | Define a nonstandard case algorithm | `caseKeyPath(id, valueType, match, embed)` | A library needs full control of identity, matching, and embedding. |
@@ -81,7 +81,14 @@ north.embed(Unit) // Compass.NORTH
 ### Reflection-backed constructor factories
 
 `casePathsOf<Root>().pathFor(::Case)` is the short manual factory for a conventional data-class
-case. Import a nested case so Kotlin can use its constructor reference directly:
+case. It is a JVM-only convenience that needs the separate artifact. This isolates runtime case
+shape discovery from the core API; the remaining Kotlin Multiplatform work is tracked separately:
+
+```kotlin
+implementation("dev.kpaths:kpaths-reflection-jvm:0.1.0-SNAPSHOT")
+```
+
+Import a nested case so Kotlin can use its constructor reference directly:
 
 ```kotlin
 import example.Event.Message
@@ -165,7 +172,7 @@ CaseKeyPaths are callable as their intentionally lossy `(Root) -> Value?` extrac
 events.mapNotNull(EventPaths.Message.text)
 ```
 
-Use `match` to preserve a matched `null` payload:
+Use `match` to preserve a matched `null` payload; see the [API reference](api/index.md) for its related operations:
 
 ```kotlin
 when (val result = status.match(StatusPaths.Note.text)) {
@@ -204,11 +211,11 @@ Request.Navigate("profile", "privacy")[destination] // null
 
 ## Generic roots and identity
 
-`casePathsOf<Root>()` retains complete reified generic metadata:
+On the JVM, `casePathsOf<Root>()` retains complete reified generic metadata:
 
 ```kotlin
 val loaded: CaseKeyPath<Loadable<String>, String> =
   casePathsOf<Loadable<String>>().pathFor(::Loaded)
 ```
 
-Generated `LoadablePaths<String>().Loaded.value` carries the same concrete identity. Both manual and generated CaseKeyPaths compare and hash structurally by `PathId`; generated catalogs remain the most ergonomic no-reflection form.
+Generated `LoadablePaths<String>().Loaded.value` carries the same concrete identity. Both manual and generated CaseKeyPaths compare and hash structurally by `PathId`; generated catalogs remain the most ergonomic no-reflection form. Read [Generated catalogs](generation.md) for static versus generic catalog rules, [Identity and type metadata](identity.md) for the equality model, and [recipes](recipes.md) for collection and nested-case patterns.

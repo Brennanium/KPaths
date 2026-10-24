@@ -1,6 +1,6 @@
 # Advanced KeyPaths
 
-The usual KPaths API is small: create a `KeyPath` from a Kotlin property reference, or create a `WritableKeyPath` by also supplying its replacement behavior. This guide covers KeyPath factories for values Kotlin cannot express as a simple property reference. For sealed cases, see [CaseKeyPaths](case-paths.md).
+The usual KPaths API is small: create a `KeyPath` from a Kotlin property reference, or create a `WritableKeyPath` by also supplying its replacement behavior. This guide covers the custom-selector patterns Kotlin cannot express as a simple property reference. For the ordinary factory decision, start with [KeyPaths](key-paths.md#choose-a-keypath-factory); for sealed cases, see [CaseKeyPaths](case-paths.md).
 
 ## Define a named derived KeyPath
 
@@ -18,7 +18,7 @@ normalizedName(Person("  Blob  ")) // "blob"
 listOf(Person("  Blob  ")).map(normalizedName) // ["blob"]
 ```
 
-Two independently created `KeyPath`s with the same root type and name compare equal. Do not reuse a name for unrelated computations.
+Two independently created `KeyPath`s with the same root type and name compare equal. Do not reuse a name for unrelated computations. [Identity and type metadata](identity.md) explains why the name is semantic.
 
 ## Define a named WritableKeyPath
 
@@ -79,7 +79,7 @@ val secondContact: ReferenceWritableKeyPath<MutableList<Contact>, Contact> =
 secondContact.set(mutableListOf(Contact("a"), Contact("b")), Contact("revised"))
 ```
 
-`ListPaths`, `ArrayPaths`, `MutableListPaths`, and primitive-array catalogs provide the same standard KeyPaths with named accessors.
+`ListPaths`, `ArrayPaths`, `MutableListPaths`, and primitive-array catalogs provide the same standard KeyPaths with named accessors. See [recipes](recipes.md#create-indexed-and-keyed-keypaths) for a smaller collection-focused example and the [API reference](api/index.md) for all standard catalogs.
 
 ## Create keyed Map KeyPaths
 
@@ -109,4 +109,4 @@ val wholePerson: WritableKeyPath<Person, Person> = identityKeyPath()
 val replacement = wholePerson.set(oldPerson, newPerson)
 ```
 
-It is useful in generic code accepting `WritableKeyPath<Root, Value>` that sometimes needs to focus the complete root.
+It is useful in generic code accepting `WritableKeyPath<Root, Value>` that sometimes needs to focus the complete root. For a design example, see [Require write-back when an operation updates part of a value](route-aware-apis.md#require-write-back-when-an-operation-updates-part-of-a-value).

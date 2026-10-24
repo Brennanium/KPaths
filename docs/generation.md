@@ -1,6 +1,10 @@
 # Generated catalogs
 
-`@Pathable` generates a `TypeNamePaths` catalog for data classes, ordinary classes, sealed roots, and enums. Generated property KeyPaths follow Kotlin mutability: `val` is `KeyPath`; data-class `var` is copy-based `WritableKeyPath`; class `var` is `ReferenceWritableKeyPath`.
+`@Pathable` generates a `TypeNamePaths` catalog for data classes, ordinary classes, sealed roots, and enums. Generated property KeyPaths follow Kotlin mutability: `val` is a read-only `KeyPath`; data-class `var` is copy-based `WritableKeyPath`; class `var` is `ReferenceWritableKeyPath`.
+
+Catalogs are a discoverability and repeated-use feature, not a prerequisite for paths. Use the
+[KeyPaths guide](key-paths.md) for direct property factories, and the [CaseKeyPaths guide](case-paths.md)
+for the factory choices available to unannotated or third-party sealed hierarchies.
 
 For a sealed root, every direct subtype gets a canonical `CaseKeyPath`:
 
@@ -47,4 +51,4 @@ LoadablePaths<String>().Loaded.value
 
 Catalogs expose `allCasePaths` and `caseOf(root)` as `PartialCaseKeyPath<Root>` for type-erased inspection. Use a named CaseKeyPath whenever the payload type matters.
 
-The default catalog name is `TypeNamePaths`; `@Pathable("CustomPaths")` chooses another name. KSP diagnoses public naming collisions and preserves declared identifiers where Kotlin permits them.
+The default catalog name is `TypeNamePaths`; `@Pathable("CustomPaths")` chooses another name. KSP diagnoses public naming collisions and preserves declared identifiers where Kotlin permits them. See the [API reference](api/index.md) for annotation parameters, and [identity and type metadata](identity.md) for why generated generic catalogs retain a concrete `TypeId`.

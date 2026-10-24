@@ -51,7 +51,10 @@ a nested chain of object identities.
 
 Most code never constructs a `PathId` directly. Use generated catalogs, property references, or
 named manual factories. The low-level `PathId` APIs exist for library authors defining a custom
-KeyPath or CaseKeyPath whose identity must remain stable across modules or call sites.
+KeyPath or CaseKeyPath whose identity must remain stable across modules or call sites. Factory
+selection belongs in the [KeyPaths](key-paths.md#choose-a-keypath-factory) and
+[CaseKeyPaths](case-paths.md#choose-a-casekeypath-factory) guides; the [API reference](api/index.md)
+documents the low-level constructors.
 
 ## Why identity changes API design
 
@@ -75,4 +78,4 @@ check(visibleColumns.size == 1)
 This makes a KeyPath or CaseKeyPath a good component of a subscription, prepared-query, or configuration key.
 When caching a computed **value**, include the input identity or version too; a KeyPath identifies the
 field being read, not one particular root value. See [KeyPath and CaseKeyPath API design](route-aware-apis.md) for
-the broader design patterns.
+the broader design patterns and [recipes](recipes.md) for concrete collection uses.
