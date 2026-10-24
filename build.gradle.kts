@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "dev.kpaths"
-version = "0.1.0-SNAPSHOT"
+version = providers.gradleProperty("VERSION_NAME").get()
 
 allprojects {
   group = rootProject.group

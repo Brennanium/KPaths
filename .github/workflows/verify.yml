@@ -1,0 +1,47 @@
+name: Verify
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  jvm:
+    name: JVM and documentation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Verify JVM targets and build documentation
+        run: >-
+          ./gradlew
+          :kpaths-annotations:jvmTest
+          :kpaths-core:jvmTest
+          :kpaths-reflection-jvm:jvmTest
+          :kpaths-ksp:jvmTest
+          :kpaths-sample:jvmTest
+          docsBuild
+
+  ios:
+    name: iOS Native
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Verify iOS simulator targets
+        run: >-
+          ./gradlew
+          :kpaths-core:iosSimulatorArm64Test
+          :kpaths-sample:iosSimulatorArm64Test

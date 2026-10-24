@@ -1,0 +1,57 @@
+name: Deploy documentation
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/docs.yml"
+      - "build.gradle.kts"
+      - "dokka-module.md"
+      - "docs/**"
+      - "gradle/**"
+      - "kpaths-annotations/src/**"
+      - "kpaths-annotations/build.gradle.kts"
+      - "kpaths-core/src/**"
+      - "kpaths-core/build.gradle.kts"
+      - "kpaths-reflection-jvm/src/**"
+      - "kpaths-reflection-jvm/build.gradle.kts"
+      - "mkdocs.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: github-pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Install documentation dependencies
+        run: python3 -m pip install -r docs/requirements.txt
+      - name: Build documentation
+        run: ./gradlew docsBuild
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: build/docs/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
