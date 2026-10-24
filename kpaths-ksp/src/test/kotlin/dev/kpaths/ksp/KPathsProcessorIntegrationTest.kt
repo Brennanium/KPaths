@@ -263,9 +263,9 @@ class KPathsProcessorIntegrationTest {
     source: String,
   ): String {
     val projectDirectory = Path.of(checkNotNull(System.getProperty("kpaths.projectDir")))
-    val annotationsJar = projectDirectory.resolve("kpaths-annotations/build/libs/kpaths-annotations.jar")
-    val coreJar = projectDirectory.resolve("kpaths-core/build/libs/kpaths-core.jar")
-    val processorJar = projectDirectory.resolve("kpaths-ksp/build/libs/kpaths-ksp.jar")
+    val annotationsJar = projectDirectory.jvmArtifact("kpaths-annotations")
+    val coreJar = projectDirectory.jvmArtifact("kpaths-core")
+    val processorJar = projectDirectory.jvmArtifact("kpaths-ksp")
 
     Files.writeString(
       fixtureDirectory.resolve("settings.gradle.kts"),
@@ -308,6 +308,20 @@ class KPathsProcessorIntegrationTest {
       .withArguments("compileKotlin", "--stacktrace")
       .buildAndFail()
       .output
+  }
+
+  private fun Path.jvmArtifact(moduleName: String): Path {
+    val librariesDirectory = resolve(moduleName).resolve("build/libs")
+    return Files.list(librariesDirectory).use { artifacts ->
+      artifacts
+        .filter { artifact ->
+          artifact.fileName.toString().let { name ->
+            name.startsWith("$moduleName-jvm-") && name.endsWith(".jar") && !name.endsWith("-sources.jar")
+          }
+        }
+        .findFirst()
+        .orElseThrow { error("Could not find the JVM publication for $moduleName in $librariesDirectory.") }
+    }
   }
 
   private fun Path.gradlePath(): String = toString().replace("\\", "\\\\")
