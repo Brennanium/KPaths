@@ -20,6 +20,8 @@ jobs:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
+      - name: Install documentation dependencies
+        run: python3 -m pip install -r docs/requirements.txt
       - name: Verify JVM targets and build documentation
         run: >-
           ./gradlew
