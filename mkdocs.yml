@@ -1,6 +1,8 @@
 site_name: KPaths
 site_description: Typed, comparable KeyPaths and CaseKeyPaths for Kotlin.
 site_dir: build/docs/site
+repo_name: Brennanium/KPaths
+repo_url: https://github.com/Brennanium/KPaths
 
 theme:
   name: material
