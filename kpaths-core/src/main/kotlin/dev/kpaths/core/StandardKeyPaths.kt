@@ -250,7 +250,6 @@ public inline fun <reified Value> referenceWritableKeyPath(
   valueType = TypeId.of<Value>(),
   get = { array -> get(array, at) },
   set = { array, value -> set(array, at, value) },
-  rootClass = Array<Value>::class,
 )
 
 /** Creates an in-place path through a [MutableList]'s indexed `get` and `set` operations at [at]. */

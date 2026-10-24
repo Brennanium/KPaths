@@ -1,20 +1,19 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-  alias(libs.plugins.kotlin.jvm)
-  alias(libs.plugins.dokka)
+  alias(libs.plugins.kotlin.multiplatform)
+  `maven-publish`
 }
-
 kotlin {
-  compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
-}
+  jvm {
+    compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
+  }
+  iosArm64()
+  iosSimulatorArm64()
 
-tasks.withType<JavaCompile>().configureEach {
-  options.release.set(11)
-}
-
-dokka {
-  dokkaSourceSets.named("main") {
-    includes.from("src/main/kotlin/dev/kpaths/annotations/package.md")
+  sourceSets {
+    commonMain {
+      kotlin.srcDir("src/main/kotlin")
+    }
   }
 }

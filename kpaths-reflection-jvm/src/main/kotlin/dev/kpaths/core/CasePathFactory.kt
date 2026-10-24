@@ -11,10 +11,12 @@ import kotlin.reflect.full.primaryConstructor
 import kotlin.reflect.typeOf
 
 /**
- * A root-scoped factory for conventional data-class [CaseKeyPath]s.
+ * A JVM-only root-scoped factory for conventional data-class [CaseKeyPath]s.
  *
  * Obtain one with [casePathsOf]. [pathFor] reflects the referenced constructor once to locate its
- * stored primary-constructor properties. Prefer generated catalogs for frequently used CaseKeyPaths.
+ * stored primary-constructor properties. Prefer generated catalogs for frequently used
+ * CaseKeyPaths; this convenience is intentionally isolated from `kpaths-core` because it needs
+ * Kotlin/JVM's full reflection implementation.
  */
 public class CasePathFactory<Root>(
   private val rootType: TypeId,
@@ -89,7 +91,10 @@ public class CasePathFactory<Root>(
   }
 }
 
-/** Starts a reflection-backed [CaseKeyPath] factory while retaining [Root]'s complete [TypeId]. */
+/**
+ * Starts a JVM-reflection-backed [CaseKeyPath] factory while retaining [Root]'s complete
+ * [TypeId]. This function is available from the `kpaths-reflection-jvm` artifact only.
+ */
 @OptIn(ExperimentalStdlibApi::class)
 public inline fun <reified Root> casePathsOf(): CasePathFactory<Root> =
   CasePathFactory(TypeId.of<Root>(), typeOf<Root>())

@@ -1,6 +1,5 @@
 package dev.kpaths.core
 
-import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 
 /** A non-fatal runtime diagnostic emitted by KPaths. */
@@ -12,28 +11,17 @@ public data class KPathsRuntimeWarning(
 /**
  * Configures delivery of non-fatal KPaths runtime diagnostics.
  *
- * The default handler writes to standard error. Applications may replace [handler] to integrate
- * with their logging system, or set it to `null` to disable runtime-warning work entirely.
+ * On the JVM, the default handler writes to standard error. Applications may replace [handler]
+ * to integrate with their logging system, or set it to `null` to disable runtime-warning work
+ * entirely.
+ *
+ * Kotlin/Native does not expose the runtime metadata necessary to identify data classes, so the
+ * data-class warning emitted for manually constructed [ReferenceWritableKeyPath] instances is
+ * inactive there. The [handler] property remains available so cross-platform application code
+ * does not need a platform branch.
  */
-public object KPathsRuntimeWarnings {
-  @Volatile
-  public var handler: ((KPathsRuntimeWarning) -> Unit)? = { warning ->
-    System.err.println("[KPaths] warning: ${warning.message}")
-  }
+public expect object KPathsRuntimeWarnings {
+  public var handler: ((KPathsRuntimeWarning) -> Unit)?
 
-  private val reportedPathIds: MutableSet<PathId> = ConcurrentHashMap.newKeySet()
-
-  internal fun warnIfDataClassRoot(rootClass: KClass<*>?, pathId: PathId) {
-    val handler = handler ?: return
-    if (rootClass?.isData != true || !reportedPathIds.add(pathId)) return
-
-    handler(
-      KPathsRuntimeWarning(
-        message =
-          "ReferenceWritableKeyPath '$pathId' has data-class root '${rootClass.qualifiedName}'. " +
-            "It mutates the supplied instance; prefer WritableKeyPath when value semantics are intended.",
-        pathId = pathId,
-      ),
-    )
-  }
+  internal fun warnIfDataClassRoot(rootClass: KClass<*>?, pathId: PathId)
 }

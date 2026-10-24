@@ -1,28 +1,38 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-  alias(libs.plugins.kotlin.jvm)
+  alias(libs.plugins.kotlin.multiplatform)
   alias(libs.plugins.ksp)
 }
 
 kotlin {
-  compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
-}
+  jvm {
+    compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
+  }
 
-tasks.withType<JavaCompile>().configureEach {
-  options.release.set(11)
+  sourceSets {
+    jvmMain {
+      kotlin.srcDir("src/main/kotlin")
+      dependencies {
+        implementation(project(":kpaths-annotations"))
+        implementation(project(":kpaths-core"))
+      }
+    }
+    jvmTest {
+      kotlin.srcDir("src/test/kotlin")
+      dependencies {
+        implementation(kotlin("test"))
+        implementation(libs.junit.jupiter)
+        runtimeOnly("org.junit.platform:junit-platform-launcher")
+      }
+    }
+  }
 }
 
 dependencies {
-  implementation(project(":kpaths-annotations"))
-  implementation(project(":kpaths-core"))
-  ksp(project(":kpaths-ksp"))
-
-  testImplementation(kotlin("test"))
-  testImplementation(libs.junit.jupiter)
-  testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+  add("kspJvm", project(":kpaths-ksp"))
 }
 
-tasks.test {
+tasks.named<Test>("jvmTest") {
   useJUnitPlatform()
 }

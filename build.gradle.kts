@@ -1,11 +1,16 @@
 plugins {
-  alias(libs.plugins.kotlin.jvm) apply false
+  alias(libs.plugins.kotlin.multiplatform) apply false
   alias(libs.plugins.ksp) apply false
   alias(libs.plugins.dokka)
 }
 
 group = "dev.kpaths"
 version = "0.1.0-SNAPSHOT"
+
+allprojects {
+  group = rootProject.group
+  version = rootProject.version
+}
 
 val docsSiteDirectory = layout.buildDirectory.dir("docs/site")
 val localDocsPython = rootDir.resolve(".venv-docs/bin/python")
@@ -29,6 +34,7 @@ dokka {
 dependencies {
   dokka(project(":kpaths-annotations"))
   dokka(project(":kpaths-core"))
+  dokka(project(":kpaths-reflection-jvm"))
 }
 
 val mkdocsBuild = tasks.register<Exec>("mkdocsBuild") {

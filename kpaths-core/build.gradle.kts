@@ -1,32 +1,41 @@
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
-  alias(libs.plugins.kotlin.jvm)
-  alias(libs.plugins.dokka)
+  alias(libs.plugins.kotlin.multiplatform)
+  `maven-publish`
 }
 
 kotlin {
-  compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
-}
+  compilerOptions {
+    freeCompilerArgs.add("-Xexpect-actual-classes")
+  }
 
-tasks.withType<JavaCompile>().configureEach {
-  options.release.set(11)
-}
+  jvm {
+    compilerOptions.jvmTarget.set(JvmTarget.JVM_11)
+  }
+  iosArm64()
+  iosSimulatorArm64()
 
-dokka {
-  dokkaSourceSets.named("main") {
-    includes.from("src/main/kotlin/dev/kpaths/core/package.md")
+  sourceSets {
+    commonMain {
+      kotlin.srcDir("src/main/kotlin")
+    }
+    jvmMain {
+      dependencies {
+        implementation(kotlin("reflect"))
+      }
+    }
+    jvmTest {
+      kotlin.srcDir("src/test/kotlin")
+      dependencies {
+        implementation(kotlin("test"))
+        implementation(libs.junit.jupiter)
+        runtimeOnly("org.junit.platform:junit-platform-launcher")
+      }
+    }
   }
 }
 
-dependencies {
-  implementation(kotlin("reflect"))
-
-  testImplementation(kotlin("test"))
-  testImplementation(libs.junit.jupiter)
-  testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-}
-
-tasks.test {
+tasks.withType<Test>().configureEach {
   useJUnitPlatform()
 }
