@@ -35,13 +35,13 @@ This is Kotlin’s equivalent of using a Swift key path as a function, such as `
 Generated `WritableKeyPath`s make a nested data-class update reusable instead of repeatedly nesting `copy` calls:
 
 ```kotlin
-@Pathable data class Address(var city: String)
-@Pathable data class Profile(var address: Address)
-@Pathable data class Member(val id: String, var profile: Profile)
+@Pathable data class Address(var city: String) { companion object }
+@Pathable data class Profile(var address: Address) { companion object }
+@Pathable data class Member(val id: String, var profile: Profile) { companion object }
 
-val memberCity: WritableKeyPath<Member, String> = MemberPaths.profile
-  .then(ProfilePaths.address)
-  .then(AddressPaths.city)
+val memberCity: WritableKeyPath<Member, String> = Member.Paths.profile
+  .then(Profile.Paths.address)
+  .then(Address.Paths.city)
 
 val moved = members.map { member ->
   member.setting(memberCity, "Toronto")

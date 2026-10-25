@@ -18,35 +18,14 @@ it is about designing consumers of those values.
 | Handle one branch of a sealed hierarchy | `CaseKeyPath<Root, Case>` | Carries typed matching rather than an ad-hoc nullable extractor. |
 | Construct a branch payload | `CaseKeyPath<Root, Value>` | Carries matching and independent embedding. |
 
-## Describe a reusable field, not an anonymous getter
+## Retain a field only when the API needs its semantics
 
-For a one-off sort, Kotlin's `sortedBy { it.title }` is perfect. When a feature must retain the
-selected field—for example as a table column, saved preference, filter definition, or query
-plan—make the field a KeyPath instead:
+For a one-off sort, Kotlin's `sortedBy { it.title }` is perfect. Accept a `KeyPath` when the API
+must retain which field was selected after the immediate read: it may need to compose it, compare
+it, use it for a typed update, or associate it with policy. Otherwise, accept an ordinary closure.
 
-```kotlin
-data class Book(
-  val title: String,
-  val year: Int,
-)
-
-data class SortRule<Row, Value : Comparable<Value>>(
-  val field: KeyPath<Row, Value>,
-  val descending: Boolean,
-)
-
-fun <Row, Value : Comparable<Value>> List<Row>.sortedBy(
-  rule: SortRule<Row, Value>,
-): List<Row> =
-  if (rule.descending) sortedByDescending(rule.field) else sortedBy(rule.field)
-
-val titleRule = SortRule(keyPath(Book::title), descending = false)
-val yearRule = SortRule(keyPath(Book::year), descending = true)
-```
-
-`field` can still be invoked anywhere Kotlin expects `(Book) -> Value`, but the surrounding API
-does not lose that it is specifically the `Book.title` or `Book.year` KeyPath. It can display a
-label for the selected field, compose a nested KeyPath onto it, or compare it with another rule.
+The [Advanced KeyPath APIs](advanced-paths.md) guide shows field schemas, sort/query plans, and
+path-indexed policies. This guide focuses on the boundary types that make those APIs honest.
 
 ## Require write-back when an operation updates part of a value
 
@@ -61,17 +40,15 @@ fun <Root, Value> update(
   transform: (Value) -> Value,
 ): Root = path.modify(root, transform)
 
+@Pathable
 data class Preferences(
   val username: String,
   var sendNewsletter: Boolean,
-)
+) {
+  companion object
+}
 
-val newsletter = writableKeyPath(
-  get = Preferences::sendNewsletter,
-  set = { preferences, value -> preferences.copy(sendNewsletter = value) },
-)
-
-val updated = update(Preferences("Blob", false), newsletter) { true }
+val updated = update(Preferences("Blob", false), Preferences.Paths.sendNewsletter) { true }
 ```
 
 The signature makes an important promise visible: it will return an updated `Root`. Passing a
@@ -79,9 +56,12 @@ read-only `KeyPath` is a compile-time error. A nested `WritableKeyPath` works wi
 without the function knowing anything about the nesting:
 
 ```kotlin
-val accountCity: WritableKeyPath<Account, String> =
-  accountProfile.then(profileAddress).then(addressCity)
-val moved = update(accountValue, accountCity) { "Toronto" }
+@Pathable data class Address(var city: String) { companion object }
+@Pathable data class Profile(var address: Address) { companion object }
+
+val profileCity: WritableKeyPath<Profile, String> =
+  Profile.Paths.address.then(Address.Paths.city)
+val moved = update(Profile(Address("Paris")), profileCity) { "Toronto" }
 ```
 
 For `ReferenceWritableKeyPath`, the same `update` signature is valid, but its result is the same
@@ -94,7 +74,10 @@ A `CaseKeyPath` gives an API a named, typed branch *and its payload*. The API ca
 payload and remain correct if unrelated cases are added later:
 
 ```kotlin
+@Pathable
 sealed interface DownloadEvent {
+  companion object {}
+
   data class Progress(val percent: Int) : DownloadEvent
   data class Finished(val location: String) : DownloadEvent
   data class Failed(val message: String) : DownloadEvent
@@ -109,12 +92,8 @@ fun <Root, Case : Any, Result> handleCase(
   is CaseMatch.Matched -> handler(match.value)
 }
 
-val finishedLocation = caseKeyPath<DownloadEvent, DownloadEvent.Finished, String>(
-  extract = DownloadEvent.Finished::location,
-  embed = { location -> DownloadEvent.Finished(location) },
-)
 val event: DownloadEvent = DownloadEvent.Finished("/tmp/report.json")
-val location = handleCase(event, finishedLocation) { it }
+val location = handleCase(event, DownloadEvent.Paths.Finished) { it.location }
 ```
 
 Unlike a nullable extraction closure, `match` retains the distinction between “a different case”
@@ -131,7 +110,7 @@ fun <Root, Value> lift(
   value: Value,
 ): Root = path.embed(value)
 
-val progress = caseKeyPath<DownloadEvent, DownloadEvent.Progress>()
+val progress = DownloadEvent.Paths.Progress
 val advanced: DownloadEvent = lift(progress, DownloadEvent.Progress(10))
 ```
 
@@ -139,35 +118,17 @@ For product values that must be updated in place conceptually—such as an exist
 one changed field—require a `WritableKeyPath` instead. The separate types prevent an API from
 confusing “replace a field in this root” with “construct this sealed case.”
 
-## Stable identity enables registries and caches
-
-Two closures cannot say whether they represent the same operation. In contrast, KeyPaths and
-CaseKeyPaths compare by their structural `PathId` and focused `TypeId`, not by allocation identity:
-
-```kotlin
-data class Book(val title: String)
-
-val visibleColumns = linkedSetOf<AnyKeyPath>()
-visibleColumns += keyPath(Book::title)
-visibleColumns += keyPath(Book::title)
-
-check(visibleColumns.size == 1)
-```
-
-That makes a KeyPath or CaseKeyPath suitable as a component of a key for a subscription registry, prepared
-query plan, view-model cache, or deduplicated configuration. A cache of *computed values* must
-also include the input identity or version—`Book.title` alone is not a cache key for every book—
-but the KeyPath gives the cache a stable identity for **what is being computed**.
-
-Generated KeyPaths and equivalent factory KeyPaths have the same structural identity. A catalog
-provides discoverability and a canonical singleton; a factory keeps the same identity behavior
-for third-party or one-off types.
+For heterogeneous schemas, registries, reversible edits, state projection, and selective
+invalidation, continue to [Advanced KeyPath APIs](advanced-paths.md). That guide builds those
+library-level patterns from the same boundary types.
 
 ## Keep the KeyPath type at the boundary
 
 Because `KeyPath` implements a function type, this is tempting:
 
 ```kotlin
+data class Book(val title: String)
+
 fun <Root, Value> addColumn(read: (Root) -> Value)
 ```
 
