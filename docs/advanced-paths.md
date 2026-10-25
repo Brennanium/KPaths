@@ -1,6 +1,6 @@
 # Advanced KeyPaths
 
-The usual KPaths API is small: create a `KeyPath` from a Kotlin property reference, or create a `WritableKeyPath` by also supplying its replacement behavior. This guide covers the custom-selector patterns Kotlin cannot express as a simple property reference. For the ordinary factory decision, start with [KeyPaths](key-paths.md#choose-a-keypath-factory); for sealed cases, see [CaseKeyPaths](case-paths.md).
+The usual KPaths API is small: create a `KeyPath` from a Kotlin property reference, or create a `WritableKeyPath` by also supplying its replacement behavior. This guide covers the custom-selector patterns Kotlin cannot express as a simple property reference. For the ordinary factory decision, start with [KeyPaths](key-paths.md#detailed-factory-patterns); for sealed cases, see [CaseKeyPaths](case-paths.md).
 
 ## Define a named derived KeyPath
 

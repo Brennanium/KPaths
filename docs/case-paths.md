@@ -1,6 +1,40 @@
 # CaseKeyPaths
 
-KPaths’ CaseKeyPaths are inspired by [Point-Free’s CasePaths](https://github.com/pointfreeco/swift-case-paths). A `CaseKeyPath<Root, Value>` is a reusable, hashable value that matches one sealed case and focuses a value associated with it. It makes extraction, construction, composition, and generic APIs possible without repeating local `when` expressions.
+KPaths’ CaseKeyPaths are inspired by [Point-Free’s CasePaths](https://github.com/pointfreeco/swift-case-paths).
+A `CaseKeyPath<Root, Value>` is a reusable, hashable description of one sealed case and the value
+it carries. Instead of repeating a local `when`, code can retain the case description, match it,
+extract from it, construct it, compose it, and hand it to a generic API.
+
+## Make a CaseKeyPath
+
+The simple manual form focuses the entire concrete case. It is the default for a one-off or
+third-party sealed hierarchy:
+
+```kotlin
+val message: CaseKeyPath<Event, Event.Message> =
+  caseKeyPath<Event, Event.Message>()
+```
+
+For a source-owned hierarchy used repeatedly, generate the canonical path and expose it with the
+sealed root:
+
+```kotlin
+@Pathable
+sealed interface Event {
+  companion object {}
+
+  data object Started : Event
+  data class Message(val text: String) : Event
+}
+
+val message = Event.Paths.Message
+```
+
+`EventPaths.Message` is the same canonical CaseKeyPath and remains available without a companion.
+For an enum entry, use `caseKeyPath(Entry)`; its focus is `Unit`. The reflection-backed and explicit
+payload factories are covered after the core behaviors below.
+
+## What a CaseKeyPath gives an API
 
 ```kotlin
 interface CaseKeyPath<Root, Value> {
@@ -10,29 +44,42 @@ interface CaseKeyPath<Root, Value> {
 }
 ```
 
-`embed` always constructs a root, independent of any existing root—just like Swift CasePaths:
+`match` distinguishes “this is not the case” from “this case carries `null`.” `extract` is the
+convenient lossy form when a nullable result is all an algorithm needs:
 
 ```kotlin
-@Pathable
-sealed interface Event {
-  data object Started : Event
-  data class Message(val text: String) : Event
-  data class Navigate(val id: String, val destination: String) : Event
-  data class Replace(
-    val id: String,
-    val destination: String,
-    val animated: Boolean,
-  ) : Event
-}
+val events: List<Event> = listOf(Event.Started, Event.Message("Hello"))
 
-val message = caseKeyPath<Event, Event.Message>()
-message.embed(Event.Message("Hello")) // Event.Message("Hello")
-Event.Started[message]                 // null
+events.mapNotNull(message)       // [Event.Message("Hello")]
+Event.Started[message]           // null
+Event.Message("Hello")[message] // Event.Message("Hello")
+message.matches(Event.Message("Hello")) // true
 ```
 
-There is no `WritableCaseKeyPath`: a genuine CaseKeyPath always embeds a complete case. `val`/`var` capability distinctions belong to ordinary Kotlin KeyPaths.
+Embedding is independent of an existing root: a CaseKeyPath can construct the enclosing case from
+its focus. That is why generic code can use the same value for both matching and construction:
 
-## Choose a CaseKeyPath factory
+```kotlin
+message.embed(Event.Message("Updated"))
+// Event.Message("Updated")
+```
+
+CaseKeyPaths compose through nested sealed cases while retaining that ability to construct every
+enclosing case. Generated top-level catalogs provide especially concise payload paths for this:
+
+```kotlin
+val renameText = AppEventPaths.Profile.action
+  .then(ProfileActionPaths.Editor.action)
+  .then(EditorActionPaths.Rename.text)
+
+renameText.embed("Jr.")
+// AppEvent.Profile(ProfileAction.Editor(EditorAction.Rename("Jr.")))
+```
+
+There is no `WritableCaseKeyPath`: a genuine CaseKeyPath always embeds a complete case. `val`/`var`
+capability distinctions belong to ordinary Kotlin KeyPaths.
+
+## Detailed factory choices
 
 For a source-owned sealed hierarchy used repeatedly, `@Pathable` is the preferred choice. Add a
 companion object when you own the sealed root to make its canonical CaseKeyPaths discoverable under
@@ -191,34 +238,6 @@ val ping: CaseKeyPath<Signal, Unit> = caseKeyPath(
 
 When the root and focus types are reified, the overload without `valueType` captures that token
 automatically. Generated catalogs and the higher-level factories should remain the default.
-
-## Extract, embed, compose
-
-CaseKeyPaths are callable as their intentionally lossy `(Root) -> Value?` extraction:
-
-```kotlin
-events.mapNotNull(EventPaths.Message.text)
-```
-
-Use `match` to preserve a matched `null` payload; see the [API reference](api/index.md) for its related operations:
-
-```kotlin
-when (val result = status.match(StatusPaths.Note.text)) {
-  CaseMatch.NoMatch -> Unit
-  is CaseMatch.Matched -> println(result.value) // may be null
-}
-```
-
-Composition retains independent embedding through every enclosing case:
-
-```kotlin
-val renameText = AppEventPaths.Profile.action
-  .then(ProfileActionPaths.Editor.action)
-  .then(EditorActionPaths.Rename.text)
-
-renameText.embed("Jr.")
-// AppEvent.Profile(ProfileAction.Editor(EditorAction.Rename("Jr.")))
-```
 
 ## Multi-value cases and bound CaseKeyPaths
 

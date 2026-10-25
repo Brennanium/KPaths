@@ -1,29 +1,21 @@
 # KeyPaths
 
-KPaths is inspired by [Swift key-path expressions](https://docs.swift.org/latest/documentation/the-swift-programming-language/expressions/#Key-Path-Expression).
-In Swift, `\Person.name` is a compiler-recognized expression that creates a typed `KeyPath<Person, String>`.
-Kotlin has property references rather than key-path expressions, so KPaths uses a factory as the equivalent construction syntax:
+KPaths brings [Swift-style key-path](https://docs.swift.org/latest/documentation/the-swift-programming-language/expressions/#Key-Path-Expression)
+capabilities to Kotlin: a typed description of a field that can be read, compared, stored,
+composed, and—when its capability permits—updated. Unlike an anonymous getter closure, a KeyPath
+keeps its structural identity and value type after it leaves the call site.
 
-```kotlin
-// Swift: \Person.name
-val name = keyPath(Person::name)
-// KeyPath<Person, String>
-```
+## Make a KeyPath
 
-This factory-first style is the normal way to create a KeyPath. It works for any accessible Kotlin property, including one declared in another module. For source-owned models whose KeyPaths are used repeatedly, `@Pathable` generates canonical KeyPaths; see [Generated catalogs](generation.md).
-
-## Choose a KeyPath factory
-
-Use a property-reference factory by default. It preserves Kotlin’s own property name and lets
-KPaths derive stable identity and complete type metadata:
+For an ordinary accessible Kotlin property, use `keyPath` with a property reference. This is the
+default construction form and Kotlin’s counterpart to Swift's `\Person.name` expression:
 
 ```kotlin
 val name: KeyPath<Person, String> = keyPath(Person::name)
 ```
 
-For a source-owned type with a public, frequently used KeyPath vocabulary, prefer a generated
-catalog. Add a companion object when you own the type to make that vocabulary appear under the type
-itself:
+For a source-owned model whose paths are part of its normal vocabulary, generate canonical paths
+and expose them beside the type:
 
 ```kotlin
 @Pathable
@@ -33,59 +25,13 @@ data class Person(val name: String, var address: Address) {
 
 Person.Paths.name    // KeyPath<Person, String>
 Person.Paths.address // WritableKeyPath<Person, Address>
-
-// The top-level catalog is always generated too:
-PersonPaths.name == Person.Paths.name
 ```
 
-The companion is optional. `@Pathable data class Person(...)` with no companion still gives you
-`PersonPaths.name`; use that form when the model cannot own a companion or a top-level catalog is
-clearer at the call site.
+`Person.Paths` is the most discoverable generated spelling. `PersonPaths.name` is always the same
+canonical value and remains available when the model has no companion. See [Generated catalogs](generation.md)
+for the companion and generic-catalog rules.
 
-The remaining factories are deliberate escape hatches:
-
-| Need | Factory | Use it when |
-| --- | --- | --- |
-| Read an accessible property | `keyPath(Person::name)` | Default choice, including third-party types. |
-| Reuse source-owned KeyPaths | `Person.Paths.name` or `PersonPaths.name` | The model is annotated; prefer `Person.Paths` when a source-owned companion is available. |
-| Read a computed or derived value | `keyPath(name, get)` | No property reference represents the read. |
-| Replace part of an immutable value | `writableKeyPath(get, set)` | You can state how a new focus produces a new root. |
-| Set a mutable computed property on a copied root | `writableKeyPath(property, copy)` | A `KMutableProperty1` exists and copying first is the desired value semantics. |
-| Mutate an intentionally shared class | `referenceWritableKeyPath(property)` | The root is reference-owned and in-place mutation is intentional. |
-| Bind an index or map key | indexed/keyed `keyPath` or `writableKeyPath` factories | The selector is a Kotlin `get`/`set` operation rather than a property. |
-| Define library-level identity explicitly | the `PathId` and `TypeId` overloads | A library must control every identity segment or lacks reified type information. |
-
-`asKeyPath()` and `asReferenceWritableKeyPath()` are equivalent extension spellings for the
-property-reference factories. They are conveniences, not a separate KeyPath model. The generated
-[API reference](api/index.md) lists every overload.
-
-### Derived KeyPaths
-
-Use the named `keyPath` factory when a derived value has no `KProperty1`:
-
-```kotlin
-val normalizedName: KeyPath<Person, String> = keyPath("normalizedName") { person ->
-  person.name.trim().lowercase()
-}
-```
-
-The name is part of the KeyPath’s `PathId`. Use a stable, root-local name; two separately-created
-KeyPaths with the same root type and name compare equal.
-
-The `PathId` overload is lower level. It is for library authors who need a custom multi-segment
-identity or who must pass an explicit `TypeId`:
-
-```kotlin
-val normalizedName: KeyPath<Person, String> = keyPath(
-  id = PathId.custom(TypeId.of<Person>(), "normalizedName"),
-  valueType = TypeId.of<String>(),
-  get = { person -> person.name.trim().lowercase() },
-)
-```
-
-Application code should normally use the named factory instead.
-
-## A KeyPath that can act as a closure
+## What a KeyPath gives an API
 
 A `KeyPath<Root, Value>` is a total typed read: every `Root` has exactly one `Value`. It can be read, passed to a generic function, composed with another KeyPath, and compared with another KeyPath. It is more descriptive than passing an anonymous `(Root) -> Value` getter around.
 
@@ -115,6 +61,8 @@ val people = listOf(
 people.map(name)                    // ["Blob", "Jr."]
 people.sortedBy(name)               // sorted by name
 people.groupBy(name)                // Map<String, List<Person>>
+
+check(name == keyPath(Person::name)) // same structural path, not merely equal behavior
 ```
 
 The KeyPath does not become “just a closure” when passed this way. It retains its `PathId`, `TypeId`,
@@ -339,6 +287,52 @@ val editableSecond = referenceWritableKeyPath(
   at = 1,
 )
 ```
+
+## Detailed factory patterns
+
+The property-reference factory and generated `Type.Paths` catalogs cover most application code.
+The remaining factories are deliberate tools for shapes Kotlin property references cannot express:
+
+| Need | Factory | Use it when |
+| --- | --- | --- |
+| Read an accessible property | `keyPath(Person::name)` | Default choice, including third-party types. |
+| Reuse source-owned KeyPaths | `Person.Paths.name` or `PersonPaths.name` | The model is annotated; prefer `Person.Paths` when a source-owned companion is available. |
+| Read a computed or derived value | `keyPath(name, get)` | No property reference represents the read. |
+| Replace part of an immutable value | `writableKeyPath(get, set)` | You can state how a new focus produces a new root. |
+| Set a mutable computed property on a copied root | `writableKeyPath(property, copy)` | A `KMutableProperty1` exists and copying first is the desired value semantics. |
+| Mutate an intentionally shared class | `referenceWritableKeyPath(property)` | The root is reference-owned and in-place mutation is intentional. |
+| Bind an index or map key | indexed/keyed `keyPath` or `writableKeyPath` factories | The selector is a Kotlin `get`/`set` operation rather than a property. |
+| Define library-level identity explicitly | the `PathId` and `TypeId` overloads | A library must control every identity segment or lacks reified type information. |
+
+`asKeyPath()` and `asReferenceWritableKeyPath()` are equivalent extension spellings for the
+property-reference factories. They are conveniences, not a separate KeyPath model. The generated
+[API reference](api/index.md) lists every overload.
+
+### Derived KeyPaths
+
+Use the named `keyPath` factory when a derived value has no `KProperty1`:
+
+```kotlin
+val normalizedName: KeyPath<Person, String> = keyPath("normalizedName") { person ->
+  person.name.trim().lowercase()
+}
+```
+
+The name is part of the KeyPath’s `PathId`. Use a stable, root-local name; two separately-created
+KeyPaths with the same root type and name compare equal.
+
+The `PathId` overload is lower level. It is for library authors who need a custom multi-segment
+identity or who must pass an explicit `TypeId`:
+
+```kotlin
+val normalizedName: KeyPath<Person, String> = keyPath(
+  id = PathId.custom(TypeId.of<Person>(), "normalizedName"),
+  valueType = TypeId.of<String>(),
+  get = { person -> person.name.trim().lowercase() },
+)
+```
+
+Application code should normally use the named factory instead.
 
 ## Where to go next
 

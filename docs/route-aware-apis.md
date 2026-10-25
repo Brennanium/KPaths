@@ -119,7 +119,7 @@ val location = handleCase(event, finishedLocation) { it }
 
 Unlike a nullable extraction closure, `match` retains the distinction between “a different case”
 and “a matching case whose focused value is null.” That matters for nullable CaseKeyPaths; see
-[CaseKeyPaths](case-paths.md#extract-embed-compose).
+[CaseKeyPaths](case-paths.md#what-a-casekeypath-gives-an-api).
 
 When an API needs to construct or forward a case payload, ask for `CaseKeyPath`. CaseKeyPaths do
 not modify an existing root: their `embed` direction deliberately constructs the represented

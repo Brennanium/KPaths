@@ -52,8 +52,8 @@ a nested chain of object identities.
 Most code never constructs a `PathId` directly. Use generated catalogs, property references, or
 named manual factories. The low-level `PathId` APIs exist for library authors defining a custom
 KeyPath or CaseKeyPath whose identity must remain stable across modules or call sites. Factory
-selection belongs in the [KeyPaths](key-paths.md#choose-a-keypath-factory) and
-[CaseKeyPaths](case-paths.md#choose-a-casekeypath-factory) guides; the [API reference](api/index.md)
+selection belongs in the [KeyPaths](key-paths.md#detailed-factory-patterns) and
+[CaseKeyPaths](case-paths.md#detailed-factory-choices) guides; the [API reference](api/index.md)
 documents the low-level constructors.
 
 ## Why identity changes API design
