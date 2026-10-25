@@ -135,8 +135,11 @@ which of the operations above is safe:
 
 KSP selects the capability for generated stored properties: `val` becomes a read-only `KeyPath`;
 data-class `var` becomes a copy-based `WritableKeyPath`; and `class var` becomes a
-`ReferenceWritableKeyPath`. The following factories cover models KSP cannot generate for, such as
-third-party types, computed properties, and derived values.
+`ReferenceWritableKeyPath`. It applies the same rule to declared computed properties: an
+accessible computed `val` is read-only, while an accessible computed `var` in a data class copies
+the root and invokes its setter on that copy. The following factories cover models KSP cannot
+generate for, such as third-party types, derived values without a property, or a custom
+reconstruction policy.
 
 `keyPath(Person::address)` is deliberately read-only even though `address` is declared `var`.
 Kotlin cannot know whether a caller means to reconstruct a value or mutate an existing reference,
@@ -164,7 +167,9 @@ val revised = person.modifying(address) { current ->
 }
 ```
 
-For a mutable computed property, KPaths can copy first and then invoke the ordinary Kotlin setter on the copy:
+KSP generates this copy-then-set behavior automatically for an accessible mutable computed
+property declared in a `@Pathable` data class. The manual factory is useful for a third-party type
+or when the application needs to choose a different copying policy:
 
 ```kotlin
 data class User(var rawName: String) {

@@ -36,6 +36,15 @@ class GeneratedPathsTest {
   }
 
   @Test
+  fun `computed properties generate readable and copy-writable paths`() {
+    val readOnly: KeyPath<ReadOnlyComputedDraft, String> = ReadOnlyComputedDraftPaths.trimmedText
+    val writable: WritableKeyPath<ComputedDraft, String> = ComputedDraftPaths.trimmedText
+
+    assertEquals("Blob", ReadOnlyComputedDraft(" Blob ")[readOnly])
+    assertEquals(ComputedDraft("Jr."), writable.set(ComputedDraft(" Blob "), " Jr. "))
+  }
+
+  @Test
   fun `property catalog names are independently configurable`() {
     val displayName: KeyPath<NamedProfile, String> = NamedProfilePaths.displayName
     val messageText: KeyPath<NamedEvent.Message, String> = NamedEventPaths.MessageContentPaths.messageText

@@ -76,6 +76,14 @@ data class ComputedDraft(
 }
 
 @Pathable
+data class ReadOnlyComputedDraft(
+  val text: String,
+) {
+  val trimmedText: String
+    get() = text.trim()
+}
+
+@Pathable
 data class RootTypeModel(
   val rootType: String,
 )
