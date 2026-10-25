@@ -26,7 +26,7 @@ mavenPublishing {
       developer {
         id.set("brennanium")
         name.set("Brennanium")
-        email.set("brennanium@users.noreply.github.com")
+        email.set("63215941+Brennanium@users.noreply.github.com")
         organization.set("Brennanium")
         organizationUrl.set("https://github.com/Brennanium")
         url.set("https://github.com/Brennanium")
