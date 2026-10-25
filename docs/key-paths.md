@@ -77,7 +77,53 @@ KeyPath and an ordinary closure.
 
 ## Reading and writing
 
-Swift has a hierarchy of `KeyPath`, `WritableKeyPath`, and `ReferenceWritableKeyPath`. KPaths uses the same capability distinction, translated to Kotlin’s update model:
+KeyPaths make reading and updating values uniform, even when a field is nested or supplied to a
+generic API. Generated paths show the normal value-semantic flow: read the focused value, then
+receive a revised root when setting or modifying it.
+
+```kotlin
+@Pathable
+data class Draft(var text: String) {
+  companion object
+}
+
+var draft = Draft("Original")
+
+draft[Draft.Paths.text] // "Original"
+
+draft = draft.setting(Draft.Paths.text, "Revised")
+draft = draft.modifying(Draft.Paths.text) { it.uppercase() }
+// Draft("REVISED")
+```
+
+The original `Draft` is never mutated. This lets an API work with any writable field—shallow or
+deep—without knowing how the root is reconstructed:
+
+```kotlin
+fun <Root, Value> replacing(
+  root: Root,
+  path: WritableKeyPath<Root, Value>,
+  value: Value,
+): Root = root.setting(path, value)
+```
+
+For intentionally shared classes, a generated reference-writable path updates the existing object
+instead. The same square-bracket syntax makes that choice visible at the call site:
+
+```kotlin
+@Pathable
+class Session(var token: String) {
+  companion object
+}
+
+val session = Session("old")
+session[Session.Paths.token] = "new"
+check(session.token == "new")
+```
+
+Swift has a hierarchy of `KeyPath`, `WritableKeyPath`, and `ReferenceWritableKeyPath`. KPaths uses
+the same capability distinction, translated to Kotlin’s update model. The type tells a generic API
+which of the operations above is safe:
 
 | Type | Read | Write result | Mutation |
 | --- | --- | --- | --- |
@@ -85,9 +131,18 @@ Swift has a hierarchy of `KeyPath`, `WritableKeyPath`, and `ReferenceWritableKey
 | `WritableKeyPath<Root, Value>` | `get(root)` | returns a `Root` | value-style replacement |
 | `ReferenceWritableKeyPath<Root, Value>` | `get(root)` | returns the same `Root` | mutates that instance |
 
-`keyPath(Person::address)` is deliberately read-only even though `address` is declared `var`. Kotlin cannot know whether a caller means to reconstruct a value or mutate an existing reference, so choosing either write capability is explicit.
+## Factory details for writable paths
 
-### Value-style replacement
+KSP selects the capability for generated stored properties: `val` becomes a read-only `KeyPath`;
+data-class `var` becomes a copy-based `WritableKeyPath`; and `class var` becomes a
+`ReferenceWritableKeyPath`. The following factories cover models KSP cannot generate for, such as
+third-party types, computed properties, and derived values.
+
+`keyPath(Person::address)` is deliberately read-only even though `address` is declared `var`.
+Kotlin cannot know whether a caller means to reconstruct a value or mutate an existing reference,
+so manual code chooses either write capability explicitly.
+
+### Supplying value-style replacement
 
 Use `writableKeyPath` when writing should produce a replacement root. The `get` property reference supplies the read operation; `set` supplies the reconstruction that Kotlin cannot synthesize through a shared data-class interface.
 
@@ -140,7 +195,7 @@ val normalizedName: WritableKeyPath<User, String> = writableKeyPath(
 Use the `PathId` overload only for the same narrow library-author case as the read-only KeyPath
 factory: custom structural identity or an explicit `TypeId`.
 
-### Reference mutation
+### Supplying reference mutation
 
 Use `referenceWritableKeyPath` when a mutable class is intentionally shared and its existing instance should change:
 
@@ -176,17 +231,15 @@ This form is only for reference semantics. A value-style model should use `writa
 Like Swift KeyPaths, KPaths KeyPaths compose. `then` is the Kotlin-friendly spelling; `appending` is available when the longer name reads better.
 
 ```kotlin
-val address = writableKeyPath(
-  get = Person::address,
-  set = { person, value -> person.copy(address = value) },
-)
-val city = writableKeyPath(
-  get = Address::city,
-  set = { address, value -> address.copy(city = value) },
-)
+@Pathable
+data class Address(var city: String) { companion object }
 
-val personCity = address.then(city)
-val revised = person.setting(personCity, "Toronto")
+@Pathable
+data class Person(var address: Address) { companion object }
+
+val personCity = Person.Paths.address.then(Address.Paths.city)
+val revised = Person(Address("Paris")).setting(personCity, "Toronto")
+// Person(Address("Toronto"))
 ```
 
 Two writable KeyPaths compose to a `WritableKeyPath`. A reference-writable outer KeyPath composed with a writable inner KeyPath remains reference-writable. Any composition containing a read-only KeyPath is read-only: KPaths will never invent a reconstruction function just to make a composed KeyPath writable. The [API reference](api/index.md) documents the complete `then` overload set.
