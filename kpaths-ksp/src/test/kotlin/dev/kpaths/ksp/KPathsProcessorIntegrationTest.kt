@@ -64,7 +64,7 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports generic companion Paths function collisions`(
+  fun `reports generic named Paths factory collisions`(
     @TempDir fixtureDirectory: Path,
   ) {
     val output = compileFailure(
@@ -78,16 +78,16 @@ class KPathsProcessorIntegrationTest {
 
         @Pathable
         data class Box<Value>(val value: Value) {
-          companion object
+          companion object Paths {
+            fun <Value> of(): String = "existing"
+          }
         }
-
-        fun <Value> Box.Companion.Paths(): String = "existing"
       """.trimIndent(),
     )
 
     assertContains(output, "GenericCompanionPathsFunctionCollision.kt:")
-    assertContains(output, "[KPaths] Cannot generate Box.Companion.Paths because the top-level extension")
-    assertContains(output, "already declares it")
+    assertContains(output, "[KPaths] Cannot generate Box.Paths.of")
+    assertContains(output, "already declares a member named 'of'")
   }
 
   @Test

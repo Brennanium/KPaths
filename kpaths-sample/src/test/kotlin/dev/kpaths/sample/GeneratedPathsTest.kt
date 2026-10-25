@@ -123,10 +123,28 @@ class GeneratedPathsTest {
   @Test
   fun `generic companions create specialized generated catalogs`() {
     val boxed: KeyPath<Box<String>, String> = Box.Paths<String>().value
+    val boxedByReified: KeyPath<Box<String>, String> = Box.Paths.of<String>().value
+    val boxedByClass: KeyPath<Box<String>, String> = Box.Paths.of(String::class).value
+    val namedPathsByReified: KeyPath<NamedPathsBox<String>, String> = NamedPathsBox.Paths.of<String>().value
+    val namedPathsByClass: KeyPath<NamedPathsBox<String>, String> = NamedPathsBox.Paths.of(String::class).value
+    val customFacade: KeyPath<CustomFacadeBox<String>, String> = CustomFacadeBox.KPaths<String>().value
+    val customFacadeByReified: KeyPath<CustomFacadeBox<String>, String> = CustomFacadeBox.KPaths.of<String>().value
+    val customFacadeByClass: KeyPath<CustomFacadeBox<String>, String> = CustomFacadeBox.KPaths.of(String::class).value
     val loaded: CaseKeyPath<Loadable<String>, String> = Loadable.Paths<String>().Loaded.value
+    val loadedByReified: CaseKeyPath<Loadable<String>, String> = Loadable.Paths.of<String>().Loaded.value
+    val customPerson: KeyPath<CustomFacadePerson, String> = CustomFacadePerson.Paths.KPaths.name
 
     assertEquals("Blob", Box("Blob")[boxed])
+    assertEquals("Blob", Box("Blob")[boxedByReified])
+    assertEquals("Blob", Box("Blob")[boxedByClass])
+    assertEquals("Blob", NamedPathsBox("Blob")[namedPathsByReified])
+    assertEquals("Blob", NamedPathsBox("Blob")[namedPathsByClass])
+    assertEquals("Blob", CustomFacadeBox("Blob")[customFacade])
+    assertEquals("Blob", CustomFacadeBox("Blob")[customFacadeByReified])
+    assertEquals("Blob", CustomFacadeBox("Blob")[customFacadeByClass])
     assertEquals("Hello", Loadable.Loaded("Hello")[loaded])
+    assertEquals("Hello", Loadable.Loaded("Hello")[loadedByReified])
+    assertEquals("Blob", CustomFacadePerson("Blob")[customPerson])
     assertEquals(BoxPaths<String>().value, boxed)
     assertEquals(LoadablePaths<String>().Loaded.value, loaded)
   }

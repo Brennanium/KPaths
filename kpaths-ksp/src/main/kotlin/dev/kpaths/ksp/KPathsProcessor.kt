@@ -104,11 +104,22 @@ private class KPathsProcessor(
     val casePaths = casePaths(declaration)
     val companionPaths = companionPathsExtension(declaration, pathProperties, casePaths)
     val genericCompanionPaths = genericCompanionPathsFactory(declaration, pathProperties, casePaths)
+    val companionGeneratedMember = when {
+      companionPaths != null -> CompanionGeneratedMember(
+        companion = companionPaths.companion,
+        name = companionPaths.namespaceName,
+      )
+      genericCompanionPaths != null -> CompanionGeneratedMember(
+        companion = genericCompanionPaths.companion,
+        name = if (genericCompanionPaths.isDirectCompanionNamespace) "of" else genericCompanionPaths.namespaceName,
+      )
+      else -> null
+    }
     if (!validateGeneratedMemberNames(
         declaration,
         pathProperties,
         casePaths,
-        companionPaths || genericCompanionPaths,
+        companionGeneratedMember,
         resolver,
       )
     ) {
@@ -169,6 +180,9 @@ private class KPathsProcessor(
         val nonNullTypeParameters = renderTypeParameters(declaration.typeParameters, forceNonNull = true)
         writer.appendLine("    public fun <${nonNullTypeParameters.declaration}> of($classTokenParameters): $generatedIdentifier<${nonNullTypeParameters.names}>${nonNullTypeParameters.whereClause} =")
         writer.appendLine("      $generatedIdentifier(${declaration.typeParameters.joinToString { "dev.kpaths.core.TypeId.from(${typeTokenClassArgumentName(it.name.asString())})" }})")
+        val reifiedTypeParameters = renderTypeParameters(declaration.typeParameters, reified = true)
+        writer.appendLine("    public inline fun <${reifiedTypeParameters.declaration}> of(): $generatedIdentifier<${reifiedTypeParameters.names}>${reifiedTypeParameters.whereClause} =")
+        writer.appendLine("      of(${declaration.typeParameters.joinToString { "dev.kpaths.core.TypeId.of<${escapeIdentifier(it.name.asString())}>()" }})")
         writer.appendLine("  }")
       }
       writer.appendLine("  private val $generatedRootTypeName: dev.kpaths.core.TypeId = $rootTypeId")
@@ -183,13 +197,20 @@ private class KPathsProcessor(
           declarationIndent = "  ",
         )
       }
-      if (companionPaths) {
+      if (companionPaths != null) {
         writeCompanionPathsView(
           writer = writer,
           rootKotlinType = rootKotlinType,
           generatedIdentifier = generatedIdentifier,
           pathProperties = pathProperties,
           resolvedCasePaths = resolvedCasePaths,
+        )
+      }
+      if (genericCompanionPaths?.isDirectCompanionNamespace == false) {
+        writeGenericCompanionPathsView(
+          writer = writer,
+          generatedIdentifier = generatedIdentifier,
+          typeParameters = declaration.typeParameters,
         )
       }
       resolvedCasePaths.forEach { resolvedCasePath ->
@@ -213,16 +234,17 @@ private class KPathsProcessor(
         )
       }
       writer.appendLine("}")
-      if (companionPaths) {
+      if (companionPaths != null) {
         writeCompanionPathsExtension(
           writer = writer,
           rootType = renderKotlinQualifiedName(qualifiedName),
-            companionName = escapeIdentifier(requireNotNull(visibleCompanion(declaration)).simpleName.asString()),
+          companionName = escapeIdentifier(companionPaths.companion.simpleName.asString()),
+          namespaceName = companionPaths.namespaceName,
           generatedIdentifier = generatedIdentifier,
           generatedName = generatedName,
           pathProperties = pathProperties,
-            rootKotlinType = rootKotlinType,
-            resolvedCasePaths = resolvedCasePaths,
+          rootKotlinType = rootKotlinType,
+          resolvedCasePaths = resolvedCasePaths,
         )
       }
       if (declaration.typeParameters.isNotEmpty()) {
@@ -230,11 +252,13 @@ private class KPathsProcessor(
         writer.appendLine()
         writer.appendLine("public inline fun <${typeParameters.declaration}> $generatedIdentifier(): $generatedIdentifier<${typeParameters.names}>${typeParameters.whereClause} =")
         writer.appendLine("  $generatedIdentifier.of(${declaration.typeParameters.joinToString { "dev.kpaths.core.TypeId.of<${escapeIdentifier(it.name.asString())}>()" }})")
-        if (genericCompanionPaths) {
+        if (genericCompanionPaths != null) {
           writeGenericCompanionPathsFactory(
             writer = writer,
             rootType = renderKotlinQualifiedName(qualifiedName),
-            companionName = escapeIdentifier(requireNotNull(visibleCompanion(declaration)).simpleName.asString()),
+            companionName = escapeIdentifier(genericCompanionPaths.companion.simpleName.asString()),
+            namespaceName = genericCompanionPaths.namespaceName,
+            isDirectCompanionNamespace = genericCompanionPaths.isDirectCompanionNamespace,
             generatedIdentifier = generatedIdentifier,
             typeParameters = declaration.typeParameters,
           )
@@ -560,14 +584,30 @@ private class KPathsProcessor(
     declaration: KSClassDeclaration,
     pathProperties: List<PathProperty>,
     casePaths: List<CasePath>,
-  ): Boolean {
+  ): CompanionPaths? {
     if (
       declaration.typeParameters.isNotEmpty() ||
         (pathProperties.isEmpty() && casePaths.isEmpty())
     ) {
-      return false
+      return null
     }
-    return visibleCompanion(declaration) != null
+    val companion = visibleCompanion(declaration) ?: return null
+    val namespaceName = configuredGeneratedMemberName(
+      declaration = companion,
+      annotationName = "@PathsName",
+      annotationQualifiedName = pathsNameAnnotation,
+      defaultName = "Paths",
+    ) ?: return null
+    if (companion.simpleName.asString() == namespaceName) {
+      logger.error(
+        "[KPaths] Cannot generate ${declaration.simpleName.asString()}.$namespaceName because its " +
+          "companion object is also named '$namespaceName'. Use @PathsName(\"KPaths\") on the " +
+          "companion object to generate ${declaration.simpleName.asString()}.$namespaceName.KPaths instead.",
+        companion,
+      )
+      return null
+    }
+    return CompanionPaths(companion, namespaceName)
   }
 
   /** A generic companion function can retain the catalog's reified type arguments. */
@@ -575,24 +615,35 @@ private class KPathsProcessor(
     declaration: KSClassDeclaration,
     pathProperties: List<PathProperty>,
     casePaths: List<CasePath>,
-  ): Boolean {
+  ): GenericCompanionPaths? {
     if (declaration.typeParameters.isEmpty() || (pathProperties.isEmpty() && casePaths.isEmpty())) {
-      return false
+      return null
     }
-    val companion = visibleCompanion(declaration) ?: return false
-    if (
-      declaration.classKind == ClassKind.INTERFACE &&
-        companion.simpleName.asString() == "Companion"
-    ) {
+    val companion = visibleCompanion(declaration) ?: return null
+    if (companion.simpleName.asString() == "Companion") {
       logger.warn(
-        "[KPaths] Cannot generate ${declaration.simpleName.asString()}.Paths<…>() for a generic " +
-          "interface with an unnamed companion object. Name it, for example `companion object Factory`, " +
-          "or use ${declaration.simpleName.asString()}Paths<…>() directly.",
+        "[KPaths] Generic path namespaces require an explicitly named companion object. Prefer " +
+          "`companion object Paths`, or use ${declaration.simpleName.asString()}Paths.of<…>() directly.",
         declaration,
       )
-      return false
+      return null
     }
-    return true
+    val namespaceName = configuredGeneratedMemberName(
+      declaration = companion,
+      annotationName = "@PathsName",
+      annotationQualifiedName = pathsNameAnnotation,
+      defaultName = "Paths",
+    ) ?: return null
+    val isDirectCompanionNamespace = companion.simpleName.asString() == "Paths"
+    if (isDirectCompanionNamespace && namespaceName != "Paths") {
+      logger.error(
+        "[KPaths] @PathsName cannot rename a generic companion object named 'Paths'. Remove the " +
+          "annotation or use @PathsName(\"Paths\").",
+        companion,
+      )
+      return null
+    }
+    return GenericCompanionPaths(companion, namespaceName, isDirectCompanionNamespace)
   }
 
   private fun visibleCompanion(declaration: KSClassDeclaration): KSClassDeclaration? =
@@ -654,6 +705,7 @@ private class KPathsProcessor(
     writer: java.io.BufferedWriter,
     rootType: String,
     companionName: String,
+    namespaceName: String,
     generatedIdentifier: String,
     generatedName: String,
     pathProperties: List<PathProperty>,
@@ -707,7 +759,7 @@ private class KPathsProcessor(
     writer.appendLine("}")
     writer.appendLine()
     writer.appendLine("/** Returns the generated paths for $rootType. */")
-    writer.appendLine("public val $rootType.$companionName.Paths: $viewType")
+    writer.appendLine("public val $rootType.$companionName.${escapeIdentifier(namespaceName)}: $viewType")
     writer.appendLine("  get() = $backingName")
   }
 
@@ -761,14 +813,51 @@ private class KPathsProcessor(
     writer: java.io.BufferedWriter,
     rootType: String,
     companionName: String,
+    namespaceName: String,
+    isDirectCompanionNamespace: Boolean,
     generatedIdentifier: String,
     typeParameters: List<KSTypeParameter>,
   ) {
     val renderedTypeParameters = renderTypeParameters(typeParameters, reified = true)
     writer.appendLine()
     writer.appendLine("/** Creates the generated paths for $rootType with concrete type metadata. */")
-    writer.appendLine("public inline fun <${renderedTypeParameters.declaration}> $rootType.$companionName.Paths(): $generatedIdentifier<${renderedTypeParameters.names}>${renderedTypeParameters.whereClause} =")
-    writer.appendLine("  $generatedIdentifier<${renderedTypeParameters.names}>()")
+    val nonNullTypeParameters = renderTypeParameters(typeParameters, forceNonNull = true)
+    val classTokenParameters = typeParameters.joinToString(", ") { parameter ->
+      "${typeTokenClassArgumentName(parameter.name.asString())}: kotlin.reflect.KClass<${escapeIdentifier(parameter.name.asString())}>"
+    }
+    if (isDirectCompanionNamespace) {
+      writer.appendLine("public inline fun <${renderedTypeParameters.declaration}> $rootType.$companionName.of(): $generatedIdentifier<${renderedTypeParameters.names}>${renderedTypeParameters.whereClause} =")
+      writer.appendLine("  $generatedIdentifier.of<${renderedTypeParameters.names}>()")
+      writer.appendLine("public fun <${nonNullTypeParameters.declaration}> $rootType.$companionName.of($classTokenParameters): $generatedIdentifier<${nonNullTypeParameters.names}>${nonNullTypeParameters.whereClause} =")
+      writer.appendLine("  $generatedIdentifier.of(${typeParameters.joinToString { typeTokenClassArgumentName(it.name.asString()) }})")
+    } else {
+      val namespaceIdentifier = escapeIdentifier(namespaceName)
+      val viewIdentifier = escapeIdentifier(generatedInternalPrefix + "GenericCompanionPaths")
+      writer.appendLine("public val $rootType.$companionName.$namespaceIdentifier: $generatedIdentifier.$viewIdentifier")
+      writer.appendLine("  get() = $generatedIdentifier.$viewIdentifier")
+      writer.appendLine("public inline fun <${renderedTypeParameters.declaration}> $rootType.$companionName.${escapeIdentifier(namespaceName)}(): $generatedIdentifier<${renderedTypeParameters.names}>${renderedTypeParameters.whereClause} =")
+      writer.appendLine("  $generatedIdentifier.of<${renderedTypeParameters.names}>()")
+    }
+  }
+
+  private fun writeGenericCompanionPathsView(
+    writer: java.io.BufferedWriter,
+    generatedIdentifier: String,
+    typeParameters: List<KSTypeParameter>,
+  ) {
+    val viewIdentifier = escapeIdentifier(generatedInternalPrefix + "GenericCompanionPaths")
+    val reifiedTypeParameters = renderTypeParameters(typeParameters, reified = true)
+    val nonNullTypeParameters = renderTypeParameters(typeParameters, forceNonNull = true)
+    val classTokenParameters = typeParameters.joinToString(", ") { parameter ->
+      "${typeTokenClassArgumentName(parameter.name.asString())}: kotlin.reflect.KClass<${escapeIdentifier(parameter.name.asString())}>"
+    }
+    writer.appendLine()
+    writer.appendLine("  public object $viewIdentifier {")
+    writer.appendLine("    public inline fun <${reifiedTypeParameters.declaration}> of(): $generatedIdentifier<${reifiedTypeParameters.names}>${reifiedTypeParameters.whereClause} =")
+    writer.appendLine("      $generatedIdentifier.of<${reifiedTypeParameters.names}>()")
+    writer.appendLine("    public fun <${nonNullTypeParameters.declaration}> of($classTokenParameters): $generatedIdentifier<${nonNullTypeParameters.names}>${nonNullTypeParameters.whereClause} =")
+    writer.appendLine("      $generatedIdentifier.of(${typeParameters.joinToString { typeTokenClassArgumentName(it.name.asString()) }})")
+    writer.appendLine("  }")
   }
 
   /** Rejects ambiguous public members instead of silently changing the generated API. */
@@ -777,7 +866,7 @@ private class KPathsProcessor(
     declaration: KSClassDeclaration,
     pathProperties: List<PathProperty>,
     casePaths: List<CasePath>,
-    companionPaths: Boolean,
+    companionGeneratedMember: CompanionGeneratedMember?,
     resolver: Resolver,
   ): Boolean {
     val members = mutableListOf<GeneratedMember>()
@@ -829,15 +918,15 @@ private class KPathsProcessor(
       )
     }
 
-    if (companionPaths) {
-      val companion = declaration.declarations
-        .filterIsInstance<KSClassDeclaration>()
-        .first(KSClassDeclaration::isCompanionObject)
-      if (companion.declarations.any { it.simpleName.asString() == "Paths" }) {
+    if (companionGeneratedMember != null) {
+      val companion = companionGeneratedMember.companion
+      val memberName = companionGeneratedMember.name
+      val renderedTarget = "${declaration.simpleName.asString()}.${companion.simpleName.asString()}.$memberName"
+      if (companion.declarations.any { it.simpleName.asString() == memberName }) {
         reportPathableError(
           declaration,
-          "Cannot generate ${declaration.simpleName.asString()}.Companion.Paths because the companion " +
-            "already declares a member named 'Paths'. Rename that member or remove the companion object.",
+          "Cannot generate $renderedTarget because the companion already declares a member named " +
+            "'$memberName'. Rename that member or choose a different generated facade name.",
         )
         return false
       }
@@ -849,7 +938,7 @@ private class KPathsProcessor(
             else -> null
           }
           candidate.parentDeclaration == null &&
-            candidate.simpleName.asString() == "Paths" &&
+            candidate.simpleName.asString() == memberName &&
             (receiver?.resolve()?.declaration as? KSClassDeclaration)
               ?.let { receiver ->
                 receiver.isCompanionObject && receiver.parentDeclaration == declaration
@@ -859,9 +948,9 @@ private class KPathsProcessor(
       if (existingExtension != null) {
         reportPathableError(
           declaration,
-          "Cannot generate ${declaration.simpleName.asString()}.Companion.Paths because the top-level " +
+          "Cannot generate $renderedTarget because the top-level " +
             "extension '${existingExtension.qualifiedName?.asString()}' already declares it. Rename that " +
-            "extension or remove the companion object.",
+            "extension or choose a different generated facade name.",
         )
         return false
       }
@@ -1530,6 +1619,22 @@ private class KPathsProcessor(
   private data class GenerationTarget(
     val declaration: KSClassDeclaration,
     val generatedName: String,
+  )
+
+  private data class CompanionPaths(
+    val companion: KSClassDeclaration,
+    val namespaceName: String,
+  )
+
+  private data class CompanionGeneratedMember(
+    val companion: KSClassDeclaration,
+    val name: String,
+  )
+
+  private data class GenericCompanionPaths(
+    val companion: KSClassDeclaration,
+    val namespaceName: String,
+    val isDirectCompanionNamespace: Boolean,
   )
 
   private enum class CaseKind {

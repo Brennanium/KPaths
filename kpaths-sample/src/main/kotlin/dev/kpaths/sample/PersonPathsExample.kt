@@ -33,7 +33,30 @@ data class Address(
 data class Box<T>(
   val value: T,
 ) {
-  companion object
+  companion object Factory
+}
+
+@Pathable
+data class NamedPathsBox<T>(
+  val value: T,
+) {
+  companion object Paths
+}
+
+@Pathable
+data class CustomFacadeBox<T>(
+  val value: T,
+) {
+  @PathsName("KPaths")
+  companion object Factory
+}
+
+@Pathable
+data class CustomFacadePerson(
+  val name: String,
+) {
+  @PathsName("KPaths")
+  companion object Paths
 }
 
 @Pathable
