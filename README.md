@@ -40,6 +40,10 @@ PersonPaths.name
 PersonPaths.city
 ```
 
+If a non-generic class or data class already has a companion object, generated paths can also be
+accessed through `Person.Paths.name`; see [Generated catalogs](docs/generation.md) for the required
+companion declaration, import, and generated-case naming options.
+
 ## CaseKeyPaths
 
 A `CaseKeyPath<Root, Value>` matches a sealed case, extracts its associated data, and independently constructs a root from that data:
