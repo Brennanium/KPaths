@@ -90,9 +90,22 @@ Event.Paths.allCasePaths
 Event.Paths.caseOf(Event.Idle)
 ```
 
-`@PathsName` may be applied to a companion object to rename this generated facade. This is useful
-when the companion itself is named `Paths`, because a default facade would otherwise read as
-`Person.Paths.Paths`:
+`@PathsName` may be applied to a companion object to rename the generated facade. For example, a
+non-generic model can use a domain-specific namespace instead of the default `Paths`:
+
+```kotlin
+@Pathable
+data class Person(val name: String) {
+  @PathsName("KPaths")
+  companion object
+}
+
+Person.KPaths.name
+```
+
+It also resolves the special case where the companion is itself named `Paths`. Without the
+annotation, KSP diagnoses that the generated `Paths` facade conflicts with the companion name;
+give the generated namespace another name instead:
 
 ```kotlin
 @Pathable
