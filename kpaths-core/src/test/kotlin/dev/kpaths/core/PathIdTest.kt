@@ -3,6 +3,9 @@ package dev.kpaths.core
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class PathIdTest {
   @Test
@@ -44,4 +47,31 @@ class PathIdTest {
     assertEquals(listOf(TypeArgument.invariant(TypeId.of<String>())), type.arguments)
     assertEquals(originalHashCode, type.hashCode())
   }
+
+  @Test
+  fun `paths expose structural ancestor relationships without exposing PathIds`() {
+    val address = keyPath(RelationshipProfile::address)
+    val city = address.then(keyPath(RelationshipAddress::city))
+    val nickname = keyPath(RelationshipProfile::nickname)
+    val standaloneCity = keyPath(RelationshipAddress::city)
+
+    assertTrue(address.isPrefixOf(city))
+    assertTrue(city.isDescendantOf(address))
+    assertTrue(address.isPrefixOf(address))
+    assertFalse(city.isPrefixOf(address))
+    assertFalse(address.isPrefixOf(nickname))
+    assertFalse(address.isPrefixOf(standaloneCity))
+
+    assertEquals(listOf(PathSegment.Property("city")), city.descendantSegments(after = address))
+    assertEquals(emptyList(), address.descendantSegments(after = address))
+    assertNull(address.descendantSegments(after = city))
+    assertNull(city.descendantSegments(after = nickname))
+  }
 }
+
+private data class RelationshipProfile(
+  val address: RelationshipAddress,
+  val nickname: String,
+)
+
+private data class RelationshipAddress(val city: String)

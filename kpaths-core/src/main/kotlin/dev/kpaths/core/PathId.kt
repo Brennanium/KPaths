@@ -57,6 +57,37 @@ public class PathId(
   override fun toString(): String = "PathId(rootType=$rootType, segments=$segments)"
 }
 
+/**
+ * Returns whether this path identifies an ancestor (or the same location as) [other].
+ *
+ * This is an advanced structural operation for libraries that track relationships between paths,
+ * such as selective invalidation or dependency registries. It compares the root type and ordered
+ * path segments, but not the focused value type: an ancestor and descendant naturally focus
+ * different types.
+ */
+public fun AnyPath.isPrefixOf(other: AnyPath): Boolean =
+  __kpaths_id.rootType == other.__kpaths_id.rootType &&
+    __kpaths_id.segments.size <= other.__kpaths_id.segments.size &&
+    __kpaths_id.segments.indices.all { index ->
+      __kpaths_id.segments[index] == other.__kpaths_id.segments[index]
+    }
+
+/** Returns whether this path identifies a descendant (or the same location as) [ancestor]. */
+public fun AnyPath.isDescendantOf(ancestor: AnyPath): Boolean = ancestor.isPrefixOf(this)
+
+/**
+ * Returns this path's structural suffix after [after], or `null` when [after] is not its ancestor.
+ *
+ * An empty list means both paths identify the same location. This is intended for advanced
+ * path-inspection APIs; ordinary code should keep using typed KeyPath composition.
+ */
+public fun AnyPath.descendantSegments(after: AnyPath): List<PathSegment>? =
+  if (!after.isPrefixOf(this)) {
+    null
+  } else {
+    __kpaths_id.segments.drop(after.__kpaths_id.segments.size)
+  }
+
 /** A named step in a KeyPath or CaseKeyPath structural identity. */
 public sealed interface PathSegment {
   /** A declared property KeyPath segment. */
