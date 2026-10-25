@@ -36,6 +36,17 @@ class GeneratedPathsTest {
   }
 
   @Test
+  fun `property catalog names are independently configurable`() {
+    val displayName: KeyPath<NamedProfile, String> = NamedProfilePaths.displayName
+    val messageText: KeyPath<NamedEvent.Message, String> = NamedEventPaths.MessageContentPaths.messageText
+
+    assertEquals("Blob", NamedProfile("Blob")[displayName])
+    assertEquals(NamedProfilePaths.displayName, NamedProfile.Paths.displayName)
+    assertEquals(PathId.property(TypeId.of<NamedProfile>(), "legalName"), displayName.__kpaths_id)
+    assertEquals("Hello", NamedEvent.Message("Hello")[messageText])
+  }
+
+  @Test
   fun `generated case paths independently embed complete cases and payloads`() {
     val connected: CaseKeyPath<Connection, Connection.Connected> = ConnectionPaths.Connected
     val selected: CaseKeyPath<Request, String> = RequestPaths.Selected.value
@@ -51,7 +62,7 @@ class GeneratedPathsTest {
   @Test
   fun `case and nested property catalog names are independently configurable`() {
     val message: CaseKeyPath<NamedEvent, NamedEvent.Message> = NamedEventPaths.message
-    val text: KeyPath<NamedEvent.Message, String> = NamedEventPaths.MessageContentPaths.text
+    val text: KeyPath<NamedEvent.Message, String> = NamedEventPaths.MessageContentPaths.messageText
     val north: CaseKeyPath<NamedDirection, Unit> = NamedDirectionPaths.north
 
     assertEquals(NamedEvent.Message("Hello"), message.embed(NamedEvent.Message("Hello")))

@@ -2,6 +2,7 @@ package dev.kpaths.sample
 
 import dev.kpaths.annotations.CaseName
 import dev.kpaths.annotations.Pathable
+import dev.kpaths.annotations.PathName
 import dev.kpaths.annotations.PathsName
 
 @Pathable
@@ -11,6 +12,14 @@ data class Person(
   var address: Address,
   val tags: List<String> = emptyList(),
   val nickname: String? = null,
+) {
+  companion object
+}
+
+@Pathable
+data class NamedProfile(
+  @PathName("displayName")
+  val legalName: String,
 ) {
   companion object
 }
@@ -81,7 +90,10 @@ sealed interface NamedEvent {
 
   @CaseName("message")
   @PathsName("MessageContentPaths")
-  data class Message(val text: String) : NamedEvent
+  data class Message(
+    @PathName("messageText")
+    val text: String,
+  ) : NamedEvent
 }
 
 @Pathable

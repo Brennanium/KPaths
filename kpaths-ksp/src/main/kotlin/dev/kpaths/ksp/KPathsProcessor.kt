@@ -21,10 +21,12 @@ import com.google.devtools.ksp.symbol.Variance
 import com.google.devtools.ksp.validate
 import dev.kpaths.annotations.CaseName
 import dev.kpaths.annotations.Pathable
+import dev.kpaths.annotations.PathName
 import dev.kpaths.annotations.PathsName
 
 private val pathableAnnotation = Pathable::class.qualifiedName!!
 private val caseNameAnnotation = CaseName::class.qualifiedName!!
+private val pathNameAnnotation = PathName::class.qualifiedName!!
 private val pathsNameAnnotation = PathsName::class.qualifiedName!!
 
 /** Generates stable property and case-path APIs for [Pathable] declarations. */
@@ -329,13 +331,13 @@ private class KPathsProcessor(
           return@mapNotNull null
         }
         val sourceName = caseDeclaration.simpleName.asString()
-        val generatedCaseName = configuredCaseMemberName(
+        val generatedCaseName = configuredGeneratedMemberName(
           declaration = caseDeclaration,
           annotationName = "@CaseName",
           annotationQualifiedName = caseNameAnnotation,
           defaultName = sourceName,
         ) ?: return@mapNotNull null
-        val generatedPathsName = configuredCaseMemberName(
+        val generatedPathsName = configuredGeneratedMemberName(
           declaration = caseDeclaration,
           annotationName = "@PathsName",
           annotationQualifiedName = pathsNameAnnotation,
@@ -370,7 +372,7 @@ private class KPathsProcessor(
         .filter { it.classKind == ClassKind.ENUM_ENTRY }
         .mapNotNull { entry ->
           val sourceName = entry.simpleName.asString()
-          val generatedCaseName = configuredCaseMemberName(
+          val generatedCaseName = configuredGeneratedMemberName(
             declaration = entry,
             annotationName = "@CaseName",
             annotationQualifiedName = caseNameAnnotation,
@@ -392,8 +394,8 @@ private class KPathsProcessor(
     return emptyList()
   }
 
-  private fun configuredCaseMemberName(
-    declaration: KSClassDeclaration,
+  private fun configuredGeneratedMemberName(
+    declaration: com.google.devtools.ksp.symbol.KSDeclaration,
     annotationName: String,
     annotationQualifiedName: String,
     defaultName: String,
@@ -407,14 +409,14 @@ private class KPathsProcessor(
       ?.value as? String
       ?: ""
     if (configuredName.isEmpty()) {
-      logger.error("[KPaths] $annotationName requires a non-empty Kotlin identifier.", annotation)
+      logger.error("[KPaths] $annotationName requires a non-empty Kotlin identifier.", declaration)
       return null
     }
     if (configuredName.startsWith(generatedInternalPrefix)) {
       logger.error(
         "[KPaths] $annotationName value '$configuredName' uses the reserved " +
           "'$generatedInternalPrefix' prefix for KPaths-generated implementation details.",
-        annotation,
+        declaration,
       )
       return null
     }
@@ -422,12 +424,20 @@ private class KPathsProcessor(
       logger.error(
         "[KPaths] $annotationName value '$configuredName' must be a single Kotlin identifier, " +
           "without a package or dot.",
-        annotation,
+        declaration,
       )
       return null
     }
     return configuredName
   }
+
+  private fun configuredPathMemberName(property: KSPropertyDeclaration): String? =
+    configuredGeneratedMemberName(
+      declaration = property,
+      annotationName = "@PathName",
+      annotationQualifiedName = pathNameAnnotation,
+      defaultName = property.simpleName.asString(),
+    )
 
   private fun hasAnnotation(declaration: KSClassDeclaration, annotationQualifiedName: String): Boolean =
     declaration.annotations.any { candidate ->
@@ -445,9 +455,11 @@ private class KPathsProcessor(
       .toList()
 
     if (Modifier.DATA !in declaration.modifiers) {
-      return accessibleProperties.map { property ->
+      return accessibleProperties.mapNotNull { property ->
+        val generatedName = configuredPathMemberName(property) ?: return@mapNotNull null
         PathProperty(
           declaration = property,
+          generatedName = generatedName,
           kind = if (property.isMutable && isSetterAccessible(property)) {
             PathKind.REFERENCE_WRITABLE
           } else {
@@ -465,10 +477,11 @@ private class KPathsProcessor(
       ?: emptySet()
 
     return accessibleProperties.mapNotNull { property ->
+      val generatedName = configuredPathMemberName(property) ?: return@mapNotNull null
       if (property.isMutable && property.simpleName.asString() in constructorPropertyNames) {
-        PathProperty(property, PathKind.COPY_WRITABLE)
+        PathProperty(property, generatedName, PathKind.COPY_WRITABLE)
       } else if (property.isMutable && isSetterAccessible(property)) {
-        PathProperty(property, PathKind.COPY_THEN_MUTATE)
+        PathProperty(property, generatedName, PathKind.COPY_THEN_MUTATE)
       } else if (property.isMutable) {
         logger.error(
           "@Pathable data-class property '${property.simpleName.asString()}' must be declared in the primary constructor or have an accessible setter to receive a copy-based writable path.",
@@ -476,7 +489,7 @@ private class KPathsProcessor(
         )
         null
       } else {
-        PathProperty(property, PathKind.READ_ONLY)
+        PathProperty(property, generatedName, PathKind.READ_ONLY)
       }
     }
   }
@@ -550,7 +563,7 @@ private class KPathsProcessor(
     writer.appendLine("  public interface CompanionView {")
     pathProperties.forEach { pathProperty ->
       val property = pathProperty.declaration
-      val identifier = escapeIdentifier(property.simpleName.asString())
+      val identifier = escapeIdentifier(pathProperty.generatedName)
       val valueType = property.type.resolve().renderKotlinType()
       writer.appendLine("    public val $identifier: ${pathInterface(pathProperty.kind)}<$rootKotlinType, $valueType>")
     }
@@ -570,7 +583,7 @@ private class KPathsProcessor(
     writer.appendLine("private val $backingName: $viewType = object : $viewType {")
     pathProperties.forEach { pathProperty ->
       val property = pathProperty.declaration
-      val identifier = escapeIdentifier(property.simpleName.asString())
+      val identifier = escapeIdentifier(pathProperty.generatedName)
       val valueType = property.type.resolve().renderKotlinType()
       writer.appendLine("  override val $identifier: ${pathInterface(pathProperty.kind)}<$rootType, $valueType>")
       writer.appendLine("    get() = $generatedIdentifier.$identifier")
@@ -599,7 +612,7 @@ private class KPathsProcessor(
 
     pathProperties.forEach { property ->
       members += GeneratedMember(
-        name = property.declaration.simpleName.asString(),
+        name = property.generatedName,
         description = "the key path for property '${property.declaration.simpleName.asString()}'",
       )
     }
@@ -704,7 +717,8 @@ private class KPathsProcessor(
   ) {
     val property = pathProperty.declaration
     val name = property.simpleName.asString()
-    val identifier = escapeIdentifier(name)
+    val identifier = escapeIdentifier(pathProperty.generatedName)
+    val sourceIdentifier = escapeIdentifier(name)
     val valueKotlinType = property.type.resolve().renderKotlinType(typeParameterSubstitutions)
     val valueTypeId = property.type.resolve().renderTypeId(typeTokenNames)
     val pathInterface = pathInterface(pathProperty.kind)
@@ -720,15 +734,15 @@ private class KPathsProcessor(
       writer.appendLine("${declarationIndent}  object : $pathBase<$rootKotlinType, $valueKotlinType>() {")
       writer.appendLine("${declarationIndent}    override val __kpaths_id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property($rootTypeId, \"$name\")")
       writer.appendLine("${declarationIndent}    override val __kpaths_valueType: dev.kpaths.core.TypeId = $valueTypeId")
-      writer.appendLine("${declarationIndent}    override fun get(root: $rootKotlinType): $valueKotlinType = root.$identifier")
-      writeSetter(writer, pathProperty.kind, rootKotlinType, valueKotlinType, identifier, indent = "${declarationIndent}    ")
+      writer.appendLine("${declarationIndent}    override fun get(root: $rootKotlinType): $valueKotlinType = root.$sourceIdentifier")
+      writeSetter(writer, pathProperty.kind, rootKotlinType, valueKotlinType, sourceIdentifier, indent = "${declarationIndent}    ")
       writer.appendLine("${declarationIndent}  }")
     } else {
       writer.appendLine("${declarationIndent}public object $identifier : $pathBase<$rootKotlinType, $valueKotlinType>() {")
       writer.appendLine("${declarationIndent}  override val __kpaths_id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property($rootTypeId, \"$name\")")
       writer.appendLine("${declarationIndent}  override val __kpaths_valueType: dev.kpaths.core.TypeId = $valueTypeId")
-      writer.appendLine("${declarationIndent}  override fun get(root: $rootKotlinType): $valueKotlinType = root.$identifier")
-      writeSetter(writer, pathProperty.kind, rootKotlinType, valueKotlinType, identifier, indent = "${declarationIndent}  ")
+      writer.appendLine("${declarationIndent}  override fun get(root: $rootKotlinType): $valueKotlinType = root.$sourceIdentifier")
+      writeSetter(writer, pathProperty.kind, rootKotlinType, valueKotlinType, sourceIdentifier, indent = "${declarationIndent}  ")
       writer.appendLine("${declarationIndent}}")
     }
   }
@@ -1273,6 +1287,7 @@ private class KPathsProcessor(
 
   private data class PathProperty(
     val declaration: KSPropertyDeclaration,
+    val generatedName: String,
     val kind: PathKind,
   )
 

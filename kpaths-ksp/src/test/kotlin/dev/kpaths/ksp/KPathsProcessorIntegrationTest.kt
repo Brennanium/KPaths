@@ -63,6 +63,60 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
+  fun `reports invalid generated property names`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val invalidOutput = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "InvalidPathName.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.Pathable
+        import dev.kpaths.annotations.PathName
+
+        @Pathable
+        data class Profile(
+          @PathName("not a name") val legalName: String,
+        )
+      """.trimIndent(),
+    )
+
+    assertContains(invalidOutput, "InvalidPathName.kt:")
+    assertContains(invalidOutput, "[KPaths] @PathName value 'not a name'")
+
+  }
+
+  @Test
+  fun `reports colliding generated property names`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "PathNameCollision.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.Pathable
+        import dev.kpaths.annotations.PathName
+
+        @Pathable
+        data class Profile(
+          @PathName("name") val legalName: String,
+          val name: String,
+        )
+      """.trimIndent(),
+    )
+
+    assertContains(output, "PathNameCollision.kt:")
+    assertContains(output, "'name' would name both")
+    assertContains(output, "property 'legalName'")
+    assertContains(output, "property 'name'")
+  }
+
+  @Test
   fun `reports generated case member and property catalog collisions`(
     @TempDir fixtureDirectory: Path,
   ) {
