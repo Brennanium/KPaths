@@ -2,8 +2,6 @@
 
 KPaths brings typed, composable, structurally identifiable KeyPaths and CaseKeyPaths to Kotlin. It is inspired by [Swift KeyPaths](https://docs.swift.org/latest/documentation/the-swift-programming-language/expressions/#Key-Path-Expression) and [Point-Free’s CasePaths](https://github.com/pointfreeco/swift-case-paths), while using Kotlin-native property references, sealed hierarchies, KSP, and reified type tokens.
 
-[Documentation for `main`](https://brennanium.github.io/KPaths/) · [Documentation for `0.1.0`](https://brennanium.github.io/KPaths/0.1.0/)
-
 ## Modules
 
 - `kpaths-core`: KeyPath and CaseKeyPath types, explicit factories, composition, identity, and standard-library KeyPaths.
@@ -135,7 +133,10 @@ Use `match` rather than nullable extraction whenever a matched `null` must remai
 
 ## Documentation
 
-Read the [development documentation](https://brennanium.github.io/KPaths/) for the current `main` branch, or the [0.1.0 release documentation](https://brennanium.github.io/KPaths/0.1.0/) for the published release. From the development site:
+- [`main`](https://brennanium.github.io/KPaths/) — documentation for the current development branch.
+- [`0.1.0`](https://brennanium.github.io/KPaths/0.1.0/) — documentation for the published `0.1.0` release.
+
+The `main` documentation includes:
 
 - [KeyPaths](https://brennanium.github.io/KPaths/key-paths/) covers the normal property-reference and writable-path APIs.
 - [CaseKeyPaths](https://brennanium.github.io/KPaths/case-paths/) covers sealed-case matching, embedding, and composition.
@@ -143,12 +144,6 @@ Read the [development documentation](https://brennanium.github.io/KPaths/) for t
 - [Recipes](https://brennanium.github.io/KPaths/recipes/) and [API design](https://brennanium.github.io/KPaths/route-aware-apis/) show reusable patterns.
 - [Advanced KeyPath APIs](https://brennanium.github.io/KPaths/advanced-paths/) and [identity and type metadata](https://brennanium.github.io/KPaths/identity/) cover library design and structural identity.
 - The generated [API reference](https://brennanium.github.io/KPaths/api/) is the source of truth for overloads and KDoc.
-
-Build the project and documentation with:
-
-```sh
-JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew check docsBuild
-```
 
 ## Acknowledgments
 
