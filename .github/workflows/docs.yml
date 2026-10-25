@@ -3,6 +3,7 @@ name: Deploy documentation
 on:
   push:
     branches: [main]
+    tags: ["[0-9]*.[0-9]*.[0-9]*"]
     paths:
       - ".github/workflows/docs.yml"
       - "build.gradle.kts"
@@ -32,6 +33,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+        with:
+          # A tag-triggered run still publishes the newest development site at
+          # the root, alongside snapshots built from every release tag.
+          ref: main
+          fetch-depth: 0
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -41,6 +47,21 @@ jobs:
         run: python3 -m pip install -r docs/requirements.txt
       - name: Build documentation
         run: ./gradlew docsBuild
+      - name: Build release documentation snapshots
+        shell: bash
+        run: |
+          set -euo pipefail
+          while IFS= read -r version; do
+            release_root="$RUNNER_TEMP/kpaths-docs-$version"
+            git worktree add --detach "$release_root" "$version"
+            (
+              cd "$release_root"
+              ./gradlew docsBuild
+            )
+            mkdir -p "build/docs/site/$version"
+            cp -a "$release_root/build/docs/site/." "build/docs/site/$version/"
+            git worktree remove --force "$release_root"
+          done < <(git tag --list --sort=version:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:

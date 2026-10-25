@@ -2,6 +2,8 @@
 
 KPaths brings typed, composable, structurally identifiable KeyPaths and CaseKeyPaths to Kotlin. It is inspired by [Swift KeyPaths](https://docs.swift.org/latest/documentation/the-swift-programming-language/expressions/#Key-Path-Expression) and [Point-Free’s CasePaths](https://github.com/pointfreeco/swift-case-paths), while using Kotlin-native property references, sealed hierarchies, KSP, and reified type tokens.
 
+[Documentation for `main`](https://brennanium.github.io/KPaths/) · [Documentation for `0.1.0`](https://brennanium.github.io/KPaths/0.1.0/)
+
 ## Modules
 
 - `kpaths-core`: KeyPath and CaseKeyPath types, explicit factories, composition, identity, and standard-library KeyPaths.
@@ -28,7 +30,7 @@ val city = writableKeyPath(
 )
 ```
 
-`KeyPath` reads, `WritableKeyPath` returns a revised value for value-semantic models, and `ReferenceWritableKeyPath` is for intentional in-place class mutation. See the [KeyPaths guide](docs/key-paths.md) for factory selection, composition, nullable paths, and standard-library paths.
+`KeyPath` reads, `WritableKeyPath` returns a revised value for value-semantic models, and `ReferenceWritableKeyPath` is for intentional in-place class mutation. See the [KeyPaths guide](https://brennanium.github.io/KPaths/key-paths/) for factory selection, composition, nullable paths, and standard-library paths.
 
 For a source-owned model with paths used repeatedly, annotate it to generate a canonical catalog:
 
@@ -56,7 +58,7 @@ Person.Paths.city
 `Person.Paths` keeps the vocabulary with its type in completion. It is a generated extension, so a
 consumer in another package imports it normally; Kotlin IDEs generally offer that import
 automatically. If the model has no companion, use `PersonPaths` instead—no generated behavior is
-lost. See [Generated catalogs](docs/generation.md) for companion naming, imports, generic
+lost. See [Generated catalogs](https://brennanium.github.io/KPaths/generation/) for companion naming, imports, generic
 construction forms, `@PathsName`, and generated-case naming options.
 
 ## CaseKeyPaths
@@ -76,7 +78,7 @@ Event.Started[message]           // null
 message.embed(Event.Message("Updated"))
 ```
 
-There is one `CaseKeyPath` type. Unlike KeyPaths, CaseKeyPaths reconstruct complete cases, so there is no read-only/writable hierarchy. The [CaseKeyPaths guide](docs/case-paths.md) explains whole-case, payload, reflection-backed, and generated factories.
+There is one `CaseKeyPath` type. Unlike KeyPaths, CaseKeyPaths reconstruct complete cases, so there is no read-only/writable hierarchy. The [CaseKeyPaths guide](https://brennanium.github.io/KPaths/case-paths/) explains whole-case, payload, reflection-backed, and generated factories.
 
 For a conventional unannotated data-class case on the JVM, add the optional reflection artifact and
 use the reflection-backed shorthand:
@@ -133,14 +135,14 @@ Use `match` rather than nullable extraction whenever a matched `null` must remai
 
 ## Documentation
 
-Start with the [documentation overview](docs/index.md). From there:
+Read the [development documentation](https://brennanium.github.io/KPaths/) for the current `main` branch, or the [0.1.0 release documentation](https://brennanium.github.io/KPaths/0.1.0/) for the published release. From the development site:
 
-- [KeyPaths](docs/key-paths.md) covers the normal property-reference and writable-path APIs.
-- [CaseKeyPaths](docs/case-paths.md) covers sealed-case matching, embedding, and composition.
-- [Generated catalogs](docs/generation.md) explains what `@Pathable` adds.
-- [Recipes](docs/recipes.md) and [API design](docs/route-aware-apis.md) show reusable patterns.
-- [Advanced KeyPath APIs](docs/advanced-paths.md) and [identity and type metadata](docs/identity.md) cover library design and structural identity.
-- The generated [API reference](docs/api/index.md) is the source of truth for overloads and KDoc.
+- [KeyPaths](https://brennanium.github.io/KPaths/key-paths/) covers the normal property-reference and writable-path APIs.
+- [CaseKeyPaths](https://brennanium.github.io/KPaths/case-paths/) covers sealed-case matching, embedding, and composition.
+- [Generated catalogs](https://brennanium.github.io/KPaths/generation/) explains what `@Pathable` adds.
+- [Recipes](https://brennanium.github.io/KPaths/recipes/) and [API design](https://brennanium.github.io/KPaths/route-aware-apis/) show reusable patterns.
+- [Advanced KeyPath APIs](https://brennanium.github.io/KPaths/advanced-paths/) and [identity and type metadata](https://brennanium.github.io/KPaths/identity/) cover library design and structural identity.
+- The generated [API reference](https://brennanium.github.io/KPaths/api/) is the source of truth for overloads and KDoc.
 
 Build the project and documentation with:
 
