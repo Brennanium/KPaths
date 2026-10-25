@@ -58,22 +58,81 @@ Event.Paths.allCasePaths
 Event.Paths.caseOf(Event.Idle)
 ```
 
-Generic models use a generic companion function, which captures the concrete type arguments needed
-for `TypeId`:
+`@PathsName` may be applied to a companion object to rename this generated facade. This is useful
+when the companion itself is named `Paths`, because a default facade would otherwise read as
+`Person.Paths.Paths`:
+
+```kotlin
+@Pathable
+data class Person(val name: String) {
+  @PathsName("KPaths")
+  companion object Paths
+}
+
+Person.Paths.KPaths.name
+```
+
+Generic catalogs need concrete type arguments for `TypeId`. Their top-level catalog always offers
+all three construction forms:
+
+```kotlin
+BoxPaths<String>()
+BoxPaths.of<String>()
+BoxPaths.of(String::class)
+```
+
+The reified forms preserve full Kotlin type information, including nullability and nested generic
+arguments. The `KClass` form is useful when a non-generic caller has only a class token, but it
+cannot represent those details.
+
+An explicitly named generic companion exposes a root-level facade. A companion whose name is not
+`Paths` supports the short constructor spelling *and* both `.of` forms:
 
 ```kotlin
 @Pathable
 data class Box<Value>(val value: Value) {
-  companion object
+  companion object Factory
 }
 
 Box.Paths<String>().value
+Box.Paths.of<String>().value
+Box.Paths.of(String::class).value
 // KeyPath<Box<String>, String>
 ```
 
-The generic function returns the same specialized catalog as `BoxPaths<String>()`. For a generic
-interface, Kotlin requires the companion to have an explicit name when it is used as an extension
-receiver:
+If the companion is itself named `Paths`, it owns the `Root.Paths` namespace. KPaths therefore
+adds only the two `.of` overloads rather than a competing `Paths<T>()` function:
+
+```kotlin
+@Pathable
+data class Box<Value>(val value: Value) {
+  companion object Paths
+}
+
+Box.Paths.of<String>().value
+Box.Paths.of(String::class).value
+```
+
+`@PathsName` customizes the facade for another named companion:
+
+```kotlin
+@Pathable
+data class Box<Value>(val value: Value) {
+  @PathsName("KPaths")
+  companion object Factory
+}
+
+Box.KPaths<String>().value
+Box.KPaths.of<String>().value
+Box.KPaths.of(String::class).value
+```
+
+For a generic `companion object` with no explicit name, KPaths intentionally creates **no**
+`Root.Paths` facade and reports a warning at `@Pathable`. Name it—normally `Paths` or `Factory`—or
+use the top-level `RootPaths` catalog directly. This rule applies to generic classes and generic
+sealed interfaces alike, so their API stays predictable.
+
+For example, a generic sealed root can use the `Factory` form and exposes the same alternatives:
 
 ```kotlin
 @Pathable
@@ -85,11 +144,13 @@ sealed interface Loadable<out Value : Any> {
 }
 
 Loadable.Paths<String>().Loaded.value
+Loadable.Paths.of<String>().Loaded.value
 // CaseKeyPath<Loadable<String>, String>
 ```
 
-`Paths` is generated only when a catalog has content to expose. KSP diagnoses a companion member or
-top-level companion extension already named `Paths`, rather than silently changing either API.
+`Paths` (or its `@PathsName` replacement) is generated only when a catalog has content to expose.
+KSP diagnoses a collision with the precise generated companion member—`Paths`, `KPaths`, or `of`—
+rather than silently changing either API.
 
 ## Multiplatform source sets
 
@@ -166,9 +227,9 @@ EventPaths.MessageContentPaths.text
 
 `@CaseName` also applies to enum entries. All three naming annotations affect only public generated
 member names: source declarations remain the structural names in their `PathId`, so renaming an API
-does not change equality or hashing. `@PathsName` is valid only for a sealed case that has at least
-one accessible property path. KSP diagnoses invalid, reserved, and colliding generated names at the
-annotated declaration.
+does not change equality or hashing. `@PathsName` is valid for a companion facade or for a sealed
+case that has at least one accessible property path. KSP diagnoses invalid, reserved, and colliding
+generated names at the annotated declaration.
 
 Data-class cases with one to three primary-constructor properties also receive direct payload CaseKeyPaths:
 

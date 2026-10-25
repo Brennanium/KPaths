@@ -41,9 +41,9 @@ PersonPaths.city
 ```
 
 If a source-owned model has a companion object, generated paths can also be accessed through
-`Person.Paths.name`, `Event.Paths.Message`, or `Box.Paths<String>().value`; see
-[Generated catalogs](docs/generation.md) for the required companion declaration, import, generic
-interface detail, and generated-case naming options.
+`Person.Paths.name`, `Event.Paths.Message`, or `Box.Paths<String>().value`. See
+[Generated catalogs](docs/generation.md) for the companion declaration, imports, generic
+construction forms, `@PathsName`, and generated-case naming options.
 
 ## CaseKeyPaths
 

@@ -1,11 +1,12 @@
 package dev.kpaths.annotations
 
 /**
- * Names a sealed data case's generated nested property-path catalog.
+ * Names a generated path namespace.
  *
- * Apply this to a direct case with generated property paths of an enclosing [Pathable] sealed type. It changes the
- * `CasePaths` portion of the generated API without changing the whole-case [CaseName] member or
- * path identity.
+ * Apply this to a direct sealed case with generated property paths to change its nested property-path
+ * catalog without changing its whole-case [CaseName] member or path identity. Apply it to a
+ * companion object to rename the generated root facade, such as `Person.KPaths` instead of
+ * `Person.Paths`.
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.SOURCE)

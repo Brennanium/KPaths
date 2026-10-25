@@ -7,5 +7,5 @@ Kotlin type. It is a convenience and discoverability feature: the runtime path f
 available for any accessible type without annotation processing.
 
 [PathName] renames a generated property-path member. [CaseName] renames a generated whole-case
-member, while [PathsName] independently renames a sealed data case's nested property-path catalog.
-None of these annotations changes a path's structural identity.
+member, while [PathsName] renames either a sealed data case's nested property-path catalog or a
+companion's generated root facade. None of these annotations changes a path's structural identity.
