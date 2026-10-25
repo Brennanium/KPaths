@@ -74,11 +74,29 @@ RequestPaths.Message
 RequestPaths.Message.embed(Request.Message("1", "Hello"))
 ```
 
-## Naming generated sealed-case APIs
+## Naming generated APIs
 
-`@Pathable("CustomPaths")` names the outer catalog. Within a sealed root, use `@CaseName` and
-`@PathsName` independently when the default case spelling and the case property-catalog spelling
-need different Kotlin names:
+`@Pathable("CustomPaths")` names the outer catalog. `@PathName` names a generated `KeyPath`
+member without changing the underlying Kotlin property or its structural identity:
+
+```kotlin
+@Pathable
+data class Profile(
+  @PathName("displayName")
+  val legalName: String,
+)
+
+ProfilePaths.displayName
+// KeyPath<Profile, String>
+```
+
+The generated path still reads `Profile.legalName`, and its `PathId` identifies `legalName`.
+`@PathName` also applies to the property catalog nested under a sealed data case. It intentionally
+does not rename a direct payload CaseKeyPath such as `EventPaths.Message.text`: that member is a
+case payload API rather than a property KeyPath.
+
+Within a sealed root, use `@CaseName` and `@PathsName` independently when the default case spelling
+and the case property-catalog spelling need different Kotlin names:
 
 ```kotlin
 @Pathable
@@ -97,11 +115,11 @@ EventPaths.MessageContentPaths.text
 // KeyPath<Event.Message, String>
 ```
 
-`@CaseName` also applies to enum entries. Both annotations affect only the public generated member
-name: the source declaration remains the structural case name in its `PathId`, so renaming an API
+`@CaseName` also applies to enum entries. All three naming annotations affect only public generated
+member names: source declarations remain the structural names in their `PathId`, so renaming an API
 does not change equality or hashing. `@PathsName` is valid only for a sealed case that has at least
 one accessible property path. KSP diagnoses invalid, reserved, and colliding generated names at the
-`@Pathable` declaration.
+annotated declaration.
 
 Data-class cases with one to three primary-constructor properties also receive direct payload CaseKeyPaths:
 
