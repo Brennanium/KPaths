@@ -31,6 +31,20 @@ Person.Paths.address // WritableKeyPath<Person, Address>
 canonical value and remains available when the model has no companion. See [Generated catalogs](generation.md)
 for the companion and generic-catalog rules.
 
+## Let declarations name the path
+
+The normal forms never ask for a string such as `"Person.name"`. `keyPath(Person::name)` carries
+Kotlin's checked property reference, while generated catalogs derive the root and property names
+from their declarations. Renaming `Person`, `name`, or a type in a composed path is therefore part
+of an ordinary compiler-aware refactor: references and generated code update together instead of
+leaving a stale string behind.
+
+Those declaration-derived names form the path's structural identity. Equivalent property-reference
+and generated KeyPaths compare equal even when they were created in different places. The named
+custom factories remain available for derived values that have no property declaration; see
+[Detailed factory patterns](#detailed-factory-patterns) and [Identity and type metadata](identity.md)
+for how to name those intentionally.
+
 ## What a KeyPath gives an API
 
 A `KeyPath<Root, Value>` is a total typed read: every `Root` has exactly one `Value`. It can be read, passed to a generic function, composed with another KeyPath, and compared with another KeyPath. It is more descriptive than passing an anonymous `(Root) -> Value` getter around.
@@ -377,7 +391,9 @@ val normalizedName: KeyPath<Person, String> = keyPath("normalizedName") { person
 ```
 
 The name is part of the KeyPath’s `PathId`. Use a stable, root-local name; two separately-created
-KeyPaths with the same root type and name compare equal.
+KeyPaths with the same root type and name compare equal. Because this name is a string, the
+compiler cannot carry it through a rename; prefer a property reference or generated catalog
+whenever a declaration exists for the value.
 
 The `PathId` overload is lower level. It is for library authors who need a custom multi-segment
 identity or who must pass an explicit `TypeId`:

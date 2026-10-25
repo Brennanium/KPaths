@@ -14,6 +14,22 @@ The library-reserved metadata properties are named `__kpaths_id` and `__kpaths_v
 are intentionally unusual names so ordinary model properties such as `id` and `valueType` can be
 generated without a collision.
 
+## Prefer declaration-derived identity
+
+The usual construction forms derive identity from checked Kotlin declarations:
+
+```kotlin
+val title = keyPath(Book::title)
+val finished = caseKeyPath<DownloadEvent, DownloadEvent.Finished>()
+```
+
+Generated catalogs do the same for source-owned models. That avoids maintaining string paths such
+as `"Book.title"` or `"DownloadEvent.Finished"`: a compiler-aware rename updates property and type
+references, and KSP regenerates the corresponding catalog identity.
+
+Named custom factories are the intentional exception. Their name is semantic, so choose a stable,
+root-local identifier and avoid reusing it for unrelated derived computations:
+
 ```kotlin
 val first = keyPath<Person, String>("normalizedName") { it.name.trim().lowercase() }
 val second = keyPath<Person, String>("normalizedName") { it.name.trim().lowercase() }
