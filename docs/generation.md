@@ -9,8 +9,8 @@ for the factory choices available to unannotated or third-party sealed hierarchi
 ## Companion access
 
 The normal generated catalog is a top-level object such as `PersonPaths`. A source-owned,
-non-generic class or data class can also opt into the more Swift-like `Person.Paths.name` spelling
-by declaring an otherwise ordinary, visible companion object:
+non-generic model can also opt into the more Swift-like `Person.Paths.name` spelling by declaring
+an otherwise ordinary, visible companion object:
 
 ```kotlin
 @Pathable
@@ -36,11 +36,60 @@ import example.Person
 val name = Person.Paths.name
 ```
 
-The facade is only generated for a non-generic `class` or `data class` with accessible generated
-property paths. Generic types instead use their typed catalog instance, for example
-`BoxPaths<String>().value`, because `Box.Companion` has no `String` type argument to retain. A
-sealed root continues to expose its `TypeNamePaths` catalog. KSP diagnoses a companion that already
-declares `Paths`, rather than silently changing either API.
+For a non-generic sealed root or enum, the same facade exposes its generated case paths, nested
+case-property catalogs, and type-erased case catalog:
+
+```kotlin
+@Pathable
+sealed interface Event {
+  companion object {}
+
+  data object Idle : Event
+  data class Message(val text: String) : Event
+}
+
+Event.Paths.Message
+// CaseKeyPath<Event, Event.Message>
+
+Event.Paths.MessagePaths.text
+// KeyPath<Event.Message, String>
+
+Event.Paths.allCasePaths
+Event.Paths.caseOf(Event.Idle)
+```
+
+Generic models use a generic companion function, which captures the concrete type arguments needed
+for `TypeId`:
+
+```kotlin
+@Pathable
+data class Box<Value>(val value: Value) {
+  companion object
+}
+
+Box.Paths<String>().value
+// KeyPath<Box<String>, String>
+```
+
+The generic function returns the same specialized catalog as `BoxPaths<String>()`. For a generic
+interface, Kotlin requires the companion to have an explicit name when it is used as an extension
+receiver:
+
+```kotlin
+@Pathable
+sealed interface Loadable<out Value : Any> {
+  companion object Factory
+
+  data object Idle : Loadable<Nothing>
+  data class Loaded<T : Any>(val value: T) : Loadable<T>
+}
+
+Loadable.Paths<String>().Loaded.value
+// CaseKeyPath<Loadable<String>, String>
+```
+
+`Paths` is generated only when a catalog has content to expose. KSP diagnoses a companion member or
+top-level companion extension already named `Paths`, rather than silently changing either API.
 
 ## Multiplatform source sets
 
