@@ -559,9 +559,10 @@ private class KPathsProcessor(
     rootKotlinType: String,
     pathProperties: List<PathProperty>,
   ) {
+    val viewName = escapeIdentifier(generatedInternalPrefix + "CompanionView")
     writer.appendLine()
     writer.appendLine("  /** Instance-facing view used by the generated companion [Paths] extension. */")
-    writer.appendLine("  public interface CompanionView {")
+    writer.appendLine("  public interface $viewName {")
     pathProperties.forEach { pathProperty ->
       val property = pathProperty.declaration
       val identifier = escapeIdentifier(pathProperty.generatedName)
@@ -578,7 +579,8 @@ private class KPathsProcessor(
     generatedName: String,
     pathProperties: List<PathProperty>,
   ) {
-    val viewType = "$generatedIdentifier.CompanionView"
+    val viewName = escapeIdentifier(generatedInternalPrefix + "CompanionView")
+    val viewType = "$generatedIdentifier.$viewName"
     val backingName = escapeIdentifier(generatedInternalPrefix + generatedName + "CompanionView")
     writer.appendLine()
     writer.appendLine("private val $backingName: $viewType = object : $viewType {")
@@ -685,10 +687,6 @@ private class KPathsProcessor(
         )
         return false
       }
-      members += GeneratedMember(
-        name = "CompanionView",
-        description = "the generated companion-path view type",
-      )
     }
 
     var isValid = true
