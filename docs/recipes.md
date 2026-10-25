@@ -5,7 +5,9 @@ KPaths provides two related values for two different jobs:
 - A `KeyPath` reads a value from every root; a `WritableKeyPath` can also return a revised root.
 - A `CaseKeyPath` matches one sealed case, extracts its associated value, and embeds that value in a newly constructed root.
 
-These examples use those concrete types throughout and do not require a particular UI or state-management framework. For factory selection and capability rules, read [KeyPaths](key-paths.md) and [CaseKeyPaths](case-paths.md) first; this page concentrates on combinations you can reuse.
+These framework-neutral examples use those concrete types throughout. For factory selection and
+capability rules, read [KeyPaths](key-paths.md) and [CaseKeyPaths](case-paths.md) first; this page
+concentrates on combinations you can reuse.
 
 ## Pass a KeyPath to Kotlin collection functions
 

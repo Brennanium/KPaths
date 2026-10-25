@@ -8,7 +8,7 @@ information the API needs.
 Kotlin closures remain excellent for a one-off computation. Prefer a KeyPath or CaseKeyPath
 parameter when an API needs to retain, compose, compare, cache, inspect, or use it after accepting it. This
 guide assumes familiarity with the construction APIs in [KeyPaths](key-paths.md) and [CaseKeyPaths](case-paths.md);
-it is about designing consumers of those values.
+it is about designing APIs that receive those values.
 
 | API needs | Accept | Why a closure alone is insufficient |
 | --- | --- | --- |

@@ -4,9 +4,8 @@ The [KeyPaths guide](key-paths.md) explains how to create, read, write, and comp
 guide is about a different question: what can a reusable library do when it retains a KeyPath
 instead of accepting an opaque closure or a string property name?
 
-KPaths does not prescribe an inspector, undo manager, state container, or observation framework.
-It supplies the typed, composable, structurally identifiable values those libraries need to build
-their own policies.
+Typed, composable, structurally identifiable paths let these APIs retain the meaning of a field
+instead of reducing it to a string name or an opaque closure.
 
 ## Build a heterogeneous field schema
 
@@ -63,8 +62,7 @@ val byTitle = SortRule(Book.Paths.title, descending = false)
 ```
 
 The same idea applies to allow-lists, validation metadata, redaction policies, analytics field
-names, and query plans. The policy belongs to the consuming library; KPaths supplies the field
-identity and typed access.
+names, and query plans, all while preserving field identity and typed access.
 
 ## Record reversible edits
 
@@ -102,19 +100,17 @@ rename.apply(Draft("First draft", "…"))
 // Draft("Final draft", "…")
 ```
 
-Different `FieldChange<Root, Value>` values can be stored behind the consuming library's
-`Change<Root>` interface, so an undo stack can hold edits to differently typed fields. The typed
-constructor prevents a title path from receiving a non-`String` replacement before that erasure
-happens.
+Different `FieldChange<Root, Value>` values can be stored behind `Change<Root>`, so an undo stack
+can hold edits to differently typed fields. The typed constructor prevents a title path from
+receiving a non-`String` replacement before that erasure happens.
 
 This pattern also supports edit coalescing: two edits concern the same field when their paths are
-equal. Whether consecutive edits should merge, how much history to retain, and whether a
-reference-writable path is acceptable are application decisions.
+equal. It can form the basis of undo history, draft synchronization, or an event stream.
 
 ## Project state through a writable path
 
 A state or binding library can project a container of `Root` into a container of `Value` using a
-`WritableKeyPath`. Here is a deliberately tiny, framework-neutral example:
+`WritableKeyPath`. The following small mutable box makes that projection explicit:
 
 ```kotlin
 interface MutableBox<Value> {
@@ -148,9 +144,8 @@ the same `focus` API for its native state type.
 
 ## Track related paths for selective invalidation
 
-Most application code should not inspect path segments. A dependency graph, subscription registry,
-or cache invalidator sometimes must. The advanced relationship helpers compare paths directly,
-without requiring consumers to extract `PathId` themselves:
+Dependency graphs, subscription registries, and cache invalidators can inspect path relationships.
+The advanced relationship helpers compare paths directly:
 
 ```kotlin
 @Pathable
@@ -179,9 +174,8 @@ fun pathsOverlap(first: AnyPath, second: AnyPath): Boolean =
   first.isPrefixOf(second) || first.isDescendantOf(second)
 ```
 
-The helpers compare structural root and segment information only. They intentionally do not
-observe objects, schedule callbacks, or decide cache policy; those responsibilities remain with
-the library that uses them.
+The helpers provide a structural relationship signal that an observer, registry, or cache can use
+when deciding what to update.
 
 ## Keep typed paths at API boundaries
 
