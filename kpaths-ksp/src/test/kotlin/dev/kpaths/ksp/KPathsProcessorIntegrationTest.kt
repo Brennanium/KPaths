@@ -64,6 +64,33 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
+  fun `reports generic companion Paths function collisions`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "GenericCompanionPathsFunctionCollision.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.Pathable
+
+        @Pathable
+        data class Box<Value>(val value: Value) {
+          companion object
+        }
+
+        fun <Value> Box.Companion.Paths(): String = "existing"
+      """.trimIndent(),
+    )
+
+    assertContains(output, "GenericCompanionPathsFunctionCollision.kt:")
+    assertContains(output, "[KPaths] Cannot generate Box.Companion.Paths because the top-level extension")
+    assertContains(output, "already declares it")
+  }
+
+  @Test
   fun `reports invalid generated case and property catalog names`(
     @TempDir fixtureDirectory: Path,
   ) {

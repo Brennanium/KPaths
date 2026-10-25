@@ -10,6 +10,7 @@ import com.google.devtools.ksp.processing.SymbolProcessor
 import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
 import com.google.devtools.ksp.processing.SymbolProcessorProvider
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSPropertyDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSTypeAlias
@@ -102,7 +103,15 @@ private class KPathsProcessor(
     val pathProperties = pathProperties(declaration)
     val casePaths = casePaths(declaration)
     val companionPaths = companionPathsExtension(declaration, pathProperties)
-    if (!validateGeneratedMemberNames(declaration, pathProperties, casePaths, companionPaths, resolver)) {
+    val genericCompanionPaths = genericCompanionPathsFactory(declaration)
+    if (!validateGeneratedMemberNames(
+        declaration,
+        pathProperties,
+        casePaths,
+        companionPaths || genericCompanionPaths,
+        resolver,
+      )
+    ) {
       return
     }
     val typeTokenNames = declaration.typeParameters.associate { parameter ->
@@ -206,6 +215,7 @@ private class KPathsProcessor(
         writeCompanionPathsExtension(
           writer = writer,
           rootType = renderKotlinQualifiedName(qualifiedName),
+            companionName = escapeIdentifier(requireNotNull(visibleCompanion(declaration)).simpleName.asString()),
           generatedIdentifier = generatedIdentifier,
           generatedName = generatedName,
           pathProperties = pathProperties,
@@ -216,6 +226,15 @@ private class KPathsProcessor(
         writer.appendLine()
         writer.appendLine("public inline fun <${typeParameters.declaration}> $generatedIdentifier(): $generatedIdentifier<${typeParameters.names}>${typeParameters.whereClause} =")
         writer.appendLine("  $generatedIdentifier.of(${declaration.typeParameters.joinToString { "dev.kpaths.core.TypeId.of<${escapeIdentifier(it.name.asString())}>()" }})")
+        if (genericCompanionPaths) {
+          writeGenericCompanionPathsFactory(
+            writer = writer,
+            rootType = renderKotlinQualifiedName(qualifiedName),
+            companionName = escapeIdentifier(requireNotNull(visibleCompanion(declaration)).simpleName.asString()),
+            generatedIdentifier = generatedIdentifier,
+            typeParameters = declaration.typeParameters,
+          )
+        }
       }
     }
   }
@@ -545,14 +564,37 @@ private class KPathsProcessor(
     ) {
       return false
     }
-    val companion = declaration.declarations
+    return visibleCompanion(declaration) != null
+  }
+
+  /** A generic companion function can retain the catalog's reified type arguments. */
+  private fun genericCompanionPathsFactory(declaration: KSClassDeclaration): Boolean {
+    if (declaration.typeParameters.isEmpty()) return false
+    val companion = visibleCompanion(declaration) ?: return false
+    if (
+      declaration.classKind == ClassKind.INTERFACE &&
+        companion.simpleName.asString() == "Companion"
+    ) {
+      logger.warn(
+        "[KPaths] Cannot generate ${declaration.simpleName.asString()}.Paths<…>() for a generic " +
+          "interface with an unnamed companion object. Name it, for example `companion object Factory`, " +
+          "or use ${declaration.simpleName.asString()}Paths<…>() directly.",
+        declaration,
+      )
+      return false
+    }
+    return true
+  }
+
+  private fun visibleCompanion(declaration: KSClassDeclaration): KSClassDeclaration? =
+    declaration.declarations
       .filterIsInstance<KSClassDeclaration>()
       .firstOrNull(KSClassDeclaration::isCompanionObject)
-      ?: return false
-    return Modifier.PRIVATE !in companion.modifiers &&
-      Modifier.PROTECTED !in companion.modifiers &&
-      Modifier.INTERNAL !in companion.modifiers
-  }
+      ?.takeIf { companion ->
+        Modifier.PRIVATE !in companion.modifiers &&
+          Modifier.PROTECTED !in companion.modifiers &&
+          Modifier.INTERNAL !in companion.modifiers
+      }
 
   private fun writeCompanionPathsView(
     writer: java.io.BufferedWriter,
@@ -575,6 +617,7 @@ private class KPathsProcessor(
   private fun writeCompanionPathsExtension(
     writer: java.io.BufferedWriter,
     rootType: String,
+    companionName: String,
     generatedIdentifier: String,
     generatedName: String,
     pathProperties: List<PathProperty>,
@@ -594,8 +637,22 @@ private class KPathsProcessor(
     writer.appendLine("}")
     writer.appendLine()
     writer.appendLine("/** Returns the generated paths for $rootType. */")
-    writer.appendLine("public val $rootType.Companion.Paths: $viewType")
+    writer.appendLine("public val $rootType.$companionName.Paths: $viewType")
     writer.appendLine("  get() = $backingName")
+  }
+
+  private fun writeGenericCompanionPathsFactory(
+    writer: java.io.BufferedWriter,
+    rootType: String,
+    companionName: String,
+    generatedIdentifier: String,
+    typeParameters: List<KSTypeParameter>,
+  ) {
+    val renderedTypeParameters = renderTypeParameters(typeParameters, reified = true)
+    writer.appendLine()
+    writer.appendLine("/** Creates the generated paths for $rootType with concrete type metadata. */")
+    writer.appendLine("public inline fun <${renderedTypeParameters.declaration}> $rootType.$companionName.Paths(): $generatedIdentifier<${renderedTypeParameters.names}>${renderedTypeParameters.whereClause} =")
+    writer.appendLine("  $generatedIdentifier<${renderedTypeParameters.names}>()")
   }
 
   /** Rejects ambiguous public members instead of silently changing the generated API. */
@@ -669,15 +726,20 @@ private class KPathsProcessor(
         return false
       }
       val existingExtension = resolver.getDeclarationsFromPackage(declaration.packageName.asString())
-        .filterIsInstance<KSPropertyDeclaration>()
-        .firstOrNull { property ->
-          property.parentDeclaration == null &&
-            property.simpleName.asString() == "Paths" &&
-            (property.extensionReceiver?.resolve()?.declaration as? KSClassDeclaration)
+        .filter { candidate ->
+          val receiver = when (candidate) {
+            is KSPropertyDeclaration -> candidate.extensionReceiver
+            is KSFunctionDeclaration -> candidate.extensionReceiver
+            else -> null
+          }
+          candidate.parentDeclaration == null &&
+            candidate.simpleName.asString() == "Paths" &&
+            (receiver?.resolve()?.declaration as? KSClassDeclaration)
               ?.let { receiver ->
                 receiver.isCompanionObject && receiver.parentDeclaration == declaration
               } == true
         }
+        .firstOrNull()
       if (existingExtension != null) {
         reportPathableError(
           declaration,

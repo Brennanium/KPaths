@@ -106,4 +106,15 @@ class GeneratedPathsTest {
     assertEquals(Loadable.Loaded("Jr."), loaded.embed(Loadable.Loaded("Jr.")))
     assertEquals(TypeId.of<Loadable.Loaded<String>>(), loaded.__kpaths_valueType)
   }
+
+  @Test
+  fun `generic companions create specialized generated catalogs`() {
+    val boxed: KeyPath<Box<String>, String> = Box.Paths<String>().value
+    val loaded: CaseKeyPath<Loadable<String>, String> = Loadable.Paths<String>().Loaded.value
+
+    assertEquals("Blob", Box("Blob")[boxed])
+    assertEquals("Hello", Loadable.Loaded("Hello")[loaded])
+    assertEquals(BoxPaths<String>().value, boxed)
+    assertEquals(LoadablePaths<String>().Loaded.value, loaded)
+  }
 }

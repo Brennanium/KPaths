@@ -32,7 +32,9 @@ data class Address(
 @Pathable
 data class Box<T>(
   val value: T,
-)
+) {
+  companion object
+}
 
 @Pathable
 data class Draft(
@@ -160,6 +162,8 @@ sealed interface KeywordCase {
 
 @Pathable
 sealed interface Loadable<out Value : Any> {
+  companion object Factory
+
   data object Idle : Loadable<Nothing>
   data class Loaded<T : Any>(val value: T) : Loadable<T>
 }
