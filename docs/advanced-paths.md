@@ -1,112 +1,196 @@
-# Advanced KeyPaths
+# Advanced KeyPath APIs
 
-The usual KPaths API is small: create a `KeyPath` from a Kotlin property reference, or create a `WritableKeyPath` by also supplying its replacement behavior. This guide covers the custom-selector patterns Kotlin cannot express as a simple property reference. For the ordinary factory decision, start with [KeyPaths](key-paths.md#detailed-factory-patterns); for sealed cases, see [CaseKeyPaths](case-paths.md).
+The [KeyPaths guide](key-paths.md) explains how to create, read, write, and compose paths. This
+guide is about a different question: what can a reusable library do when it retains a KeyPath
+instead of accepting an opaque closure or a string property name?
 
-## Define a named derived KeyPath
+KPaths does not prescribe an inspector, undo manager, state container, or observation framework.
+It supplies the typed, composable, structurally identifiable values those libraries need to build
+their own policies.
 
-Swift can place computed properties and custom subscripts inside a key-path expression. In Kotlin, create the equivalent `KeyPath` with a stable custom name. That name contributes to the `KeyPath`’s identity, so it describes one conceptual read—not merely a display label.
+## Build a heterogeneous field schema
+
+`PartialKeyPath<Root>` keeps a concrete root type while erasing only the focused value type. It
+can still read a value with `getAny`, and retains its `PathId` and `TypeId`. That makes it a useful
+building block for an inspector, table, export format, or diagnostics panel with fields of many
+different types:
 
 ```kotlin
-data class Person(val displayName: String)
+@Pathable
+data class Book(
+  val title: String,
+  val year: Int,
+  val inPrint: Boolean,
+) {
+  companion object
+}
 
-val normalizedName: KeyPath<Person, String> =
-  keyPath("normalizedName") { person ->
-    person.displayName.trim().lowercase()
+data class Field<Root>(
+  val title: String,
+  val path: PartialKeyPath<Root>,
+)
+
+val bookFields: List<Field<Book>> = listOf(
+  Field("Title", Book.Paths.title),
+  Field("Year", Book.Paths.year),
+  Field("In print", Book.Paths.inPrint),
+)
+
+fun <Root> inspect(root: Root, fields: List<Field<Root>>): Map<String, Any?> =
+  fields.associate { field -> field.title to field.path.getAny(root) }
+```
+
+The schema keeps the root type checked: a `PartialKeyPath<Author>` cannot enter
+`List<Field<Book>>`. The focused values are intentionally erased only at the point where a
+heterogeneous UI or exporter needs them. A renderer can use `field.path.__kpaths_valueType` to
+choose formatting, while `field.path.__kpaths_id` gives the field a stable in-process identity.
+
+For a typed operation such as sorting, filtering, or validation, retain the full
+`KeyPath<Root, Value>` instead. It is both a typed field descriptor and a Kotlin read function:
+
+```kotlin
+data class SortRule<Root, Value : Comparable<Value>>(
+  val field: KeyPath<Root, Value>,
+  val descending: Boolean,
+)
+
+fun <Root, Value : Comparable<Value>> List<Root>.sortedBy(
+  rule: SortRule<Root, Value>,
+): List<Root> =
+  if (rule.descending) sortedByDescending(rule.field) else sortedBy(rule.field)
+
+val byTitle = SortRule(Book.Paths.title, descending = false)
+```
+
+The same idea applies to allow-lists, validation metadata, redaction policies, analytics field
+names, and query plans. The policy belongs to the consuming library; KPaths supplies the field
+identity and typed access.
+
+## Record reversible edits
+
+`WritableKeyPath` carries both halves of a value-style edit: how to read a field and how to put a
+replacement value back into its root. An undo library can define its own change protocol without
+KPaths needing to ship an undo manager:
+
+```kotlin
+interface Change<Root> {
+  fun apply(root: Root): Root
+  fun revert(root: Root): Root
+}
+
+data class FieldChange<Root, Value>(
+  val path: WritableKeyPath<Root, Value>,
+  val oldValue: Value,
+  val newValue: Value,
+) : Change<Root> {
+  override fun apply(root: Root): Root = path.set(root, newValue)
+  override fun revert(root: Root): Root = path.set(root, oldValue)
+}
+
+@Pathable
+data class Draft(var title: String, var body: String) {
+  companion object
+}
+
+val rename: Change<Draft> = FieldChange(
+  path = Draft.Paths.title,
+  oldValue = "First draft",
+  newValue = "Final draft",
+)
+
+rename.apply(Draft("First draft", "…"))
+// Draft("Final draft", "…")
+```
+
+Different `FieldChange<Root, Value>` values can be stored behind the consuming library's
+`Change<Root>` interface, so an undo stack can hold edits to differently typed fields. The typed
+constructor prevents a title path from receiving a non-`String` replacement before that erasure
+happens.
+
+This pattern also supports edit coalescing: two edits concern the same field when their paths are
+equal. Whether consecutive edits should merge, how much history to retain, and whether a
+reference-writable path is acceptable are application decisions.
+
+## Project state through a writable path
+
+A state or binding library can project a container of `Root` into a container of `Value` using a
+`WritableKeyPath`. Here is a deliberately tiny, framework-neutral example:
+
+```kotlin
+interface MutableBox<Value> {
+  var value: Value
+}
+
+fun <Root, Value> MutableBox<Root>.focus(
+  path: WritableKeyPath<Root, Value>,
+): MutableBox<Value> {
+  val rootBox = this
+  return object : MutableBox<Value> {
+    override var value: Value
+      get() = rootBox.value[path]
+      set(value) {
+        rootBox.value = rootBox.value.setting(path, value)
+      }
   }
+}
 
-normalizedName(Person("  Blob  ")) // "blob"
-listOf(Person("  Blob  ")).map(normalizedName) // ["blob"]
+class Box<Value>(override var value: Value) : MutableBox<Value>
+
+val screen = Box(Draft(title = "First draft", body = "…"))
+val title = screen.focus(Draft.Paths.title)
+
+title.value = "Final draft"
+screen.value.title // "Final draft"
 ```
 
-Two independently created `KeyPath`s with the same root type and name compare equal. Do not reuse a name for unrelated computations. [Identity and type metadata](identity.md) explains why the name is semantic.
+The adapter owns the state-container contract; KPaths only supplies the typed projection and
+write-back rule. A UI framework integration can expose the same idea with its native state type,
+without adding that framework as a dependency of `kpaths-core`.
 
-## Define a named WritableKeyPath
+## Track related paths for selective invalidation
 
-A computed value becomes a `WritableKeyPath` only when the application can state how a replacement value produces a replacement root. This is Kotlin’s equivalent of supplying the getter and setter portions of a custom Swift subscript:
+Most application code should not inspect path segments. A dependency graph, subscription registry,
+or cache invalidator sometimes must. The advanced relationship helpers compare paths directly,
+without requiring consumers to extract `PathId` themselves:
 
 ```kotlin
-data class Person(val displayName: String)
+@Pathable
+data class Address(var city: String) {
+  companion object
+}
 
-val normalizedName: WritableKeyPath<Person, String> = writableKeyPath(
-  name = "normalizedName",
-  get = { person -> person.displayName.trim().lowercase() },
-  set = { person, value -> person.copy(displayName = value.trim()) },
-)
+@Pathable
+data class Profile(var address: Address) {
+  companion object
+}
 
-val revised = normalizedName.set(Person("  Blob  "), "  BLOB JR.  ")
-// Person(displayName = "BLOB JR.")
+val address = Profile.Paths.address
+val city = address.then(Address.Paths.city)
+
+address.isPrefixOf(city)      // true
+city.isDescendantOf(address)  // true
+city.descendantSegments(after = address)
+// [PathSegment.Property("city")]
 ```
 
-It composes exactly like a generated `WritableKeyPath`:
+For example, an invalidator can treat two paths as related when either is an ancestor of the other:
 
 ```kotlin
-data class Account(var owner: Person)
-
-val owner: WritableKeyPath<Account, Person> = writableKeyPath(
-  get = Account::owner,
-  set = { account, value -> account.copy(owner = value) },
-)
-
-val accountOwnerName: WritableKeyPath<Account, String> = owner.then(normalizedName)
+fun pathsOverlap(first: AnyPath, second: AnyPath): Boolean =
+  first.isPrefixOf(second) || first.isDescendantOf(second)
 ```
 
-## Create indexed KeyPaths
+The helpers compare structural root and segment information only. They intentionally do not
+observe objects, schedule callbacks, or decide cache policy; those responsibilities remain with
+the library that uses them.
 
-The indexed factories are Kotlin’s counterpart to a Swift key path such as `\[Contact][1].email`. They capture the index in a `KeyPath` rather than closing over a mutable variable:
+## Keep typed paths at API boundaries
 
-```kotlin
-data class Contact(val email: String)
+The common thread is that a KeyPath should remain a KeyPath while an API still needs to know what
+field it addresses. Reducing it immediately to `(Root) -> Value` is fine for a one-off operation,
+but discards composition, write capability, type metadata, and structural identity.
 
-val secondContact: KeyPath<List<Contact>, Contact> =
-  keyPath(get = List<Contact>::get, at = 1)
-val secondEmail: KeyPath<List<Contact>, String> =
-  secondContact.then(keyPath(Contact::email))
-
-secondEmail(listOf(Contact("first@example.com"), Contact("second@example.com")))
-// "second@example.com"
-```
-
-For a `MutableList`, use `referenceWritableKeyPath` because Kotlin’s collection API changes the existing list instance:
-
-```kotlin
-val secondContact: ReferenceWritableKeyPath<MutableList<Contact>, Contact> =
-  referenceWritableKeyPath(
-    get = MutableList<Contact>::get,
-    set = MutableList<Contact>::set,
-    at = 1,
-  )
-
-secondContact.set(mutableListOf(Contact("a"), Contact("b")), Contact("revised"))
-```
-
-`ListPaths`, `ArrayPaths`, `MutableListPaths`, and primitive-array catalogs provide the same standard KeyPaths with named accessors. See [recipes](recipes.md#create-indexed-and-keyed-keypaths) for a smaller collection-focused example and the [API reference](api/index.md) for all standard catalogs.
-
-## Create keyed Map KeyPaths
-
-The map factory is the equivalent of a keyed Swift subscript. Its `WritableKeyPath` focus is nullable because lookup may miss; assigning `null` removes the key:
-
-```kotlin
-val showTips: WritableKeyPath<Map<String, Boolean>, Boolean?> = writableKeyPath(
-  get = Map<String, Boolean>::get,
-  key = "showTips",
-)
-
-val enabled = showTips.set(emptyMap(), true)
-// mapOf("showTips" to true)
-
-val removed = showTips.set(enabled, null)
-// emptyMap()
-```
-
-This is a copy-based `WritableKeyPath` for `Map`. Use `referenceWritableKeyPath` with `MutableMap<String, Boolean>::get` only when mutation of a shared mutable map is intentional.
-
-## Focus the whole value
-
-`identityKeyPath<Root>()` is the equivalent of Swift’s `\.self`. It is a `WritableKeyPath<Root, Root>` whose replacement simply becomes the new root value:
-
-```kotlin
-val wholePerson: WritableKeyPath<Person, Person> = identityKeyPath()
-val replacement = wholePerson.set(oldPerson, newPerson)
-```
-
-It is useful in generic code accepting `WritableKeyPath<Root, Value>` that sometimes needs to focus the complete root. For a design example, see [Require write-back when an operation updates part of a value](route-aware-apis.md#require-write-back-when-an-operation-updates-part-of-a-value).
+Use a closure for arbitrary behavior. Use a KeyPath for a field that a library needs to retain,
+classify, compose, compare, or update. The [API design guide](route-aware-apis.md) contains smaller
+examples of that decision, while [Identity and type metadata](identity.md) describes the underlying
+equality model.

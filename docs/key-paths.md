@@ -394,9 +394,9 @@ Application code should normally use the named factory instead.
 
 ## Where to go next
 
-This guide owns the ordinary property-reference and writable-path story. For named derived,
-indexed, keyed, and whole-value paths, continue to [Advanced KeyPaths](advanced-paths.md). For the
-generated-catalog naming, diagnostics, and sealed-case surface of `@Pathable`, continue to
-[Generated catalogs](generation.md). For why `PathId` and `TypeId` make these values comparable,
-read [Identity and type metadata](identity.md); the [API-design guide](route-aware-apis.md) shows
-how to retain that information in your own APIs.
+This guide owns property-reference, writable, derived, indexed, keyed, and whole-value paths. For
+the generated-catalog naming, diagnostics, and sealed-case surface of `@Pathable`, continue to
+[Generated catalogs](generation.md). For advanced library designs that retain and inspect paths,
+read [Advanced KeyPath APIs](advanced-paths.md). For why `PathId` and `TypeId` make these values
+comparable, read [Identity and type metadata](identity.md); the [API-design guide](route-aware-apis.md)
+shows how to retain that information in your own APIs.

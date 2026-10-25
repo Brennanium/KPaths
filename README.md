@@ -139,7 +139,7 @@ Start with the [documentation overview](docs/index.md). From there:
 - [CaseKeyPaths](docs/case-paths.md) covers sealed-case matching, embedding, and composition.
 - [Generated catalogs](docs/generation.md) explains what `@Pathable` adds.
 - [Recipes](docs/recipes.md) and [API design](docs/route-aware-apis.md) show reusable patterns.
-- [Advanced KeyPaths](docs/advanced-paths.md) and [identity and type metadata](docs/identity.md) cover escape hatches.
+- [Advanced KeyPath APIs](docs/advanced-paths.md) and [identity and type metadata](docs/identity.md) cover library design and structural identity.
 - The generated [API reference](docs/api/index.md) is the source of truth for overloads and KDoc.
 
 Build the project and documentation with:

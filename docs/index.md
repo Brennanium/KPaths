@@ -23,8 +23,8 @@ Then choose the guide that matches the problem at hand:
 - [Recipes](recipes.md) collects composition, collection, and case-classification patterns.
 - [API design](route-aware-apis.md) explains when an API should retain a KeyPath or CaseKeyPath
   instead of accepting an opaque closure.
-- [Advanced KeyPaths](advanced-paths.md) covers named derived, indexed, keyed, and whole-value
-  paths.
+- [Advanced KeyPath APIs](advanced-paths.md) shows how libraries can build schemas, reversible
+  edits, state projection, and selective invalidation from paths.
 - [Identity and type metadata](identity.md) explains structural equality, `PathId`, and `TypeId`.
 
 The [API reference](api/index.md) is the source of truth for every public declaration and overload.

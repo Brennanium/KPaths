@@ -188,4 +188,4 @@ val enabled = showTips.set(emptyMap(), true)
 val removed = showTips.set(enabled, null) // null removes the map key
 ```
 
-See [Advanced KeyPaths](advanced-paths.md) for named computed KeyPaths and explicit reference-mutable collection KeyPaths. The [API reference](api/index.md) lists the complete indexed and keyed overloads.
+See [KeyPaths](key-paths.md#detailed-factory-patterns) for named computed KeyPaths and explicit reference-mutable collection KeyPaths. The [API reference](api/index.md) lists the complete indexed and keyed overloads.
