@@ -132,7 +132,7 @@ class GeneratedPathsTest {
     val customFacadeByClass: KeyPath<CustomFacadeBox<String>, String> = CustomFacadeBox.KPaths.of(String::class).value
     val loaded: CaseKeyPath<Loadable<String>, String> = Loadable.Paths<String>().Loaded.value
     val loadedByReified: CaseKeyPath<Loadable<String>, String> = Loadable.Paths.of<String>().Loaded.value
-    val customPerson: KeyPath<CustomFacadePerson, String> = CustomFacadePerson.Paths.KPaths.name
+    val customPerson: KeyPath<CustomFacadePerson, String> = CustomFacadePerson.KPaths.name
 
     assertEquals("Blob", Box("Blob")[boxed])
     assertEquals("Blob", Box("Blob")[boxedByReified])

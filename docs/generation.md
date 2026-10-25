@@ -104,8 +104,9 @@ Person.KPaths.name
 ```
 
 It also resolves the special case where the companion is itself named `Paths`. Without the
-annotation, KSP diagnoses that the generated `Paths` facade conflicts with the companion name;
-give the generated namespace another name instead:
+annotation, KSP diagnoses that the generated `Paths` facade conflicts with the companion name.
+Give the generated namespace another name; Kotlin's companion shorthand still exposes that name
+directly on `Person`:
 
 ```kotlin
 @Pathable
@@ -114,7 +115,7 @@ data class Person(val name: String) {
   companion object Paths
 }
 
-Person.Paths.KPaths.name
+Person.KPaths.name
 ```
 
 Generic catalogs need concrete type arguments for `TypeId`. Their top-level catalog always offers
