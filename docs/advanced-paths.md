@@ -143,10 +143,8 @@ title.value = "Final draft"
 screen.value.title // "Final draft"
 ```
 
-The adapter owns the state-container contract; KPaths supplies the typed projection and write-back
-rule. A UI integration module would depend on both `kpaths-core` and its UI framework, then expose
-the same idea with that framework's native state type. `kpaths-core` itself does not need a UI
-framework dependency.
+Any state holder with a mutable value can offer this operation. A framework integration can provide
+the same `focus` API for its native state type.
 
 ## Track related paths for selective invalidation
 
