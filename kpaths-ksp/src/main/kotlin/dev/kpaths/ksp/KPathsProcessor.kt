@@ -103,7 +103,7 @@ private class KPathsProcessor(
     val pathProperties = pathProperties(declaration)
     val casePaths = casePaths(declaration)
     val companionPaths = companionPathsExtension(declaration, pathProperties, casePaths)
-    val genericCompanionPaths = genericCompanionPathsFactory(declaration)
+    val genericCompanionPaths = genericCompanionPathsFactory(declaration, pathProperties, casePaths)
     if (!validateGeneratedMemberNames(
         declaration,
         pathProperties,
@@ -571,8 +571,14 @@ private class KPathsProcessor(
   }
 
   /** A generic companion function can retain the catalog's reified type arguments. */
-  private fun genericCompanionPathsFactory(declaration: KSClassDeclaration): Boolean {
-    if (declaration.typeParameters.isEmpty()) return false
+  private fun genericCompanionPathsFactory(
+    declaration: KSClassDeclaration,
+    pathProperties: List<PathProperty>,
+    casePaths: List<CasePath>,
+  ): Boolean {
+    if (declaration.typeParameters.isEmpty() || (pathProperties.isEmpty() && casePaths.isEmpty())) {
+      return false
+    }
     val companion = visibleCompanion(declaration) ?: return false
     if (
       declaration.classKind == ClassKind.INTERFACE &&
