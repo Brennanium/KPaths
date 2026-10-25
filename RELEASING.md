@@ -1,7 +1,7 @@
 # Releasing KPaths
 
 KPaths uses ordinary release versions. `VERSION_NAME` in `gradle.properties` is the single source
-of truth for Gradle coordinates and must agree with the release tag, for example `v0.1.0`.
+of truth for Gradle coordinates and must agree with the bare SemVer release tag, for example `0.1.0`.
 
 ## Local verification
 
@@ -50,7 +50,7 @@ Do not store Portal tokens or signing keys in this repository or `gradle.propert
 2. Run the local verification command; `verifyMavenPublications` checks every generated POM.
 3. Run **Upload Maven Central deployment** manually from the Actions tab with `version: 0.1.0`.
 4. In the Portal, wait for validation, inspect the deployment, and click **Publish**.
-5. Once `io.github.brennanium` artifacts resolve from Maven Central, create the `v0.1.0` GitHub
+5. Once `io.github.brennanium` artifacts resolve from Maven Central, create the `0.1.0` GitHub
    release from `main` using the prepared release notes command.
 
 ## Documentation site
