@@ -9,6 +9,65 @@ import org.junit.jupiter.api.io.TempDir
 
 class KPathsProcessorIntegrationTest {
   @Test
+  fun `reports invalid generated case and property catalog names`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "InvalidCaseNames.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.CaseName
+        import dev.kpaths.annotations.Pathable
+
+        @Pathable
+        sealed interface Event {
+          @CaseName("not a name")
+          data object Idle : Event
+        }
+      """.trimIndent(),
+    )
+
+    assertContains(output, "InvalidCaseNames.kt:")
+    assertContains(output, "[KPaths] @CaseName value 'not a name'")
+    assertContains(output, "must be a single Kotlin identifier")
+  }
+
+  @Test
+  fun `reports generated case member and property catalog collisions`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "CaseNameCollision.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.CaseName
+        import dev.kpaths.annotations.Pathable
+        import dev.kpaths.annotations.PathsName
+
+        @Pathable
+        sealed interface Event {
+          @CaseName("MessagePaths")
+          data object Idle : Event
+
+          @PathsName("MessagePaths")
+          data class Message(val text: String) : Event
+        }
+      """.trimIndent(),
+    )
+
+    assertContains(output, "CaseNameCollision.kt:")
+    assertContains(output, "[KPaths] Cannot generate paths because 'MessagePaths' would name both")
+    assertContains(output, "the case path for 'Idle'")
+    assertContains(output, "the property-path namespace for case 'Message'")
+  }
+
+  @Test
   fun `reports an actionable error at Pathable for unsupported generic sealed variants`(
     @TempDir fixtureDirectory: Path,
   ) {

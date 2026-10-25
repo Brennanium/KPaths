@@ -3,6 +3,7 @@ package dev.kpaths.sample
 import dev.kpaths.core.CaseKeyPath
 import dev.kpaths.core.CaseMatch
 import dev.kpaths.core.KeyPath
+import dev.kpaths.core.PathId
 import dev.kpaths.core.TypeId
 import dev.kpaths.core.WritableKeyPath
 import dev.kpaths.core.caseMatches
@@ -39,6 +40,18 @@ class GeneratedPathsTest {
     assertEquals(CaseMatch.Matched(null), Request.Nullable(null).match(nullable))
     assertTrue(Request.Nullable(null).caseMatches(nullable))
     assertNull(Request.Selected("Blob")[nullable])
+  }
+
+  @Test
+  fun `case and nested property catalog names are independently configurable`() {
+    val message: CaseKeyPath<NamedEvent, NamedEvent.Message> = NamedEventPaths.message
+    val text: KeyPath<NamedEvent.Message, String> = NamedEventPaths.MessageContentPaths.text
+    val north: CaseKeyPath<NamedDirection, Unit> = NamedDirectionPaths.north
+
+    assertEquals(NamedEvent.Message("Hello"), message.embed(NamedEvent.Message("Hello")))
+    assertEquals("Hello", NamedEvent.Message("Hello")[text])
+    assertEquals(PathId.case(TypeId.of<NamedEvent>(), "Message"), message.__kpaths_id)
+    assertTrue(NamedDirection.NORTH.caseMatches(north))
   }
 
   @Test

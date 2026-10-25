@@ -1,6 +1,8 @@
 package dev.kpaths.sample
 
+import dev.kpaths.annotations.CaseName
 import dev.kpaths.annotations.Pathable
+import dev.kpaths.annotations.PathsName
 
 @Pathable
 data class Person(
@@ -69,6 +71,21 @@ class Session(
 sealed interface Connection {
   data object Disconnected : Connection
   data class Connected(val host: String?) : Connection
+}
+
+@Pathable
+sealed interface NamedEvent {
+  data object Idle : NamedEvent
+
+  @CaseName("message")
+  @PathsName("MessageContentPaths")
+  data class Message(val text: String) : NamedEvent
+}
+
+@Pathable
+enum class NamedDirection {
+  @CaseName("north")
+  NORTH,
 }
 
 @Pathable

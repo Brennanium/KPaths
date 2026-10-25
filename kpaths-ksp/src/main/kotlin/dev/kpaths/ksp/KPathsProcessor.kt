@@ -19,9 +19,13 @@ import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.symbol.Variance
 import com.google.devtools.ksp.validate
+import dev.kpaths.annotations.CaseName
 import dev.kpaths.annotations.Pathable
+import dev.kpaths.annotations.PathsName
 
 private val pathableAnnotation = Pathable::class.qualifiedName!!
+private val caseNameAnnotation = CaseName::class.qualifiedName!!
+private val pathsNameAnnotation = PathsName::class.qualifiedName!!
 
 /** Generates stable property and case-path APIs for [Pathable] declarations. */
 public class KPathsProcessorProvider : SymbolProcessorProvider {
@@ -307,12 +311,38 @@ private class KPathsProcessor(
           logger.error("Sealed variants must have qualified names.", caseDeclaration)
           return@mapNotNull null
         }
+        val sourceName = caseDeclaration.simpleName.asString()
+        val generatedCaseName = configuredCaseMemberName(
+          declaration = caseDeclaration,
+          annotationName = "@CaseName",
+          annotationQualifiedName = caseNameAnnotation,
+          defaultName = sourceName,
+        ) ?: return@mapNotNull null
+        val generatedPathsName = configuredCaseMemberName(
+          declaration = caseDeclaration,
+          annotationName = "@PathsName",
+          annotationQualifiedName = pathsNameAnnotation,
+          defaultName = sourceName + "Paths",
+        ) ?: return@mapNotNull null
+        val propertyPaths = pathProperties(caseDeclaration)
+        if (
+          hasAnnotation(caseDeclaration, pathsNameAnnotation) &&
+            propertyPaths.isEmpty()
+        ) {
+          logger.error(
+            "[KPaths] @PathsName requires a sealed case with at least one accessible property path.",
+            caseDeclaration,
+          )
+          return@mapNotNull null
+        }
         CasePath(
           declaration = caseDeclaration,
-          name = caseDeclaration.simpleName.asString(),
+          sourceName = sourceName,
+          generatedCaseName = generatedCaseName,
+          generatedPathsName = generatedPathsName,
           kind = CaseKind.SEALED_VARIANT,
           qualifiedName = qualifiedName,
-          propertyPaths = pathProperties(caseDeclaration),
+          propertyPaths = propertyPaths,
         )
       }.toList()
     }
@@ -321,10 +351,19 @@ private class KPathsProcessor(
       return declaration.declarations
         .filterIsInstance<KSClassDeclaration>()
         .filter { it.classKind == ClassKind.ENUM_ENTRY }
-        .map { entry ->
+        .mapNotNull { entry ->
+          val sourceName = entry.simpleName.asString()
+          val generatedCaseName = configuredCaseMemberName(
+            declaration = entry,
+            annotationName = "@CaseName",
+            annotationQualifiedName = caseNameAnnotation,
+            defaultName = sourceName,
+          ) ?: return@mapNotNull null
           CasePath(
             declaration = entry,
-            name = entry.simpleName.asString(),
+            sourceName = sourceName,
+            generatedCaseName = generatedCaseName,
+            generatedPathsName = null,
             kind = CaseKind.ENUM_ENTRY,
             qualifiedName = null,
             propertyPaths = emptyList(),
@@ -335,6 +374,48 @@ private class KPathsProcessor(
 
     return emptyList()
   }
+
+  private fun configuredCaseMemberName(
+    declaration: KSClassDeclaration,
+    annotationName: String,
+    annotationQualifiedName: String,
+    defaultName: String,
+  ): String? {
+    val annotation = declaration.annotations.firstOrNull { candidate ->
+      candidate.annotationType.resolve().declaration.qualifiedName?.asString() == annotationQualifiedName
+    }
+    if (annotation == null) return defaultName
+    val configuredName = annotation.arguments
+      .firstOrNull { argument -> argument.name?.asString() == "value" }
+      ?.value as? String
+      ?: ""
+    if (configuredName.isEmpty()) {
+      logger.error("[KPaths] $annotationName requires a non-empty Kotlin identifier.", annotation)
+      return null
+    }
+    if (configuredName.startsWith(generatedInternalPrefix)) {
+      logger.error(
+        "[KPaths] $annotationName value '$configuredName' uses the reserved " +
+          "'$generatedInternalPrefix' prefix for KPaths-generated implementation details.",
+        annotation,
+      )
+      return null
+    }
+    if (!configuredName.isKotlinIdentifier()) {
+      logger.error(
+        "[KPaths] $annotationName value '$configuredName' must be a single Kotlin identifier, " +
+          "without a package or dot.",
+        annotation,
+      )
+      return null
+    }
+    return configuredName
+  }
+
+  private fun hasAnnotation(declaration: KSClassDeclaration, annotationQualifiedName: String): Boolean =
+    declaration.annotations.any { candidate ->
+      candidate.annotationType.resolve().declaration.qualifiedName?.asString() == annotationQualifiedName
+    }
 
   /** Classifies Kotlin properties into the library's explicit value-style and reference-style APIs. */
   private fun pathProperties(declaration: KSClassDeclaration): List<PathProperty> {
@@ -442,25 +523,25 @@ private class KPathsProcessor(
     }
     casePaths.forEach { casePath ->
       members += GeneratedMember(
-        name = casePath.name,
-        description = "the case path for '${casePath.name}'",
+        name = casePath.generatedCaseName,
+        description = "the case path for '${casePath.sourceName}'",
       )
       if (casePath.kind == CaseKind.SEALED_VARIANT && casePath.propertyPaths.isNotEmpty()) {
         members += GeneratedMember(
-          name = casePath.name + "Paths",
-          description = "the property-path namespace for case '${casePath.name}'",
+          name = requireNotNull(casePath.generatedPathsName),
+          description = "the property-path namespace for case '${casePath.sourceName}'",
         )
         if (declaration.typeParameters.isNotEmpty()) {
           members += GeneratedMember(
-            name = casePath.name + "PropertyPaths",
-            description = "the generated property-path type for case '${casePath.name}'",
+            name = casePath.sourceName + "PropertyPaths",
+            description = "the generated property-path type for case '${casePath.sourceName}'",
           )
         }
       }
       if (declaration.typeParameters.isNotEmpty() && generatedCasePayload(casePath) != null) {
         members += GeneratedMember(
-          name = casePath.name + "CasePath",
-          description = "the generated payload-bearing case-path type for case '${casePath.name}'",
+          name = casePath.generatedCaseName + "CasePath",
+          description = "the generated payload-bearing case-path type for case '${casePath.sourceName}'",
         )
       }
     }
@@ -488,11 +569,11 @@ private class KPathsProcessor(
         isValid = false
       }
     casePaths
-      .filter { it.name.startsWith(generatedInternalPrefix) }
+      .filter { it.sourceName.startsWith(generatedInternalPrefix) }
       .forEach { casePath ->
         reportPathableError(
           declaration,
-          "Cannot generate paths because case '${casePath.name}' uses the reserved " +
+          "Cannot generate paths because case '${casePath.sourceName}' uses the reserved " +
             "'$generatedInternalPrefix' prefix for KPaths-generated implementation details.",
         )
         isValid = false
@@ -528,8 +609,7 @@ private class KPathsProcessor(
     val valueTypeId = property.type.resolve().renderTypeId(typeTokenNames)
     val pathInterface = when (pathProperty.kind) {
       PathKind.READ_ONLY -> "dev.kpaths.core.KeyPath"
-      PathKind.COPY_WRITABLE -> "dev.kpaths.core.WritableKeyPath"
-      PathKind.COPY_THEN_MUTATE -> "dev.kpaths.core.WritableKeyPath"
+      PathKind.COPY_WRITABLE, PathKind.COPY_THEN_MUTATE -> "dev.kpaths.core.WritableKeyPath"
       PathKind.REFERENCE_WRITABLE -> "dev.kpaths.core.ReferenceWritableKeyPath"
     }
     val pathBase = when (pathProperty.kind) {
@@ -568,7 +648,7 @@ private class KPathsProcessor(
     resolvedCaseType: ResolvedCaseType,
     payload: CasePayload?,
   ) {
-    val caseIdentifier = escapeIdentifier(casePath.name)
+    val caseIdentifier = escapeIdentifier(casePath.generatedCaseName)
 
     writer.appendLine()
     if (capturesTypeTokens) {
@@ -638,7 +718,7 @@ private class KPathsProcessor(
         caseProperties = caseProperties,
       )
     } else {
-      writer.appendLine("  public object ${escapeIdentifier(casePath.name + "Paths")} {")
+      writer.appendLine("  public object ${escapeIdentifier(requireNotNull(casePath.generatedPathsName))} {")
       caseProperties.forEach { property ->
         writePropertyPath(
           writer = writer,
@@ -668,8 +748,8 @@ private class KPathsProcessor(
     resolvedCaseType: ResolvedCaseType,
     payload: CasePayload,
   ) {
-    val caseIdentifier = escapeIdentifier(casePath.name)
-    val casePathClassIdentifier = escapeIdentifier(casePath.name + "CasePath")
+    val caseIdentifier = escapeIdentifier(casePath.generatedCaseName)
+    val casePathClassIdentifier = escapeIdentifier(casePath.generatedCaseName + "CasePath")
 
     writer.appendLine("  public val $caseIdentifier: $casePathClassIdentifier = $casePathClassIdentifier()")
     writer.appendLine()
@@ -802,7 +882,7 @@ private class KPathsProcessor(
         if (property == target) "value" else escapeIdentifier(property.declaration.simpleName.asString())
       }
       val pathId = bound.fold(
-        "dev.kpaths.core.PathId.case($rootTypeId, \"${casePath.name}\").appending(dev.kpaths.core.PathId.property(${resolvedCaseType.typeId}, \"$targetName\"))",
+        "dev.kpaths.core.PathId.case($rootTypeId, \"${casePath.sourceName}\").appending(dev.kpaths.core.PathId.property(${resolvedCaseType.typeId}, \"$targetName\"))",
       ) { accumulated, property ->
         "$accumulated.appending(dev.kpaths.core.PathSegment.Key(${escapeIdentifier(property.declaration.simpleName.asString())}))"
       }
@@ -829,7 +909,7 @@ private class KPathsProcessor(
     focusTypeId: String,
   ) {
     val pathId = properties.fold(
-      "dev.kpaths.core.PathId.case($rootTypeId, \"${casePath.name}\")",
+      "dev.kpaths.core.PathId.case($rootTypeId, \"${casePath.sourceName}\")",
     ) { accumulated, property ->
       val propertyName = property.declaration.simpleName.asString()
       "$accumulated.appending(dev.kpaths.core.PathId.property(${resolvedCaseType.typeId}, \"$propertyName\"))"
@@ -864,7 +944,7 @@ private class KPathsProcessor(
   ) {
     val partialCasePathType = "dev.kpaths.core.PartialCaseKeyPath<$rootKotlinType>"
     val paths = resolvedCasePaths.joinToString { resolvedCasePath ->
-      escapeIdentifier(resolvedCasePath.casePath.name)
+      escapeIdentifier(resolvedCasePath.casePath.generatedCaseName)
     }
 
     writer.appendLine()
@@ -873,7 +953,7 @@ private class KPathsProcessor(
     writer.appendLine()
     writer.appendLine("  public fun caseOf(root: $rootKotlinType): $partialCasePathType {")
     resolvedCasePaths.forEach { resolvedCasePath ->
-      val identifier = escapeIdentifier(resolvedCasePath.casePath.name)
+      val identifier = escapeIdentifier(resolvedCasePath.casePath.generatedCaseName)
       writer.appendLine("    if ($identifier.matches(root)) return $identifier")
     }
     writer.appendLine("    error(\"No generated case path matched the supplied ${rootKotlinType.substringBefore('<')} value.\")")
@@ -888,7 +968,7 @@ private class KPathsProcessor(
     casePath: CasePath,
     resolvedCaseType: ResolvedCaseType,
   ) {
-    writer.appendLine("${indent}override val __kpaths_id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.case($rootTypeId, \"${casePath.name}\")")
+    writer.appendLine("${indent}override val __kpaths_id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.case($rootTypeId, \"${casePath.sourceName}\")")
     writer.appendLine("${indent}override val __kpaths_valueType: dev.kpaths.core.TypeId = ${resolvedCaseType.typeId}")
     when (casePath.kind) {
       CaseKind.SEALED_VARIANT -> {
@@ -897,7 +977,7 @@ private class KPathsProcessor(
         writer.appendLine("${indent}override fun embed(value: ${resolvedCaseType.kotlinType}): $rootKotlinType = value")
       }
       CaseKind.ENUM_ENTRY -> {
-        val enumEntryIdentifier = escapeIdentifier(casePath.name)
+        val enumEntryIdentifier = escapeIdentifier(casePath.sourceName)
         writer.appendLine("${indent}override fun match(root: $rootKotlinType): dev.kpaths.core.CaseMatch<kotlin.Unit> = if (root == $rootKotlinType.$enumEntryIdentifier) dev.kpaths.core.CaseMatch.Matched(kotlin.Unit) else dev.kpaths.core.CaseMatch.NoMatch")
         writer.appendLine("${indent}override fun embed(value: kotlin.Unit): $rootKotlinType = $rootKotlinType.$enumEntryIdentifier")
       }
@@ -916,8 +996,8 @@ private class KPathsProcessor(
     val tokenParameters = rootDeclaration.typeParameters.joinToString(", ") { parameter ->
       "private val ${rootTypeTokenNames.getValue(parameter.name.asString())}: dev.kpaths.core.TypeId"
     }
-    val nestedClassName = escapeIdentifier(casePath.name + "PropertyPaths")
-    val namespaceName = escapeIdentifier(casePath.name + "Paths")
+    val nestedClassName = escapeIdentifier(casePath.sourceName + "PropertyPaths")
+    val namespaceName = escapeIdentifier(requireNotNull(casePath.generatedPathsName))
     val tokenArguments = rootDeclaration.typeParameters.joinToString { parameter ->
       rootTypeTokenNames.getValue(parameter.name.asString())
     }
@@ -964,7 +1044,7 @@ private class KPathsProcessor(
       if (caseDeclaration.typeParameters.isNotEmpty()) {
         reportPathableError(
           rootDeclaration,
-          "Cannot generate '${casePath.name}' because this non-generic sealed root has a generic variant. " +
+          "Cannot generate '${casePath.sourceName}' because this non-generic sealed root has a generic variant. " +
             "Make the variant non-generic or use a generic sealed root.",
         )
         return null
@@ -984,7 +1064,7 @@ private class KPathsProcessor(
     if (caseRootSupertype == null) {
       reportPathableError(
         rootDeclaration,
-        "Cannot generate '${casePath.name}' because KPaths could not resolve its direct $rootQualifiedName supertype.",
+        "Cannot generate '${casePath.sourceName}' because KPaths could not resolve its direct $rootQualifiedName supertype.",
       )
       return null
     }
@@ -1006,7 +1086,7 @@ private class KPathsProcessor(
         if (existingSubstitution != null && existingSubstitution != rootParameterName) {
           reportPathableError(
             rootDeclaration,
-            "Cannot generate '${casePath.name}' because its type parameter '$caseParameterName' " +
+            "Cannot generate '${casePath.sourceName}' because its type parameter '$caseParameterName' " +
               "would need to represent both '$existingSubstitution' and '$rootParameterName'.",
           )
           return null
@@ -1019,7 +1099,7 @@ private class KPathsProcessor(
         val renderedArgument = caseArgument?.renderKotlinType() ?: "<unresolved>"
         reportPathableError(
           rootDeclaration,
-          "Cannot generate '${casePath.name}' because it implements $rootQualifiedName<$renderedArgument> " +
+          "Cannot generate '${casePath.sourceName}' because it implements $rootQualifiedName<$renderedArgument> " +
             "where the generic root requires '${rootParameter.name.asString()}'. " +
             "The variant must forward that type parameter, or refine it to Nothing through an `out` parameter.",
         )
@@ -1033,7 +1113,7 @@ private class KPathsProcessor(
     if (missingParameters.isNotEmpty()) {
       reportPathableError(
         rootDeclaration,
-        "Cannot generate '${casePath.name}' because its type parameter(s) " +
+        "Cannot generate '${casePath.sourceName}' because its type parameter(s) " +
           "${missingParameters.joinToString()} cannot be determined from the sealed root.",
       )
       return null
@@ -1096,7 +1176,9 @@ private class KPathsProcessor(
 
   private data class CasePath(
     val declaration: KSClassDeclaration,
-    val name: String,
+    val sourceName: String,
+    val generatedCaseName: String,
+    val generatedPathsName: String?,
     val kind: CaseKind,
     val qualifiedName: String?,
     val propertyPaths: List<PathProperty>,
