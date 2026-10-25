@@ -9,6 +9,33 @@ import org.junit.jupiter.api.io.TempDir
 
 class KPathsProcessorIntegrationTest {
   @Test
+  fun `reports companion Paths member collisions`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "CompanionPathsCollision.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.Pathable
+
+        @Pathable
+        data class Person(val name: String) {
+          companion object {
+            val Paths = "existing"
+          }
+        }
+      """.trimIndent(),
+    )
+
+    assertContains(output, "CompanionPathsCollision.kt:")
+    assertContains(output, "[KPaths] Cannot generate Person.Companion.Paths")
+    assertContains(output, "already declares a member named 'Paths'")
+  }
+
+  @Test
   fun `reports invalid generated case and property catalog names`(
     @TempDir fixtureDirectory: Path,
   ) {

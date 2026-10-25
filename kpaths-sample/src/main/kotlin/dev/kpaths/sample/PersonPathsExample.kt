@@ -11,7 +11,9 @@ data class Person(
   var address: Address,
   val tags: List<String> = emptyList(),
   val nickname: String? = null,
-)
+) {
+  companion object
+}
 
 @Pathable
 data class Address(

@@ -98,7 +98,8 @@ private class KPathsProcessor(
     val generatedIdentifier = escapeIdentifier(generatedName)
     val pathProperties = pathProperties(declaration)
     val casePaths = casePaths(declaration)
-    if (!validateGeneratedMemberNames(declaration, pathProperties, casePaths)) {
+    val companionPaths = companionPathsExtension(declaration, pathProperties)
+    if (!validateGeneratedMemberNames(declaration, pathProperties, casePaths, companionPaths)) {
       return
     }
     val typeTokenNames = declaration.typeParameters.associate { parameter ->
@@ -170,6 +171,13 @@ private class KPathsProcessor(
           declarationIndent = "  ",
         )
       }
+      if (companionPaths) {
+        writeCompanionPathsView(
+          writer = writer,
+          rootKotlinType = rootKotlinType,
+          pathProperties = pathProperties,
+        )
+      }
       resolvedCasePaths.forEach { resolvedCasePath ->
         writeCasePath(
           writer = writer,
@@ -191,6 +199,15 @@ private class KPathsProcessor(
         )
       }
       writer.appendLine("}")
+      if (companionPaths) {
+        writeCompanionPathsExtension(
+          writer = writer,
+          rootType = renderKotlinQualifiedName(qualifiedName),
+          generatedIdentifier = generatedIdentifier,
+          generatedName = generatedName,
+          pathProperties = pathProperties,
+        )
+      }
       if (declaration.typeParameters.isNotEmpty()) {
         val typeParameters = renderTypeParameters(declaration.typeParameters, reified = true)
         writer.appendLine()
@@ -501,11 +518,76 @@ private class KPathsProcessor(
   private fun isAccessible(setter: com.google.devtools.ksp.symbol.KSPropertySetter): Boolean =
     Modifier.PRIVATE !in setter.modifiers && Modifier.PROTECTED !in setter.modifiers
 
+  /** Only a concrete class can bind a generated companion view to one precise root type. */
+  private fun companionPathsExtension(
+    declaration: KSClassDeclaration,
+    pathProperties: List<PathProperty>,
+  ): Boolean {
+    if (
+      declaration.typeParameters.isNotEmpty() ||
+        Modifier.SEALED in declaration.modifiers ||
+        declaration.classKind != ClassKind.CLASS ||
+        pathProperties.isEmpty()
+    ) {
+      return false
+    }
+    val companion = declaration.declarations
+      .filterIsInstance<KSClassDeclaration>()
+      .firstOrNull(KSClassDeclaration::isCompanionObject)
+      ?: return false
+    return Modifier.PRIVATE !in companion.modifiers &&
+      Modifier.PROTECTED !in companion.modifiers &&
+      Modifier.INTERNAL !in companion.modifiers
+  }
+
+  private fun writeCompanionPathsView(
+    writer: java.io.BufferedWriter,
+    rootKotlinType: String,
+    pathProperties: List<PathProperty>,
+  ) {
+    writer.appendLine()
+    writer.appendLine("  /** Instance-facing view used by the generated companion [Paths] extension. */")
+    writer.appendLine("  public interface CompanionView {")
+    pathProperties.forEach { pathProperty ->
+      val property = pathProperty.declaration
+      val identifier = escapeIdentifier(property.simpleName.asString())
+      val valueType = property.type.resolve().renderKotlinType()
+      writer.appendLine("    public val $identifier: ${pathInterface(pathProperty.kind)}<$rootKotlinType, $valueType>")
+    }
+    writer.appendLine("  }")
+  }
+
+  private fun writeCompanionPathsExtension(
+    writer: java.io.BufferedWriter,
+    rootType: String,
+    generatedIdentifier: String,
+    generatedName: String,
+    pathProperties: List<PathProperty>,
+  ) {
+    val viewType = "$generatedIdentifier.CompanionView"
+    val backingName = escapeIdentifier(generatedInternalPrefix + generatedName + "CompanionView")
+    writer.appendLine()
+    writer.appendLine("private val $backingName: $viewType = object : $viewType {")
+    pathProperties.forEach { pathProperty ->
+      val property = pathProperty.declaration
+      val identifier = escapeIdentifier(property.simpleName.asString())
+      val valueType = property.type.resolve().renderKotlinType()
+      writer.appendLine("  override val $identifier: ${pathInterface(pathProperty.kind)}<$rootType, $valueType>")
+      writer.appendLine("    get() = $generatedIdentifier.$identifier")
+    }
+    writer.appendLine("}")
+    writer.appendLine()
+    writer.appendLine("/** Returns the generated paths for $rootType. */")
+    writer.appendLine("public val $rootType.Companion.Paths: $viewType")
+    writer.appendLine("  get() = $backingName")
+  }
+
   /** Rejects ambiguous public members instead of silently changing the generated API. */
   private fun validateGeneratedMemberNames(
     declaration: KSClassDeclaration,
     pathProperties: List<PathProperty>,
     casePaths: List<CasePath>,
+    companionPaths: Boolean,
   ): Boolean {
     val members = mutableListOf<GeneratedMember>()
     if (declaration.typeParameters.isNotEmpty()) {
@@ -553,6 +635,24 @@ private class KPathsProcessor(
       members += GeneratedMember(
         name = "caseOf",
         description = "the generated case-path lookup function",
+      )
+    }
+
+    if (companionPaths) {
+      val companion = declaration.declarations
+        .filterIsInstance<KSClassDeclaration>()
+        .first(KSClassDeclaration::isCompanionObject)
+      if (companion.declarations.any { it.simpleName.asString() == "Paths" }) {
+        reportPathableError(
+          declaration,
+          "Cannot generate ${declaration.simpleName.asString()}.Companion.Paths because the companion " +
+            "already declares a member named 'Paths'. Rename that member or remove the companion object.",
+        )
+        return false
+      }
+      members += GeneratedMember(
+        name = "CompanionView",
+        description = "the generated companion-path view type",
       )
     }
 
@@ -607,11 +707,7 @@ private class KPathsProcessor(
     val identifier = escapeIdentifier(name)
     val valueKotlinType = property.type.resolve().renderKotlinType(typeParameterSubstitutions)
     val valueTypeId = property.type.resolve().renderTypeId(typeTokenNames)
-    val pathInterface = when (pathProperty.kind) {
-      PathKind.READ_ONLY -> "dev.kpaths.core.KeyPath"
-      PathKind.COPY_WRITABLE, PathKind.COPY_THEN_MUTATE -> "dev.kpaths.core.WritableKeyPath"
-      PathKind.REFERENCE_WRITABLE -> "dev.kpaths.core.ReferenceWritableKeyPath"
-    }
+    val pathInterface = pathInterface(pathProperty.kind)
     val pathBase = when (pathProperty.kind) {
       PathKind.READ_ONLY -> "dev.kpaths.core.KeyPathBase"
       PathKind.COPY_WRITABLE -> "dev.kpaths.core.WritableKeyPathBase"
@@ -635,6 +731,12 @@ private class KPathsProcessor(
       writeSetter(writer, pathProperty.kind, rootKotlinType, valueKotlinType, identifier, indent = "${declarationIndent}  ")
       writer.appendLine("${declarationIndent}}")
     }
+  }
+
+  private fun pathInterface(kind: PathKind): String = when (kind) {
+    PathKind.READ_ONLY -> "dev.kpaths.core.KeyPath"
+    PathKind.COPY_WRITABLE, PathKind.COPY_THEN_MUTATE -> "dev.kpaths.core.WritableKeyPath"
+    PathKind.REFERENCE_WRITABLE -> "dev.kpaths.core.ReferenceWritableKeyPath"
   }
 
   private fun writeCasePath(

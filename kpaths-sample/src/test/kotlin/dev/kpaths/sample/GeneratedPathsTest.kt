@@ -30,6 +30,12 @@ class GeneratedPathsTest {
   }
 
   @Test
+  fun `existing companions expose the canonical generated paths through Paths`() {
+    assertEquals(PersonPaths.name, Person.Paths.name)
+    assertEquals(PersonPaths.address, Person.Paths.address)
+  }
+
+  @Test
   fun `generated case paths independently embed complete cases and payloads`() {
     val connected: CaseKeyPath<Connection, Connection.Connected> = ConnectionPaths.Connected
     val selected: CaseKeyPath<Request, String> = RequestPaths.Selected.value
