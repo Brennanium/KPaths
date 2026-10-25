@@ -34,12 +34,40 @@ There is no `WritableCaseKeyPath`: a genuine CaseKeyPath always embeds a complet
 
 ## Choose a CaseKeyPath factory
 
-For a source-owned sealed hierarchy used repeatedly, `@Pathable` is the preferred choice. The
-annotated `Event` above gets canonical CaseKeyPaths without runtime shape discovery:
+For a source-owned sealed hierarchy used repeatedly, `@Pathable` is the preferred choice. Add a
+companion object when you own the sealed root to make its canonical CaseKeyPaths discoverable under
+the root itself:
 
 ```kotlin
+@Pathable
+sealed interface Event {
+  companion object {}
+
+  data object Started : Event
+  data class Message(val text: String) : Event
+  data class Navigate(val id: String, val destination: String) : Event
+}
+
+Event.Paths.Message
+// CaseKeyPath<Event, Event.Message>
+
+Event.Paths.MessagePaths.text
+// KeyPath<Event.Message, String>
+
+Event.Paths.Navigate
+// CaseKeyPath<Event, Event.Navigate>
+```
+
+The same whole-case values remain available from the always-generated top-level catalog, so a
+companion is only a discoverability upgrade. The top-level catalog also retains its direct payload
+conveniences:
+
+```kotlin
+EventPaths.Message == Event.Paths.Message
+// CaseKeyPath<Event, Event.Message>
+
 EventPaths.Message.text
-// CaseKeyPath<Event, String>
+// CaseKeyPath<Event, String> (a generated direct-payload convenience)
 
 EventPaths.Navigate.destinationFor(id = "settings")
 // CaseKeyPath<Event, String>
@@ -50,7 +78,7 @@ case:
 
 | Need | Factory | Use it when |
 | --- | --- | --- |
-| Reuse a source-owned case | generated `EventPaths.Message.text` | Preferred: canonical, discoverable, no reflection. |
+| Reuse a source-owned case | generated `Event.Paths.Message` or `EventPaths.Message` | Canonical and no-reflection; prefer `Event.Paths` when a source-owned companion exists. |
 | Match and embed the complete concrete case | `caseKeyPath<Root, Case>()` | The case object itself is the desired focus. |
 | Match one enum entry | `caseKeyPath(Entry)` | A Kotlin `enum` entry has no associated payload. |
 | Reflect a conventional data-class constructor (JVM) | `casePathsOf<Root>().pathFor(::Case)` | Add `kpaths-reflection-jvm`; a one-off data case has one to three stored constructor properties. |

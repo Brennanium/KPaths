@@ -15,8 +15,8 @@ the same idea to sealed cases through `caseKeyPath`; the optional JVM reflection
    nullable paths.
 2. Read [CaseKeyPaths](case-paths.md) for matching, independent embedding, payload factories, and
    sealed-case composition.
-3. Read [Generated catalogs](generation.md) to decide when `@Pathable` is more discoverable than a
-   direct factory.
+3. Read [Generated catalogs](generation.md) to choose between the always-generated `TypePaths`
+   catalog and the more discoverable `Type.Paths` companion facade for source-owned models.
 
 Then choose the guide that matches the problem at hand:
 

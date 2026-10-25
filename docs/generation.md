@@ -1,10 +1,32 @@
 # Generated catalogs
 
-`@Pathable` generates a `TypeNamePaths` catalog for data classes, ordinary classes, sealed roots, and enums. Generated property KeyPaths follow Kotlin mutability: `val` is a read-only `KeyPath`; data-class `var` is copy-based `WritableKeyPath`; class `var` is `ReferenceWritableKeyPath`.
+`@Pathable` generates a `TypeNamePaths` catalog for data classes, ordinary classes, sealed roots,
+and enums. Generated property KeyPaths follow Kotlin mutability: `val` is a read-only `KeyPath`;
+data-class `var` is copy-based `WritableKeyPath`; class `var` is `ReferenceWritableKeyPath`.
 
 Catalogs are a discoverability and repeated-use feature, not a prerequisite for paths. Use the
 [KeyPaths guide](key-paths.md) for direct property factories, and the [CaseKeyPaths guide](case-paths.md)
 for the factory choices available to unannotated or third-party sealed hierarchies.
+
+## Three ways to reach a path
+
+KPaths deliberately gives source-owned models a progressively more discoverable surface without
+making any one surface mandatory:
+
+| Model setup | Preferred use | What it provides |
+| --- | --- | --- |
+| No annotation | `keyPath(Person::name)` | A one-off KeyPath for any accessible property. |
+| `@Pathable`, no companion | `PersonPaths.name` | A canonical generated catalog that is always available for a valid annotated model. |
+| `@Pathable` plus a companion | `Person.Paths.name` | The same canonical path through the model's most discoverable namespace. |
+
+For a source-owned model used repeatedly, the third form is the recommended default. It keeps the
+catalog next to the type in code completion, and Kotlin IDEs normally offer or add the generated
+`Paths` extension import when it is needed outside the model's package. The top-level catalog is
+not replaced: `PersonPaths.name` and `Person.Paths.name` are the exact same canonical value.
+
+The companion is therefore ergonomic opt-in, not a requirement. If a model cannot or should not
+declare one, continue using `PersonPaths`; nothing about the generated KeyPaths or CaseKeyPaths is
+lost.
 
 ## Companion access
 
@@ -24,6 +46,16 @@ data class Person(
 PersonPaths.name == Person.Paths.name // true: the exact same canonical KeyPath
 Person.Paths.city
 // WritableKeyPath<Person, String>
+```
+
+Without that companion declaration, the ordinary generated catalog is still available:
+
+```kotlin
+@Pathable
+data class Person(val name: String)
+
+PersonPaths.name
+// KeyPath<Person, String>
 ```
 
 `Paths` is a generated extension property, not a member injected into the companion. Outside the

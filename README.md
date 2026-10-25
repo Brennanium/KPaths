@@ -30,7 +30,7 @@ val city = writableKeyPath(
 
 `KeyPath` reads, `WritableKeyPath` returns a revised value for value-semantic models, and `ReferenceWritableKeyPath` is for intentional in-place class mutation. See the [KeyPaths guide](docs/key-paths.md) for factory selection, composition, nullable paths, and standard-library paths.
 
-Annotate frequent source-owned models to generate canonical catalogs:
+For a source-owned model with paths used repeatedly, annotate it to generate a canonical catalog:
 
 ```kotlin
 @Pathable
@@ -40,9 +40,23 @@ PersonPaths.name
 PersonPaths.city
 ```
 
-If a source-owned model has a companion object, generated paths can also be accessed through
-`Person.Paths.name`, `Event.Paths.Message`, or `Box.Paths<String>().value`. See
-[Generated catalogs](docs/generation.md) for the companion declaration, imports, generic
+That top-level catalog is always the fallback for a valid annotated model; a companion is optional.
+For the most discoverable source-owned API, add a simple companion object:
+
+```kotlin
+@Pathable
+data class Person(val name: String, var city: String) {
+  companion object
+}
+
+Person.Paths.name == PersonPaths.name // the same canonical KeyPath
+Person.Paths.city
+```
+
+`Person.Paths` keeps the vocabulary with its type in completion. It is a generated extension, so a
+consumer in another package imports it normally; Kotlin IDEs generally offer that import
+automatically. If the model has no companion, use `PersonPaths` instead—no generated behavior is
+lost. See [Generated catalogs](docs/generation.md) for companion naming, imports, generic
 construction forms, `@PathsName`, and generated-case naming options.
 
 ## CaseKeyPaths

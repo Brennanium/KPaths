@@ -22,22 +22,32 @@ val name: KeyPath<Person, String> = keyPath(Person::name)
 ```
 
 For a source-owned type with a public, frequently used KeyPath vocabulary, prefer a generated
-catalog instead:
+catalog. Add a companion object when you own the type to make that vocabulary appear under the type
+itself:
 
 ```kotlin
 @Pathable
-data class Person(val name: String, var address: Address)
+data class Person(val name: String, var address: Address) {
+  companion object
+}
 
-PersonPaths.name    // KeyPath<Person, String>
-PersonPaths.address // WritableKeyPath<Person, Address>
+Person.Paths.name    // KeyPath<Person, String>
+Person.Paths.address // WritableKeyPath<Person, Address>
+
+// The top-level catalog is always generated too:
+PersonPaths.name == Person.Paths.name
 ```
+
+The companion is optional. `@Pathable data class Person(...)` with no companion still gives you
+`PersonPaths.name`; use that form when the model cannot own a companion or a top-level catalog is
+clearer at the call site.
 
 The remaining factories are deliberate escape hatches:
 
 | Need | Factory | Use it when |
 | --- | --- | --- |
 | Read an accessible property | `keyPath(Person::name)` | Default choice, including third-party types. |
-| Reuse source-owned KeyPaths | `PersonPaths.name` | The model is annotated and the KeyPath is part of its normal vocabulary. |
+| Reuse source-owned KeyPaths | `Person.Paths.name` or `PersonPaths.name` | The model is annotated; prefer `Person.Paths` when a source-owned companion is available. |
 | Read a computed or derived value | `keyPath(name, get)` | No property reference represents the read. |
 | Replace part of an immutable value | `writableKeyPath(get, set)` | You can state how a new focus produces a new root. |
 | Set a mutable computed property on a copied root | `writableKeyPath(property, copy)` | A `KMutableProperty1` exists and copying first is the desired value semantics. |
