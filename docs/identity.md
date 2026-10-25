@@ -23,9 +23,9 @@ val title = keyPath(Book::title)
 val finished = caseKeyPath<DownloadEvent, DownloadEvent.Finished>()
 ```
 
-Generated catalogs do the same for source-owned models. That avoids maintaining string paths such
-as `"Book.title"` or `"DownloadEvent.Finished"`: a compiler-aware rename updates property and type
-references, and KSP regenerates the corresponding catalog identity.
+Generated catalogs do the same for source-owned models. You do not need to maintain a separate
+string such as `"Book.title"` or `"DownloadEvent.Finished"`: rename the property or case as part of
+normal Kotlin refactoring, and KSP regenerates the matching catalog.
 
 Named custom factories are the intentional exception. Their name is semantic, so choose a stable,
 root-local identifier and avoid reusing it for unrelated derived computations:

@@ -31,19 +31,9 @@ Person.Paths.address // WritableKeyPath<Person, Address>
 canonical value and remains available when the model has no companion. See [Generated catalogs](generation.md)
 for the companion and generic-catalog rules.
 
-## Let declarations name the path
-
-The normal forms never ask for a string such as `"Person.name"`. `keyPath(Person::name)` carries
-Kotlin's checked property reference, while generated catalogs derive the root and property names
-from their declarations. Renaming `Person`, `name`, or a type in a composed path is therefore part
-of an ordinary compiler-aware refactor: references and generated code update together instead of
-leaving a stale string behind.
-
-Those declaration-derived names form the path's structural identity. Equivalent property-reference
-and generated KeyPaths compare equal even when they were created in different places. The named
-custom factories remain available for derived values that have no property declaration; see
-[Detailed factory patterns](#detailed-factory-patterns) and [Identity and type metadata](identity.md)
-for how to name those intentionally.
+You do not need to keep a separate `"Person.name"` string correct. `Person::name` points to the
+actual Kotlin property, and `Person.Paths.name` is generated from that property. If you rename the
+type or property, normal Kotlin refactoring and KSP update the path code too.
 
 ## What a KeyPath gives an API
 

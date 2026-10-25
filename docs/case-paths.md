@@ -34,17 +34,10 @@ val message = Event.Paths.Message
 For an enum entry, use `caseKeyPath(Entry)`; its focus is `Unit`. The reflection-backed and explicit
 payload factories are covered after the core behaviors below.
 
-## Let sealed declarations name the path
-
-`caseKeyPath<Event, Event.Message>()` refers to the concrete root and case types, not strings such
-as `"Event.Message"`. Likewise, generated catalogs derive their root and case identity from the
-sealed declaration, enum entry, and case property declarations. A compiler-aware rename of a root,
-case, or payload property updates these references and generated paths together.
-
-This is especially valuable for deeply composed case paths: each segment remains tied to a real
-Kotlin declaration rather than a hand-maintained spelling. Explicit payload factories use property
-references and constructor references for the same reason. Only fully custom paths supply their
-own identity names; give those names the same care as any other library-defined identifier.
+You do not need to keep a separate `"Event.Message"` string correct. The whole-case factory refers
+to `Event.Message` directly, and generated catalogs use the names from the sealed declaration. If
+you rename a root, case, or case property, normal Kotlin refactoring and KSP update the path code
+too.
 
 ## What a CaseKeyPath gives an API
 
