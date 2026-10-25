@@ -102,7 +102,7 @@ private class KPathsProcessor(
     val generatedIdentifier = escapeIdentifier(generatedName)
     val pathProperties = pathProperties(declaration)
     val casePaths = casePaths(declaration)
-    val companionPaths = companionPathsExtension(declaration, pathProperties)
+    val companionPaths = companionPathsExtension(declaration, pathProperties, casePaths)
     val genericCompanionPaths = genericCompanionPathsFactory(declaration)
     if (!validateGeneratedMemberNames(
         declaration,
@@ -187,7 +187,9 @@ private class KPathsProcessor(
         writeCompanionPathsView(
           writer = writer,
           rootKotlinType = rootKotlinType,
+          generatedIdentifier = generatedIdentifier,
           pathProperties = pathProperties,
+          resolvedCasePaths = resolvedCasePaths,
         )
       }
       resolvedCasePaths.forEach { resolvedCasePath ->
@@ -219,6 +221,8 @@ private class KPathsProcessor(
           generatedIdentifier = generatedIdentifier,
           generatedName = generatedName,
           pathProperties = pathProperties,
+            rootKotlinType = rootKotlinType,
+            resolvedCasePaths = resolvedCasePaths,
         )
       }
       if (declaration.typeParameters.isNotEmpty()) {
@@ -555,12 +559,11 @@ private class KPathsProcessor(
   private fun companionPathsExtension(
     declaration: KSClassDeclaration,
     pathProperties: List<PathProperty>,
+    casePaths: List<CasePath>,
   ): Boolean {
     if (
       declaration.typeParameters.isNotEmpty() ||
-        Modifier.SEALED in declaration.modifiers ||
-        declaration.classKind != ClassKind.CLASS ||
-        pathProperties.isEmpty()
+        (pathProperties.isEmpty() && casePaths.isEmpty())
     ) {
       return false
     }
@@ -599,7 +602,9 @@ private class KPathsProcessor(
   private fun writeCompanionPathsView(
     writer: java.io.BufferedWriter,
     rootKotlinType: String,
+    generatedIdentifier: String,
     pathProperties: List<PathProperty>,
+    resolvedCasePaths: List<ResolvedCasePath>,
   ) {
     val viewName = escapeIdentifier(generatedInternalPrefix + "CompanionView")
     writer.appendLine()
@@ -611,7 +616,32 @@ private class KPathsProcessor(
       val valueType = property.type.resolve().renderKotlinType()
       writer.appendLine("    public val $identifier: ${pathInterface(pathProperty.kind)}<$rootKotlinType, $valueType>")
     }
+    resolvedCasePaths.forEach { resolvedCasePath ->
+      val casePath = resolvedCasePath.casePath
+      val caseIdentifier = escapeIdentifier(casePath.generatedCaseName)
+      writer.appendLine("    public val $caseIdentifier: dev.kpaths.core.CaseKeyPath<$rootKotlinType, ${resolvedCasePath.resolvedCaseType.kotlinType}>")
+      if (casePath.kind == CaseKind.SEALED_VARIANT && casePath.propertyPaths.isNotEmpty()) {
+        val namespaceIdentifier = escapeIdentifier(requireNotNull(casePath.generatedPathsName))
+        writer.appendLine("    public val $namespaceIdentifier: ${casePropertyPathsViewIdentifier(casePath)}")
+      }
+    }
+    if (resolvedCasePaths.isNotEmpty()) {
+      writer.appendLine("    public val allCasePaths: kotlin.collections.List<dev.kpaths.core.PartialCaseKeyPath<$rootKotlinType>>")
+      writer.appendLine("    public fun caseOf(root: $rootKotlinType): dev.kpaths.core.PartialCaseKeyPath<$rootKotlinType>")
+    }
     writer.appendLine("  }")
+    resolvedCasePaths
+      .filter { resolvedCasePath ->
+        resolvedCasePath.casePath.kind == CaseKind.SEALED_VARIANT &&
+          resolvedCasePath.casePath.propertyPaths.isNotEmpty()
+      }
+      .forEach { resolvedCasePath ->
+        writeCasePropertyPathsCompanionView(
+          writer = writer,
+          rootKotlinType = resolvedCasePath.resolvedCaseType.kotlinType,
+          casePath = resolvedCasePath.casePath,
+        )
+      }
   }
 
   private fun writeCompanionPathsExtension(
@@ -621,11 +651,28 @@ private class KPathsProcessor(
     generatedIdentifier: String,
     generatedName: String,
     pathProperties: List<PathProperty>,
+    rootKotlinType: String,
+    resolvedCasePaths: List<ResolvedCasePath>,
   ) {
     val viewName = escapeIdentifier(generatedInternalPrefix + "CompanionView")
     val viewType = "$generatedIdentifier.$viewName"
     val backingName = escapeIdentifier(generatedInternalPrefix + generatedName + "CompanionView")
     writer.appendLine()
+    resolvedCasePaths
+      .filter { resolvedCasePath ->
+        resolvedCasePath.casePath.kind == CaseKind.SEALED_VARIANT &&
+          resolvedCasePath.casePath.propertyPaths.isNotEmpty()
+      }
+      .forEach { resolvedCasePath ->
+        writeCasePropertyPathsCompanionViewBacking(
+          writer = writer,
+          generatedIdentifier = generatedIdentifier,
+          generatedName = generatedName,
+          casePath = resolvedCasePath.casePath,
+          resolvedCaseType = resolvedCasePath.resolvedCaseType,
+        )
+        writer.appendLine()
+      }
     writer.appendLine("private val $backingName: $viewType = object : $viewType {")
     pathProperties.forEach { pathProperty ->
       val property = pathProperty.declaration
@@ -634,12 +681,75 @@ private class KPathsProcessor(
       writer.appendLine("  override val $identifier: ${pathInterface(pathProperty.kind)}<$rootType, $valueType>")
       writer.appendLine("    get() = $generatedIdentifier.$identifier")
     }
+    resolvedCasePaths.forEach { resolvedCasePath ->
+      val casePath = resolvedCasePath.casePath
+      val caseIdentifier = escapeIdentifier(casePath.generatedCaseName)
+      writer.appendLine("  override val $caseIdentifier: dev.kpaths.core.CaseKeyPath<$rootKotlinType, ${resolvedCasePath.resolvedCaseType.kotlinType}>")
+      writer.appendLine("    get() = $generatedIdentifier.$caseIdentifier")
+      if (casePath.kind == CaseKind.SEALED_VARIANT && casePath.propertyPaths.isNotEmpty()) {
+        val namespaceIdentifier = escapeIdentifier(requireNotNull(casePath.generatedPathsName))
+        writer.appendLine("  override val $namespaceIdentifier: $generatedIdentifier.${casePropertyPathsViewIdentifier(casePath)}")
+        writer.appendLine("    get() = ${casePropertyPathsViewBackingIdentifier(generatedName, casePath)}")
+      }
+    }
+    if (resolvedCasePaths.isNotEmpty()) {
+      writer.appendLine("  override val allCasePaths: kotlin.collections.List<dev.kpaths.core.PartialCaseKeyPath<$rootKotlinType>>")
+      writer.appendLine("    get() = $generatedIdentifier.allCasePaths")
+      writer.appendLine("  override fun caseOf(root: $rootKotlinType): dev.kpaths.core.PartialCaseKeyPath<$rootKotlinType> =")
+      writer.appendLine("    $generatedIdentifier.caseOf(root)")
+    }
     writer.appendLine("}")
     writer.appendLine()
     writer.appendLine("/** Returns the generated paths for $rootType. */")
     writer.appendLine("public val $rootType.$companionName.Paths: $viewType")
     writer.appendLine("  get() = $backingName")
   }
+
+  private fun writeCasePropertyPathsCompanionView(
+    writer: java.io.BufferedWriter,
+    rootKotlinType: String,
+    casePath: CasePath,
+  ) {
+    writer.appendLine()
+    writer.appendLine("  /** Instance-facing view for a generated sealed-case property catalog. */")
+    writer.appendLine("  public interface ${casePropertyPathsViewIdentifier(casePath)} {")
+    casePath.propertyPaths.forEach { pathProperty ->
+      val identifier = escapeIdentifier(pathProperty.generatedName)
+      val valueType = pathProperty.declaration.type.resolve().renderKotlinType()
+      writer.appendLine("    public val $identifier: ${pathInterface(pathProperty.kind)}<$rootKotlinType, $valueType>")
+    }
+    writer.appendLine("  }")
+  }
+
+  private fun writeCasePropertyPathsCompanionViewBacking(
+    writer: java.io.BufferedWriter,
+    generatedIdentifier: String,
+    generatedName: String,
+    casePath: CasePath,
+    resolvedCaseType: ResolvedCaseType,
+  ) {
+    val namespaceIdentifier = escapeIdentifier(requireNotNull(casePath.generatedPathsName))
+    val viewIdentifier = casePropertyPathsViewIdentifier(casePath)
+    val backingIdentifier = casePropertyPathsViewBackingIdentifier(generatedName, casePath)
+    writer.appendLine("private val $backingIdentifier: $generatedIdentifier.$viewIdentifier = object : $generatedIdentifier.$viewIdentifier {")
+    casePath.propertyPaths.forEach { pathProperty ->
+      val identifier = escapeIdentifier(pathProperty.generatedName)
+      val valueType = pathProperty.declaration.type.resolve().renderKotlinType(resolvedCaseType.typeParameterSubstitutions)
+      writer.appendLine("  override val $identifier: ${pathInterface(pathProperty.kind)}<${resolvedCaseType.kotlinType}, $valueType>")
+      writer.appendLine("    get() = $generatedIdentifier.$namespaceIdentifier.$identifier")
+    }
+    writer.appendLine("}")
+  }
+
+  private fun casePropertyPathsViewIdentifier(casePath: CasePath): String =
+    escapeIdentifier(generatedInternalPrefix + requireNotNull(casePath.generatedPathsName) + "View")
+
+  private fun casePropertyPathsViewBackingIdentifier(
+    generatedName: String,
+    casePath: CasePath,
+  ): String = escapeIdentifier(
+    generatedInternalPrefix + generatedName + requireNotNull(casePath.generatedPathsName) + "View",
+  )
 
   private fun writeGenericCompanionPathsFactory(
     writer: java.io.BufferedWriter,

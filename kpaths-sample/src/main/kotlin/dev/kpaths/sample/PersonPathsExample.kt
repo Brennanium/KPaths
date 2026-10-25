@@ -82,12 +82,16 @@ class Session(
 
 @Pathable
 sealed interface Connection {
+  companion object {}
+
   data object Disconnected : Connection
   data class Connected(val host: String?) : Connection
 }
 
 @Pathable
 sealed interface NamedEvent {
+  companion object {}
+
   data object Idle : NamedEvent
 
   @CaseName("message")
@@ -101,7 +105,9 @@ sealed interface NamedEvent {
 @Pathable
 enum class NamedDirection {
   @CaseName("north")
-  NORTH,
+  NORTH;
+
+  companion object
 }
 
 @Pathable

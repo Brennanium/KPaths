@@ -72,6 +72,19 @@ class GeneratedPathsTest {
   }
 
   @Test
+  fun `non-generic companions expose generated case catalogs`() {
+    assertEquals(ConnectionPaths.Connected, Connection.Paths.Connected)
+    assertEquals(NamedEventPaths.message, NamedEvent.Paths.message)
+    assertEquals(
+      NamedEventPaths.MessageContentPaths.messageText,
+      NamedEvent.Paths.MessageContentPaths.messageText,
+    )
+    assertEquals(NamedDirectionPaths.north, NamedDirection.Paths.north)
+    assertEquals(NamedEventPaths.allCasePaths, NamedEvent.Paths.allCasePaths)
+    assertEquals(NamedEventPaths.caseOf(NamedEvent.Idle), NamedEvent.Paths.caseOf(NamedEvent.Idle))
+  }
+
+  @Test
   fun `generated multi-payload cases provide named context-bound routes`() {
     val destination = RequestPaths.Navigate.destinationFor(id = "settings")
     val replace = RequestPaths.Route.replaceFor(id = "settings", destination = "privacy")
