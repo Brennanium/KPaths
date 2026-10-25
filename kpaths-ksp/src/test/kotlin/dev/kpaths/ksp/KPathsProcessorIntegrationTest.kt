@@ -36,6 +36,34 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
+  fun `reports companion Paths extension collisions`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "CompanionPathsExtensionCollision.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.Pathable
+
+        @Pathable
+        data class Person(val name: String) {
+          companion object
+        }
+
+        val Person.Companion.Paths: String
+          get() = "existing"
+      """.trimIndent(),
+    )
+
+    assertContains(output, "CompanionPathsExtensionCollision.kt:")
+    assertContains(output, "[KPaths] Cannot generate Person.Companion.Paths because the top-level extension")
+    assertContains(output, "already declares it")
+  }
+
+  @Test
   fun `reports invalid generated case and property catalog names`(
     @TempDir fixtureDirectory: Path,
   ) {

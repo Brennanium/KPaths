@@ -81,7 +81,7 @@ private class KPathsProcessor(
     }.forEach { target ->
       val packageName = target.declaration.packageName.asString()
       if (validateTopLevelGeneratedName(target.declaration, resolver, packageName, target.generatedName)) {
-        generatePaths(target.declaration, target.generatedName)
+        generatePaths(target.declaration, target.generatedName, resolver)
       }
     }
 
@@ -91,6 +91,7 @@ private class KPathsProcessor(
   private fun generatePaths(
     declaration: KSClassDeclaration,
     generatedName: String,
+    resolver: Resolver,
   ) {
     val qualifiedName = declaration.qualifiedName?.asString() ?: run {
       logger.error("@Pathable types must have a qualified name.", declaration)
@@ -101,7 +102,7 @@ private class KPathsProcessor(
     val pathProperties = pathProperties(declaration)
     val casePaths = casePaths(declaration)
     val companionPaths = companionPathsExtension(declaration, pathProperties)
-    if (!validateGeneratedMemberNames(declaration, pathProperties, casePaths, companionPaths)) {
+    if (!validateGeneratedMemberNames(declaration, pathProperties, casePaths, companionPaths, resolver)) {
       return
     }
     val typeTokenNames = declaration.typeParameters.associate { parameter ->
@@ -596,11 +597,13 @@ private class KPathsProcessor(
   }
 
   /** Rejects ambiguous public members instead of silently changing the generated API. */
+  @OptIn(KspExperimental::class)
   private fun validateGeneratedMemberNames(
     declaration: KSClassDeclaration,
     pathProperties: List<PathProperty>,
     casePaths: List<CasePath>,
     companionPaths: Boolean,
+    resolver: Resolver,
   ): Boolean {
     val members = mutableListOf<GeneratedMember>()
     if (declaration.typeParameters.isNotEmpty()) {
@@ -660,6 +663,25 @@ private class KPathsProcessor(
           declaration,
           "Cannot generate ${declaration.simpleName.asString()}.Companion.Paths because the companion " +
             "already declares a member named 'Paths'. Rename that member or remove the companion object.",
+        )
+        return false
+      }
+      val existingExtension = resolver.getDeclarationsFromPackage(declaration.packageName.asString())
+        .filterIsInstance<KSPropertyDeclaration>()
+        .firstOrNull { property ->
+          property.parentDeclaration == null &&
+            property.simpleName.asString() == "Paths" &&
+            (property.extensionReceiver?.resolve()?.declaration as? KSClassDeclaration)
+              ?.let { receiver ->
+                receiver.isCompanionObject && receiver.parentDeclaration == declaration
+              } == true
+        }
+      if (existingExtension != null) {
+        reportPathableError(
+          declaration,
+          "Cannot generate ${declaration.simpleName.asString()}.Companion.Paths because the top-level " +
+            "extension '${existingExtension.qualifiedName?.asString()}' already declares it. Rename that " +
+            "extension or remove the companion object.",
         )
         return false
       }
