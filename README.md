@@ -11,13 +11,12 @@ KPaths brings typed, composable, structurally identifiable KeyPaths and CaseKeyP
 - `kpaths-core`: KeyPath and CaseKeyPath types, explicit factories, composition, identity, and standard-library KeyPaths.
 - `kpaths-annotations`: `@Pathable`.
 - `kpaths-ksp`: generated catalogs.
-- `kpaths-reflection-jvm`: optional JVM-only constructor-discovery factories.
 
 An umbrella module only re-exports its dependencies: it adds no new KeyPath API. Use `kpaths-jvm`
 for the JVM convenience surface and `kpaths-native` for the currently supported iOS Kotlin/Native
 targets. `kpaths-ksp` remains a separate build-time processor because KSP uses a distinct Gradle
 configuration. The reflection-backed `casePathsOf(...).pathFor(...)` shorthand remains JVM-only
-because it depends on Kotlin reflection.
+because it depends on Kotlin reflection; generated catalogs and explicit factories work on Kotlin/Native.
 
 ## Installation
 
@@ -102,10 +101,10 @@ Event.Started[message]           // null
 message.embed(Event.Message("Updated"))
 ```
 
-There is one `CaseKeyPath` type. Unlike KeyPaths, CaseKeyPaths reconstruct complete cases, so there is no read-only/writable hierarchy. The [CaseKeyPaths guide](https://brennanium.github.io/KPaths/case-paths/) explains whole-case, payload, reflection-backed, and generated factories.
+There is one `CaseKeyPath` type. Unlike KeyPaths, CaseKeyPaths reconstruct complete cases, so there is no read-only/writable hierarchy. The [CaseKeyPaths guide](https://brennanium.github.io/KPaths/case-paths/) explains whole-case, payload, JVM constructor, and generated factories.
 
-For a conventional unannotated data-class case on the JVM, `kpaths-jvm` already includes the
-reflection-backed shorthand:
+For a conventional unannotated data-class case on the JVM, `kpaths-jvm` includes the constructor
+shorthand:
 
 ```kotlin
 implementation("io.github.brennanium:kpaths-jvm:<version>")

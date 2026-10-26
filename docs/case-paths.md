@@ -133,7 +133,7 @@ case:
 | Reuse a source-owned case | generated `Event.Paths.Message` or `EventPaths.Message` | Canonical and no-reflection; prefer `Event.Paths` when a source-owned companion exists. |
 | Match and embed the complete concrete case | `caseKeyPath<Root, Case>()` | The case object itself is the desired focus. |
 | Match one enum entry | `caseKeyPath(Entry)` | A Kotlin `enum` entry has no associated payload. |
-| Reflect a conventional data-class constructor (JVM) | `casePathsOf<Root>().pathFor(::Case)` | Add `kpaths-reflection-jvm`; a one-off data case has one to three stored constructor properties. |
+| Use a conventional data-class constructor (JVM) | `casePathsOf<Root>().pathFor(::Case)` | Included by `kpaths-jvm`; a one-off data case has one to three stored constructor properties. |
 | Match and embed one payload property | `caseKeyPath(extract, embed)` | A `KProperty1` and one-argument constructor or embedder describe the case. |
 | Match and embed two or three payload properties | `caseKeyPath(extract1, extract2[, extract3], embed)` | A `Pair` or `Triple` is an acceptable focus. |
 | Define a nonstandard case algorithm | `caseKeyPath(id, valueType, match, embed)` | A library needs full control of identity, matching, and embedding. |
@@ -158,12 +158,11 @@ val north: CaseKeyPath<Compass, Unit> = caseKeyPath(Compass.NORTH)
 north.embed(Unit) // Compass.NORTH
 ```
 
-### Reflection-backed constructor factories
+### JVM constructor factories
 
 `casePathsOf<Root>().pathFor(::Case)` is the short manual factory for a conventional data-class
-case. It is a JVM-only convenience. The `kpaths-jvm` umbrella includes it with the core and
-annotations; depend on `kpaths-reflection-jvm` directly only when you intentionally use the
-lower-level modules:
+case. It is a JVM-only convenience included by `kpaths-jvm`. Kotlin/Native consumers use generated
+catalogs or explicit factories instead:
 
 ```kotlin
 implementation("io.github.brennanium:kpaths-jvm:<version>")

@@ -6,6 +6,10 @@ plugins {
   alias(libs.plugins.vanniktech.maven.publish)
 }
 
+dokka {
+  moduleName.set("KPaths JVM conveniences")
+}
+
 mavenPublishing {
   publishToMavenCentral()
   if (providers.gradleProperty("signingInMemoryKey").isPresent) {

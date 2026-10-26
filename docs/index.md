@@ -6,8 +6,8 @@ and [Point-Free’s CasePaths](https://github.com/pointfreeco/swift-case-paths).
 
 Swift KeyPaths use `\Type.property` expressions. KPaths uses Kotlin property references and
 factories such as `keyPath(Person::name)` to create the equivalent typed value. CaseKeyPaths extend
-the same idea to sealed cases through `caseKeyPath`; the optional JVM reflection artifact adds
-`casePathsOf` for conventional data-class constructors.
+the same idea to sealed cases through `caseKeyPath`; the JVM-only `casePathsOf` convenience adds
+constructor discovery for conventional data-class cases.
 
 ## Learn KPaths in order
 
@@ -28,8 +28,8 @@ Then choose the guide that matches the problem at hand:
 - [Identity and type metadata](identity.md) explains structural equality, `PathId`, and `TypeId`.
 
 The [API reference](api/index.md) is the source of truth for every public declaration and overload.
-It includes the public core, annotation, and optional JVM-reflection modules, but deliberately
-excludes processor internals and the sample module.
+It includes the public KeyPath, annotation, and JVM-only convenience APIs, but deliberately excludes
+processor internals and the sample module.
 
 ## Platforms
 
