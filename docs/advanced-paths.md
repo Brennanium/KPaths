@@ -187,3 +187,52 @@ Use a closure for arbitrary behavior. Use a KeyPath for a field that a library n
 classify, compose, compare, or update. The [API design guide](route-aware-apis.md) contains smaller
 examples of that decision, while [Identity and type metadata](identity.md) describes the underlying
 equality model.
+
+## Reuse catalog generation in another KSP processor
+
+Most applications should use `@Pathable` with the `kpaths-ksp` processor. A library that owns its
+own model marker can go one level lower: it can use `kpaths-ksp-codegen` to generate the same
+catalog for the declarations its own processor discovers. This avoids making users apply two
+annotations or configure two KSP processors.
+
+For example, a hypothetical library with an `@DomainModel` marker could pass its models to the
+shared generator:
+
+```kotlin
+private const val domainModelAnnotation = "example.DomainModel"
+
+class DomainProcessor(
+  codeGenerator: CodeGenerator,
+  private val logger: KSPLogger,
+) : SymbolProcessor {
+  private val paths = KPathsCatalogGenerator(codeGenerator, logger)
+
+  override fun process(resolver: Resolver): List<KSAnnotated> {
+    val requests = resolver.getSymbolsWithAnnotation(domainModelAnnotation)
+      .filterIsInstance<KSClassDeclaration>()
+      .mapNotNull { declaration ->
+        val name = defaultKPathsCatalogName(declaration) ?: run {
+          logger.error("@DomainModel types must have a qualified name.", declaration)
+          return@mapNotNull null
+        }
+        KPathsCatalogRequest(
+          declaration = declaration,
+          generatedName = name,
+          annotationQualifiedName = domainModelAnnotation,
+          annotationDisplayName = "@DomainModel",
+        )
+      }
+      .toList()
+
+    return paths.generate(resolver, requests)
+  }
+}
+```
+
+The processor owns discovering `@DomainModel`; KPaths owns the property analysis, case analysis,
+name-collision checks, generated companion façade, type identity, and source emission. The result
+is the same `ProfilePaths` or `Profile.Paths` API that `@Pathable` would have produced.
+
+This is an integration API for processor authors. `kpaths-ksp-codegen` is not itself a KSP
+processor, so application code should continue to configure only `kpaths-ksp` or the library’s
+own processor.
