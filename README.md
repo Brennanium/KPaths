@@ -10,12 +10,15 @@ KPaths brings typed, composable, structurally identifiable KeyPaths and CaseKeyP
   core and annotations.
 - `kpaths-core`: KeyPath and CaseKeyPath types, explicit factories, composition, identity, and standard-library KeyPaths.
 - `kpaths-annotations`: `@Pathable`.
-- `kpaths-ksp`: generated catalogs.
+- `kpaths-ksp`: the `@Pathable` processor and generated catalogs.
+- `kpaths-ksp-codegen`: shared processor implementation for libraries that generate KPaths catalogs
+  as part of their own annotations; applications do not configure it directly.
 
 An umbrella module only re-exports its dependencies: it adds no new KeyPath API. Use `kpaths-jvm`
 for the JVM convenience surface and `kpaths-native` for the currently supported iOS Kotlin/Native
-targets. `kpaths-ksp` remains a separate build-time processor because KSP uses a distinct Gradle
-configuration. The reflection-backed `casePathsOf(...).pathFor(...)` shorthand remains JVM-only
+targets. `kpaths-ksp` remains the single build-time processor that ordinary applications configure,
+because KSP uses a distinct Gradle configuration. It brings its shared code generator transitively.
+The reflection-backed `casePathsOf(...).pathFor(...)` shorthand remains JVM-only
 because it depends on Kotlin reflection; generated catalogs and explicit factories work on Kotlin/Native.
 
 ## Installation

@@ -87,6 +87,8 @@ tasks.register("verifyMavenPublications") {
     ":kpaths-native:checkPomFileForIosSimulatorArm64Publication",
     ":kpaths-reflection-jvm:checkPomFileForKotlinMultiplatformPublication",
     ":kpaths-reflection-jvm:checkPomFileForJvmPublication",
+    ":kpaths-ksp-codegen:checkPomFileForKotlinMultiplatformPublication",
+    ":kpaths-ksp-codegen:checkPomFileForJvmPublication",
     ":kpaths-ksp:checkPomFileForKotlinMultiplatformPublication",
     ":kpaths-ksp:checkPomFileForJvmPublication",
   )

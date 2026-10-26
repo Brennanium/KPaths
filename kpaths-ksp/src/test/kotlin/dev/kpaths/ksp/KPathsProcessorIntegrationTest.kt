@@ -460,6 +460,7 @@ class KPathsProcessorIntegrationTest {
     val projectDirectory = Path.of(checkNotNull(System.getProperty("kpaths.projectDir")))
     val annotationsJar = projectDirectory.jvmArtifact("kpaths-annotations")
     val coreJar = projectDirectory.jvmArtifact("kpaths-core")
+    val codegenJar = projectDirectory.jvmArtifact("kpaths-ksp-codegen")
     val processorJar = projectDirectory.jvmArtifact("kpaths-ksp")
 
     Files.writeString(
@@ -491,7 +492,11 @@ class KPathsProcessorIntegrationTest {
         dependencies {
           implementation(files("${annotationsJar.gradlePath()}"))
           implementation(files("${coreJar.gradlePath()}"))
-          ksp(files("${processorJar.gradlePath()}", "${annotationsJar.gradlePath()}"))
+          ksp(files(
+            "${processorJar.gradlePath()}",
+            "${codegenJar.gradlePath()}",
+            "${annotationsJar.gradlePath()}",
+          ))
         }
       """.trimIndent(),
     )

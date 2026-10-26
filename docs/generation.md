@@ -8,6 +8,18 @@ Catalogs are a discoverability and repeated-use feature, not a prerequisite for 
 [KeyPaths guide](key-paths.md) for direct property factories, and the [CaseKeyPaths guide](case-paths.md)
 for the factory choices available to unannotated or third-party sealed hierarchies.
 
+## Processor integrations
+
+`kpaths-ksp` is the processor applications configure. It discovers `@Pathable` declarations and
+uses KPaths’ shared catalog generator to emit their code. Nothing changes in an application’s KSP
+setup.
+
+The shared generator is also available to a library that owns another model annotation and wants
+that annotation to generate the exact same catalog. That library supplies the declarations it owns
+to `kpaths-ksp-codegen`; it does not need to ask its users to add `@Pathable` as a second marker or
+configure two processors. This keeps property mutability rules, case catalogs, generated names,
+type identity, and diagnostics consistent across integrations.
+
 ## Three ways to reach a path
 
 KPaths deliberately gives source-owned models a progressively more discoverable surface without

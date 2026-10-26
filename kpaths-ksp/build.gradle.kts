@@ -51,7 +51,7 @@ kotlin {
       resources.srcDir("src/main/resources")
       dependencies {
         implementation(project(":kpaths-annotations"))
-        implementation(project(":kpaths-core"))
+        implementation(project(":kpaths-ksp-codegen"))
         implementation(libs.ksp.api)
       }
     }
@@ -71,7 +71,12 @@ dependencies {
 }
 
 tasks.named<Test>("jvmTest") {
-  dependsOn(":kpaths-annotations:jvmJar", ":kpaths-core:jvmJar", ":kpaths-ksp:jvmJar")
+  dependsOn(
+    ":kpaths-annotations:jvmJar",
+    ":kpaths-core:jvmJar",
+    ":kpaths-ksp-codegen:jvmJar",
+    ":kpaths-ksp:jvmJar",
+  )
   systemProperty("kpaths.projectDir", rootProject.projectDir.absolutePath)
   useJUnitPlatform()
 }
