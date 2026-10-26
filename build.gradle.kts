@@ -14,6 +14,7 @@ allprojects {
 }
 
 val docsSiteDirectory = layout.buildDirectory.dir("docs/site")
+val documentationVersion = providers.gradleProperty("documentationVersion").orElse("main")
 val localDocsPython = rootDir.resolve(".venv-docs/bin/python")
 val docsPython = providers.gradleProperty("docsPython").orElse(
   providers.provider {
@@ -24,7 +25,7 @@ val docsPython = providers.gradleProperty("docsPython").orElse(
 dokka {
   dokkaPublications.html {
     moduleName.set("KPaths")
-    moduleVersion.set(version.toString())
+    moduleVersion.set(documentationVersion)
     outputDirectory.set(layout.buildDirectory.dir("docs/api"))
     includes.from("dokka-module.md")
     suppressInheritedMembers.set(true)

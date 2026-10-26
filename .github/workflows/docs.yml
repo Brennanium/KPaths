@@ -46,7 +46,7 @@ jobs:
       - name: Install documentation dependencies
         run: python3 -m pip install -r docs/requirements.txt
       - name: Build documentation
-        run: ./gradlew docsBuild
+        run: ./gradlew docsBuild -PdocumentationVersion=main
       - name: Build release documentation snapshots
         shell: bash
         run: |
@@ -56,7 +56,9 @@ jobs:
             git worktree add --detach "$release_root" "$version"
             (
               cd "$release_root"
-              ./gradlew docsBuild
+              ./gradlew docsBuild \
+                -I "$GITHUB_WORKSPACE/gradle/documentation.init.gradle.kts" \
+                -PdocumentationVersion="$version"
             )
             mkdir -p "build/docs/site/$version"
             cp -a "$release_root/build/docs/site/." "build/docs/site/$version/"
