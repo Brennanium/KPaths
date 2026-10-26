@@ -33,10 +33,11 @@ excludes processor internals and the sample module.
 
 ## Platforms
 
-`kpaths-core` and `kpaths-annotations` publish JVM and iOS Kotlin/Native variants. The normal
-property and explicit case-path factories work on both. `kpaths-reflection-jvm` is deliberately
-JVM-only: `casePathsOf(...).pathFor(...)` needs Kotlin/JVM runtime reflection. On Native, prefer
-the explicit factories or generated `@Pathable` catalogs.
+`kpaths-jvm` is the JVM and Android umbrella: it publishes core, annotations, and the optional
+reflection factories together. `kpaths-native` is the umbrella for the supported iOS Kotlin/Native
+targets: it publishes core and annotations, but not JVM reflection. The normal property and
+explicit case-path factories work on both. On Native, prefer the explicit factories or generated
+`@Pathable` catalogs.
 
 ## Build locally
 

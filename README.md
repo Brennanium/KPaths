@@ -4,15 +4,41 @@ KPaths brings typed, composable, structurally identifiable KeyPaths and CaseKeyP
 
 ## Modules
 
+- `kpaths-jvm`: the default JVM and Android dependency; it re-exports core, annotations, and JVM
+  reflection factories.
+- `kpaths-native`: the default dependency for the supported iOS Kotlin/Native targets; it re-exports
+  core and annotations.
 - `kpaths-core`: KeyPath and CaseKeyPath types, explicit factories, composition, identity, and standard-library KeyPaths.
 - `kpaths-annotations`: `@Pathable`.
 - `kpaths-ksp`: generated catalogs.
 - `kpaths-reflection-jvm`: optional JVM-only constructor-discovery factories.
 
-`kpaths-core` and `kpaths-annotations` support Kotlin/JVM (including Android) and Kotlin/Native
-for iOS. `kpaths-ksp` is a JVM-based build-time processor; it can generate catalogs for supported
-multiplatform source sets. The reflection-backed `casePathsOf(...).pathFor(...)` shorthand remains
-JVM-only because it depends on Kotlin reflection.
+An umbrella module only re-exports its dependencies: it adds no new KeyPath API. Use `kpaths-jvm`
+for the JVM convenience surface and `kpaths-native` for the currently supported iOS Kotlin/Native
+targets. `kpaths-ksp` remains a separate build-time processor because KSP uses a distinct Gradle
+configuration. The reflection-backed `casePathsOf(...).pathFor(...)` shorthand remains JVM-only
+because it depends on Kotlin reflection.
+
+## Installation
+
+For JVM or Android, one runtime dependency includes the core APIs, `@Pathable`, and reflection
+factories:
+
+```kotlin
+implementation("io.github.brennanium:kpaths-jvm:<version>")
+```
+
+For the supported iOS Kotlin/Native targets, add the Native umbrella from `commonMain`:
+
+```kotlin
+commonMain.dependencies {
+  implementation("io.github.brennanium:kpaths-native:<version>")
+}
+```
+
+If you use `@Pathable`, add `kpaths-ksp` to the KSP configuration for each source set or target
+that compiles annotated models. See [Generated catalogs](https://brennanium.github.io/KPaths/generation/)
+for the target-specific setup.
 
 ## KeyPaths
 
@@ -78,11 +104,11 @@ message.embed(Event.Message("Updated"))
 
 There is one `CaseKeyPath` type. Unlike KeyPaths, CaseKeyPaths reconstruct complete cases, so there is no read-only/writable hierarchy. The [CaseKeyPaths guide](https://brennanium.github.io/KPaths/case-paths/) explains whole-case, payload, reflection-backed, and generated factories.
 
-For a conventional unannotated data-class case on the JVM, add the optional reflection artifact and
-use the reflection-backed shorthand:
+For a conventional unannotated data-class case on the JVM, `kpaths-jvm` already includes the
+reflection-backed shorthand:
 
 ```kotlin
-implementation("io.github.brennanium:kpaths-reflection-jvm:0.1.0")
+implementation("io.github.brennanium:kpaths-jvm:<version>")
 ```
 
 ```kotlin

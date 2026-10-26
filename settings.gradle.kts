@@ -17,6 +17,8 @@ rootProject.name = "KPaths"
 include(
   ":kpaths-annotations",
   ":kpaths-core",
+  ":kpaths-jvm",
+  ":kpaths-native",
   ":kpaths-reflection-jvm",
   ":kpaths-ksp",
   ":kpaths-sample",

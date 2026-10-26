@@ -161,11 +161,12 @@ north.embed(Unit) // Compass.NORTH
 ### Reflection-backed constructor factories
 
 `casePathsOf<Root>().pathFor(::Case)` is the short manual factory for a conventional data-class
-case. It is a JVM-only convenience that needs the separate artifact. This isolates runtime case
-shape discovery from the core API; the remaining Kotlin Multiplatform work is tracked separately:
+case. It is a JVM-only convenience. The `kpaths-jvm` umbrella includes it with the core and
+annotations; depend on `kpaths-reflection-jvm` directly only when you intentionally use the
+lower-level modules:
 
 ```kotlin
-implementation("io.github.brennanium:kpaths-reflection-jvm:0.1.0")
+implementation("io.github.brennanium:kpaths-jvm:<version>")
 ```
 
 Import a nested case so Kotlin can use its constructor reference directly:
