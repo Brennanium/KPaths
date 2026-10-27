@@ -160,20 +160,45 @@ sealed interface EditableFeedItem {
 
 @Pathable
 sealed interface AppEvent {
+  companion object {}
+
   data object Dismissed : AppEvent
   data class Profile(val action: ProfileAction) : AppEvent
 }
 
 @Pathable
 sealed interface ProfileAction {
+  companion object {}
+
   data object Back : ProfileAction
   data class Editor(val action: EditorAction) : ProfileAction
 }
 
 @Pathable
 sealed interface EditorAction {
+  companion object {}
+
   data class Rename(val text: String) : EditorAction
   data object Save : EditorAction
+}
+
+class ParentFeature {
+  @Pathable
+  sealed interface Action {
+    companion object {}
+
+    data object RefreshButtonTapped : Action
+    data class Editor(val action: EditorFeature.Action) : Action
+  }
+}
+
+class EditorFeature {
+  @Pathable
+  sealed interface Action {
+    companion object {}
+
+    data class Rename(val text: String) : Action
+  }
 }
 
 @Pathable

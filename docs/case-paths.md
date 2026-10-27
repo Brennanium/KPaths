@@ -70,12 +70,13 @@ message.embed(Event.Message("Updated"))
 ```
 
 CaseKeyPaths compose through nested sealed cases while retaining that ability to construct every
-enclosing case. Generated top-level catalogs provide especially concise payload paths for this:
+enclosing case. When source-owned roots declare companions, their generated `Paths` facades keep
+the direct-payload conveniences needed for a concise chain:
 
 ```kotlin
-val renameText = AppEventPaths.Profile.action
-  .then(ProfileActionPaths.Editor.action)
-  .then(EditorActionPaths.Rename.text)
+val renameText = AppEvent.Paths.Profile.action
+  .then(ProfileAction.Paths.Editor.action)
+  .then(EditorAction.Paths.Rename.text)
 
 renameText.embed("Jr.")
 // AppEvent.Profile(ProfileAction.Editor(EditorAction.Rename("Jr.")))
@@ -103,6 +104,9 @@ sealed interface Event {
 Event.Paths.Message
 // CaseKeyPath<Event, Event.Message>
 
+Event.Paths.Message.text
+// CaseKeyPath<Event, String> (a generated direct-payload convenience)
+
 Event.Paths.MessagePaths.text
 // KeyPath<Event.Message, String>
 
@@ -110,15 +114,16 @@ Event.Paths.Navigate
 // CaseKeyPath<Event, Event.Navigate>
 ```
 
-The same whole-case values remain available from the always-generated top-level catalog, so a
-companion is only a discoverability upgrade. The top-level catalog also retains its direct payload
-conveniences:
+`Message.text` and `MessagePaths.text` intentionally serve different purposes: the first matches
+and embeds an `Event.Message` payload in an `Event`, while the second reads `text` from an already
+known `Event.Message`. The same canonical values remain available from the always-generated
+top-level catalog, so a companion is only a discoverability upgrade:
 
 ```kotlin
 EventPaths.Message == Event.Paths.Message
 // CaseKeyPath<Event, Event.Message>
 
-EventPaths.Message.text
+EventPaths.Message.text == Event.Paths.Message.text
 // CaseKeyPath<Event, String> (a generated direct-payload convenience)
 
 EventPaths.Navigate.destinationFor(id = "settings")

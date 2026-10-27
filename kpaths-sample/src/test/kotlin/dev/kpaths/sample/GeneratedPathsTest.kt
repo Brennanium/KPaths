@@ -107,9 +107,9 @@ class GeneratedPathsTest {
 
   @Test
   fun `generated case paths compose into independently embeddable nested routes`() {
-    val renameText = AppEventPaths.Profile.action
-      .then(ProfileActionPaths.Editor.action)
-      .then(EditorActionPaths.Rename.text)
+    val renameText = AppEvent.Paths.Profile.action
+      .then(ProfileAction.Paths.Editor.action)
+      .then(EditorAction.Paths.Rename.text)
     val original: AppEvent = AppEvent.Profile(ProfileAction.Editor(EditorAction.Rename("Blob")))
 
     assertEquals("Blob", original[renameText])
@@ -118,6 +118,27 @@ class GeneratedPathsTest {
       renameText.embed("Jr."),
     )
     assertNull(AppEvent.Dismissed[renameText])
+    assertEquals(AppEventPaths.Profile.action, AppEvent.Paths.Profile.action)
+    assertEquals(ProfileActionPaths.Editor.action, ProfileAction.Paths.Editor.action)
+    assertEquals(EditorActionPaths.Rename.text, EditorAction.Paths.Rename.text)
+  }
+
+  @Test
+  fun `nested generated Paths facades retain direct case payload paths`() {
+    val renameText = ParentFeature.Action.Paths.Editor.action
+      .then(EditorFeature.Action.Paths.Rename.text)
+    val original: ParentFeature.Action = ParentFeature.Action.Editor(EditorFeature.Action.Rename("Blob"))
+
+    assertEquals("Blob", original[renameText])
+    assertEquals(
+      ParentFeature.Action.Editor(EditorFeature.Action.Rename("Jr.")),
+      renameText.embed("Jr."),
+    )
+    assertNull(ParentFeature.Action.RefreshButtonTapped[renameText])
+    assertEquals(
+      ParentFeature_ActionPaths.Editor.action,
+      ParentFeature.Action.Paths.Editor.action,
+    )
   }
 
   @Test

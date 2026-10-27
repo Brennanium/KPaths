@@ -655,7 +655,7 @@ public class KPathsCatalogGenerator(
     resolvedCasePaths.forEach { resolvedCasePath ->
       val casePath = resolvedCasePath.casePath
       val caseIdentifier = escapeIdentifier(casePath.generatedCaseName)
-      writer.appendLine("    public val $caseIdentifier: dev.kpaths.core.CaseKeyPath<$rootKotlinType, ${resolvedCasePath.resolvedCaseType.kotlinType}>")
+      writer.appendLine("    public val $caseIdentifier: $generatedIdentifier.$caseIdentifier")
       if (casePath.kind == CaseKind.SEALED_VARIANT && casePath.propertyPaths.isNotEmpty()) {
         val namespaceIdentifier = escapeIdentifier(requireNotNull(casePath.generatedPathsName))
         writer.appendLine("    public val $namespaceIdentifier: ${casePropertyPathsViewIdentifier(casePath)}")
@@ -721,7 +721,7 @@ public class KPathsCatalogGenerator(
     resolvedCasePaths.forEach { resolvedCasePath ->
       val casePath = resolvedCasePath.casePath
       val caseIdentifier = escapeIdentifier(casePath.generatedCaseName)
-      writer.appendLine("  override val $caseIdentifier: dev.kpaths.core.CaseKeyPath<$rootKotlinType, ${resolvedCasePath.resolvedCaseType.kotlinType}>")
+      writer.appendLine("  override val $caseIdentifier: $generatedIdentifier.$caseIdentifier")
       writer.appendLine("    get() = $generatedIdentifier.$caseIdentifier")
       if (casePath.kind == CaseKind.SEALED_VARIANT && casePath.propertyPaths.isNotEmpty()) {
         val namespaceIdentifier = escapeIdentifier(requireNotNull(casePath.generatedPathsName))
@@ -1210,10 +1210,11 @@ public class KPathsCatalogGenerator(
       )
       writer.appendLine("${indent}  }")
     } else {
-      writer.appendLine("${indent}public object $memberIdentifier : $pathBase<$rootKotlinType, $focusKotlinType>() {")
+      writer.appendLine("${indent}public val $memberIdentifier: $pathInterface<$rootKotlinType, $focusKotlinType> =")
+      writer.appendLine("${indent}  object : $pathBase<$rootKotlinType, $focusKotlinType>() {")
       writeCasePayloadPathBody(
         writer = writer,
-        indent = "$indent  ",
+        indent = "$indent    ",
         rootKotlinType = rootKotlinType,
         rootTypeId = rootTypeId,
         casePath = casePath,
@@ -1222,7 +1223,7 @@ public class KPathsCatalogGenerator(
         focusKotlinType = focusKotlinType,
         focusTypeId = focusTypeId,
       )
-      writer.appendLine("${indent}}")
+      writer.appendLine("${indent}  }")
     }
     writeBoundCasePayloadPaths(
       writer = writer,

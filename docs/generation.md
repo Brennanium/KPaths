@@ -95,6 +95,9 @@ sealed interface Event {
 Event.Paths.Message
 // CaseKeyPath<Event, Event.Message>
 
+Event.Paths.Message.text
+// CaseKeyPath<Event, String>
+
 Event.Paths.MessagePaths.text
 // KeyPath<Event.Message, String>
 
