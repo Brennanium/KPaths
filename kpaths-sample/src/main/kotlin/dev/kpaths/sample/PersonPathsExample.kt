@@ -113,16 +113,14 @@ class Session(
 
 @Pathable
 sealed interface Connection {
-  companion object {}
-
   data object Disconnected : Connection
   data class Connected(val host: String?) : Connection
+
+  companion object
 }
 
 @Pathable
 sealed interface NamedEvent {
-  companion object {}
-
   data object Idle : NamedEvent
 
   @CaseName("message")
@@ -131,6 +129,8 @@ sealed interface NamedEvent {
     @PathName("messageText")
     val text: String,
   ) : NamedEvent
+
+  companion object
 }
 
 @Pathable
@@ -160,44 +160,44 @@ sealed interface EditableFeedItem {
 
 @Pathable
 sealed interface AppEvent {
-  companion object {}
-
   data object Dismissed : AppEvent
   data class Profile(val action: ProfileAction) : AppEvent
+
+  companion object
 }
 
 @Pathable
 sealed interface ProfileAction {
-  companion object {}
-
   data object Back : ProfileAction
   data class Editor(val action: EditorAction) : ProfileAction
+
+  companion object
 }
 
 @Pathable
 sealed interface EditorAction {
-  companion object {}
-
   data class Rename(val text: String) : EditorAction
   data object Save : EditorAction
+
+  companion object
 }
 
 class ParentFeature {
   @Pathable
   sealed interface Action {
-    companion object {}
-
     data object RefreshButtonTapped : Action
     data class Editor(val action: EditorFeature.Action) : Action
+
+    companion object
   }
 }
 
 class EditorFeature {
   @Pathable
   sealed interface Action {
-    companion object {}
-
     data class Rename(val text: String) : Action
+
+    companion object
   }
 }
 

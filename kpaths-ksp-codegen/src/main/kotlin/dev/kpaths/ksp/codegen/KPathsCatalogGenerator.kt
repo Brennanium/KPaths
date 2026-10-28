@@ -14,12 +14,15 @@ import com.google.devtools.ksp.symbol.KSTypeAlias
 import com.google.devtools.ksp.symbol.KSTypeParameter
 import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.ClassKind
+import com.google.devtools.ksp.symbol.FileLocation
 import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.symbol.Variance
 import com.google.devtools.ksp.validate
 import dev.kpaths.annotations.CaseName
 import dev.kpaths.annotations.PathName
 import dev.kpaths.annotations.PathsName
+import java.nio.file.Files
+import java.nio.file.Path
 
 private val caseNameAnnotation = CaseName::class.qualifiedName!!
 private val pathNameAnnotation = PathName::class.qualifiedName!!
@@ -121,6 +124,9 @@ public class KPathsCatalogGenerator(
     }
     val packageName = declaration.packageName.asString()
     val generatedIdentifier = escapeIdentifier(generatedName)
+    if (!validateUnnamedCompanionPlacement(declaration)) {
+      return
+    }
     val pathProperties = pathProperties(declaration)
     val casePaths = casePaths(declaration)
     val companionPaths = companionPathsExtension(declaration, pathProperties, casePaths)
@@ -634,6 +640,79 @@ public class KPathsCatalogGenerator(
           Modifier.PROTECTED !in companion.modifiers &&
           Modifier.INTERNAL !in companion.modifiers
       }
+
+  /**
+   * Kotlin can parse `companion object` followed by a soft keyword on the next line as a named
+   * companion (for example, `data` from a following `data class`). Requiring an unbraced,
+   * unnamed companion to be last avoids that surprising interpretation while preserving concise
+   * `companion object` syntax.
+   */
+  private fun validateUnnamedCompanionPlacement(declaration: KSClassDeclaration): Boolean {
+    val companion = declaration.declarations
+      .filterIsInstance<KSClassDeclaration>()
+      .firstOrNull(KSClassDeclaration::isCompanionObject)
+      ?: return true
+    val location = companion.location as? FileLocation ?: return true
+    val source = runCatching { Files.readString(Path.of(location.filePath)) }.getOrNull() ?: return true
+    if (!source.hasBareCompanionFollowedByMember(location.lineNumber)) return true
+
+    reportGenerationError(
+      declaration,
+      "An unnamed `companion object` must be the final member of an @Pathable declaration. " +
+        "Move it to the end of the class body, or use a named companion or `companion object {}`.",
+    )
+    return false
+  }
+
+  private fun String.hasBareCompanionFollowedByMember(lineNumber: Int): Boolean {
+    val lineStart = lineStart(lineNumber) ?: return false
+    val lineEnd = indexOf('\n', lineStart).takeIf { it >= 0 } ?: length
+    // KSP reports the phantom companion created by `companion object` + `data class` at the
+    // `data` token, rather than at `companion`. The closest preceding companion declaration is
+    // therefore the one whose spelling needs inspection.
+    val match = companionObjectPattern.findAll(this)
+      .takeWhile { candidate -> candidate.range.first < lineEnd }
+      .lastOrNull()
+      ?: return false
+    var index = match.range.last + 1
+    var crossedLine = false
+
+    while (index < length) {
+      when {
+        this[index].isWhitespace() -> {
+          crossedLine = crossedLine || this[index] == '\n'
+          index += 1
+        }
+        startsWith("//", index) -> {
+          val commentEnd = indexOf('\n', index).takeIf { it >= 0 } ?: return false
+          crossedLine = true
+          index = commentEnd + 1
+        }
+        startsWith("/*", index) -> {
+          val commentEnd = indexOf("*/", index + 2).takeIf { it >= 0 } ?: return false
+          crossedLine = crossedLine || substring(index, commentEnd).contains('\n')
+          index = commentEnd + 2
+        }
+        else -> break
+      }
+    }
+
+    if (!crossedLine || index >= length || this[index] in setOf('{', '}')) return false
+    if (this[index] == '@') return true
+    val token = substring(index).takeWhile { character -> character.isLetterOrDigit() || character == '_' }
+    return token in classMemberStarters
+  }
+
+  private fun String.lineStart(lineNumber: Int): Int? {
+    if (lineNumber < 1) return null
+    var currentLine = 1
+    var index = 0
+    while (currentLine < lineNumber) {
+      index = indexOf('\n', index).takeIf { it >= 0 }?.plus(1) ?: return null
+      currentLine += 1
+    }
+    return index
+  }
 
   private fun writeCompanionPathsView(
     writer: java.io.BufferedWriter,
@@ -1763,6 +1842,15 @@ public class KPathsCatalogGenerator(
 
   private companion object {
     private const val generatedInternalPrefix = "__kpaths_"
+
+    private val companionObjectPattern = Regex("\\bcompanion\\s+object\\b")
+
+    private val classMemberStarters = setOf(
+      "abstract", "actual", "annotation", "class", "const", "constructor", "data", "enum",
+      "expect", "external", "final", "fun", "infix", "init", "inline", "inner", "interface",
+      "internal", "lateinit", "object", "open", "operator", "override", "private", "protected",
+      "public", "sealed", "suspend", "tailrec", "typealias", "val", "var",
+    )
 
     private val kotlinKeywords = setOf(
       "as", "as?", "break", "class", "continue", "do", "else", "false", "for", "fun", "if",

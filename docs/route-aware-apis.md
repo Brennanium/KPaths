@@ -76,11 +76,11 @@ payload and remain correct if unrelated cases are added later:
 ```kotlin
 @Pathable
 sealed interface DownloadEvent {
-  companion object {}
-
   data class Progress(val percent: Int) : DownloadEvent
   data class Finished(val location: String) : DownloadEvent
   data class Failed(val message: String) : DownloadEvent
+
+  companion object
 }
 
 fun <Root, Case : Any, Result> handleCase(

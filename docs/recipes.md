@@ -110,26 +110,26 @@ Unary case payloads compose through multiple sealed hierarchies. Embedding the f
 ```kotlin
 @Pathable
 sealed interface AppEvent {
-  companion object {}
-
   data class Profile(val action: ProfileAction) : AppEvent
   data object Dismissed : AppEvent
+
+  companion object
 }
 
 @Pathable
 sealed interface ProfileAction {
-  companion object {}
-
   data class Editor(val action: EditorAction) : ProfileAction
   data object Back : ProfileAction
+
+  companion object
 }
 
 @Pathable
 sealed interface EditorAction {
-  companion object {}
-
   data class Rename(val text: String) : EditorAction
   data object Save : EditorAction
+
+  companion object
 }
 
 val renameText: CaseKeyPath<AppEvent, String> = AppEvent.Paths.Profile.action

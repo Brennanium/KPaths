@@ -21,10 +21,10 @@ sealed root:
 ```kotlin
 @Pathable
 sealed interface Event {
-  companion object {}
-
   data object Started : Event
   data class Message(val text: String) : Event
+
+  companion object
 }
 
 val message = Event.Paths.Message
@@ -94,11 +94,11 @@ the root itself:
 ```kotlin
 @Pathable
 sealed interface Event {
-  companion object {}
-
   data object Started : Event
   data class Message(val text: String) : Event
   data class Navigate(val id: String, val destination: String) : Event
+
+  companion object
 }
 
 Event.Paths.Message

@@ -80,16 +80,35 @@ import example.Person
 val name = Person.Paths.name
 ```
 
+### Empty companion placement
+
+When an unnamed companion has no body, put it last in an `@Pathable` declaration:
+
+```kotlin
+@Pathable
+sealed interface Event {
+  data object Started : Event
+  data class Message(val text: String) : Event
+
+  companion object
+}
+```
+
+Kotlin can otherwise read a following soft keyword—such as `data` in `data class Message`—as the
+companion’s name. KPaths diagnoses that ambiguous arrangement. A named companion such as
+`companion object Factory`, or a companion with an explicit body such as `companion object {}`,
+can appear anywhere in the declaration.
+
 For a non-generic sealed root or enum, the same facade exposes its generated case paths, nested
 case-property catalogs, and type-erased case catalog:
 
 ```kotlin
 @Pathable
 sealed interface Event {
-  companion object {}
-
   data object Idle : Event
   data class Message(val text: String) : Event
+
+  companion object
 }
 
 Event.Paths.Message

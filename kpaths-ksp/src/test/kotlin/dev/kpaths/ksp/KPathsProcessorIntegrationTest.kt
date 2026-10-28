@@ -9,6 +9,33 @@ import org.junit.jupiter.api.io.TempDir
 
 class KPathsProcessorIntegrationTest {
   @Test
+  fun `reports an unnamed bare companion before later class members`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val output = compileFailure(
+      fixtureDirectory = fixtureDirectory,
+      fileName = "AmbiguousBareCompanion.kt",
+      source =
+      """
+        package fixture
+
+        import dev.kpaths.annotations.Pathable
+
+        @Pathable
+        sealed interface Event {
+          companion object
+
+          data object Idle : Event
+        }
+      """.trimIndent(),
+    )
+
+    assertContains(output, "AmbiguousBareCompanion.kt:")
+    assertContains(output, "[KPaths] An unnamed `companion object` must be the final member")
+    assertContains(output, "Move it to the end of the class body")
+  }
+
+  @Test
   fun `reports companion Paths member collisions`(
     @TempDir fixtureDirectory: Path,
   ) {
