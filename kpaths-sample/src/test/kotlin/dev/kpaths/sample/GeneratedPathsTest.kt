@@ -100,6 +100,22 @@ class GeneratedPathsTest {
   }
 
   @Test
+  fun `enum entries generate Unit case paths and enum metadata generates key paths`() {
+    val north: CaseKeyPath<Direction, Unit> = DirectionPaths.NORTH
+    val south: CaseKeyPath<Direction, Unit> = DirectionPaths.SOUTH
+    val defaultPort: KeyPath<HttpMethod, Int> = HttpMethod.Paths.defaultPort
+
+    assertTrue(Direction.NORTH.caseMatches(north))
+    assertFalse(Direction.SOUTH.caseMatches(north))
+    assertEquals(Direction.NORTH, north.embed(Unit))
+    assertEquals(PathId.case(TypeId.of<Direction>(), "NORTH"), north.__kpaths_id)
+    assertEquals(listOf(north, south), DirectionPaths.allCasePaths)
+    assertEquals(south, DirectionPaths.caseOf(Direction.SOUTH))
+    assertEquals(443, HttpMethod.POST[defaultPort])
+    assertEquals(HttpMethodPaths.defaultPort, HttpMethod.Paths.defaultPort)
+  }
+
+  @Test
   fun `non-generic companions expose generated case catalogs`() {
     assertEquals(ConnectionPaths.Connected, Connection.Paths.Connected)
     assertEquals(NamedEventPaths.message, NamedEvent.Paths.message)

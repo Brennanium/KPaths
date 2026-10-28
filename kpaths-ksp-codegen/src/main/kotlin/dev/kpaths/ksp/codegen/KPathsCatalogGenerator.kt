@@ -16,6 +16,7 @@ import com.google.devtools.ksp.symbol.KSAnnotated
 import com.google.devtools.ksp.symbol.ClassKind
 import com.google.devtools.ksp.symbol.FileLocation
 import com.google.devtools.ksp.symbol.Modifier
+import com.google.devtools.ksp.symbol.Origin
 import com.google.devtools.ksp.symbol.Variance
 import com.google.devtools.ksp.validate
 import dev.kpaths.annotations.CaseName
@@ -511,11 +512,12 @@ public class KPathsCatalogGenerator(
     copyWritableVals: Boolean,
     copyWritableValExclusionIds: Set<String>,
   ): List<PathProperty> {
-    if (declaration.classKind != ClassKind.CLASS) {
+    if (declaration.classKind !in setOf(ClassKind.CLASS, ClassKind.ENUM_CLASS)) {
       return emptyList()
     }
 
     val accessibleProperties = declaration.getDeclaredProperties()
+      .filter { it.origin == Origin.KOTLIN }
       .filter(::isAccessible)
       .toList()
 

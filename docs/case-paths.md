@@ -163,6 +163,51 @@ val north: CaseKeyPath<Compass, Unit> = caseKeyPath(Compass.NORTH)
 north.embed(Unit) // Compass.NORTH
 ```
 
+### Generated enum entries
+
+`@Pathable` gives a source-owned enum the same canonical, structural CaseKeyPaths as a sealed
+root. Kotlin enum entries have no Swift-style associated payload, so each generated path focuses
+`Unit`. That still makes the entry reusable in matching, composition, case classification, and
+generic APIs:
+
+```kotlin
+@Pathable
+enum class Compass {
+  NORTH,
+  SOUTH;
+
+  companion object
+}
+
+val north: CaseKeyPath<Compass, Unit> = Compass.Paths.NORTH
+
+Compass.NORTH.caseMatches(north) // true
+Compass.SOUTH.caseMatches(north) // false
+north.embed(Unit)                // Compass.NORTH
+
+Compass.Paths.allCasePaths
+Compass.Paths.caseOf(Compass.SOUTH) // Compass.Paths.SOUTH
+```
+
+The top-level `CompassPaths.NORTH` is the exact same canonical value. `@CaseName` may rename the
+generated member while the entry's declared name remains part of its `PathId`.
+
+An enum may also declare uniform metadata shared by its entry type. That metadata receives an
+ordinary KeyPath, not a CaseKeyPath payload:
+
+```kotlin
+@Pathable
+enum class HttpMethod(val defaultPort: Int) {
+  GET(80),
+  POST(443);
+
+  companion object
+}
+
+HttpMethod.Paths.defaultPort
+// KeyPath<HttpMethod, Int>
+```
+
 ### JVM constructor factories
 
 `casePathsOf<Root>().pathFor(::Case)` is the short manual factory for a conventional data-class

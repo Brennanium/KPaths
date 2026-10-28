@@ -124,6 +124,9 @@ Event.Paths.allCasePaths
 Event.Paths.caseOf(Event.Idle)
 ```
 
+For the analogous enum behavior—including its `Unit`-focused generated CaseKeyPaths and enum
+metadata KeyPaths—see [generated enum entries](case-paths.md#generated-enum-entries).
+
 `@PathsName` may be applied to a companion object to rename the generated facade. For example, a
 non-generic model can use a domain-specific namespace instead of the default `Paths`:
 

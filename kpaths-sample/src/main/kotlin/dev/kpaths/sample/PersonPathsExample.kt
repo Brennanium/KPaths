@@ -226,6 +226,16 @@ enum class Direction {
 }
 
 @Pathable
+enum class HttpMethod(
+  val defaultPort: Int,
+) {
+  GET(80),
+  POST(443);
+
+  companion object
+}
+
+@Pathable
 enum class KeywordDirection {
   `when`,
 }
