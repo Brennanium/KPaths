@@ -41,6 +41,8 @@ public data class KPathsCatalogRequest(
   public val annotationQualifiedName: String? = null,
   public val annotationDisplayName: String = "@Pathable",
   public val renameSuggestion: String? = null,
+  /** Whether primary-constructor `val` properties of data classes receive copy-writable paths. */
+  public val copyWritableVals: Boolean = false,
 )
 
 /** Returns KPaths' conventional top-level catalog name, or `null` for a local declaration. */
@@ -106,7 +108,7 @@ public class KPathsCatalogGenerator(
     }.forEach { target ->
       val packageName = target.declaration.packageName.asString()
       if (validateTopLevelGeneratedName(target.declaration, resolver, packageName, target.generatedName)) {
-        generatePaths(target.declaration, target.generatedName, resolver)
+        generatePaths(target.declaration, target.generatedName, target.copyWritableVals, resolver)
       }
     }
 
@@ -116,6 +118,7 @@ public class KPathsCatalogGenerator(
   private fun generatePaths(
     declaration: KSClassDeclaration,
     generatedName: String,
+    copyWritableVals: Boolean,
     resolver: Resolver,
   ) {
     val qualifiedName = declaration.qualifiedName?.asString() ?: run {
@@ -127,8 +130,8 @@ public class KPathsCatalogGenerator(
     if (!validateUnnamedCompanionPlacement(declaration)) {
       return
     }
-    val pathProperties = pathProperties(declaration)
-    val casePaths = casePaths(declaration)
+    val pathProperties = pathProperties(declaration, copyWritableVals)
+    val casePaths = casePaths(declaration, copyWritableVals)
     val companionPaths = companionPathsExtension(declaration, pathProperties, casePaths)
     val genericCompanionPaths = genericCompanionPathsFactory(declaration, pathProperties, casePaths)
     val companionGeneratedMember = when {
@@ -349,7 +352,10 @@ public class KPathsCatalogGenerator(
     "$packageName.$generatedName"
 
   /** Returns direct sealed variants or payload-less enum entries. */
-  private fun casePaths(declaration: KSClassDeclaration): List<CasePath> {
+  private fun casePaths(
+    declaration: KSClassDeclaration,
+    copyWritableVals: Boolean,
+  ): List<CasePath> {
     if (Modifier.SEALED in declaration.modifiers) {
       return declaration.getSealedSubclasses().mapNotNull { caseDeclaration ->
         if (caseDeclaration.classKind !in setOf(ClassKind.CLASS, ClassKind.OBJECT)) {
@@ -376,7 +382,7 @@ public class KPathsCatalogGenerator(
           annotationQualifiedName = pathsNameAnnotation,
           defaultName = sourceName + "Paths",
         ) ?: return@mapNotNull null
-        val propertyPaths = pathProperties(caseDeclaration)
+        val propertyPaths = pathProperties(caseDeclaration, copyWritableVals)
         if (
           hasAnnotation(caseDeclaration, pathsNameAnnotation) &&
             propertyPaths.isEmpty()
@@ -478,7 +484,10 @@ public class KPathsCatalogGenerator(
     }
 
   /** Classifies Kotlin properties into the library's explicit value-style and reference-style APIs. */
-  private fun pathProperties(declaration: KSClassDeclaration): List<PathProperty> {
+  private fun pathProperties(
+    declaration: KSClassDeclaration,
+    copyWritableVals: Boolean,
+  ): List<PathProperty> {
     if (declaration.classKind != ClassKind.CLASS) {
       return emptyList()
     }
@@ -511,7 +520,10 @@ public class KPathsCatalogGenerator(
 
     return accessibleProperties.mapNotNull { property ->
       val generatedName = configuredPathMemberName(property) ?: return@mapNotNull null
-      if (property.isMutable && property.simpleName.asString() in constructorPropertyNames) {
+      if (
+        (property.isMutable || copyWritableVals) &&
+          property.simpleName.asString() in constructorPropertyNames
+      ) {
         PathProperty(property, generatedName, PathKind.COPY_WRITABLE)
       } else if (property.isMutable && isSetterAccessible(property)) {
         PathProperty(property, generatedName, PathKind.COPY_THEN_MUTATE)

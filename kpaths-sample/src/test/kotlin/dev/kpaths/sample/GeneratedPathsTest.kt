@@ -30,6 +30,25 @@ class GeneratedPathsTest {
   }
 
   @Test
+  fun `copyWritableVals makes primary-constructor vals copy-writable`() {
+    val original = EditablePerson(name = "Blob", address = Address(city = "Paris"))
+    val name: WritableKeyPath<EditablePerson, String> = EditablePerson.Paths.name
+    val address: WritableKeyPath<EditablePerson, Address> = EditablePerson.Paths.address
+
+    assertEquals(EditablePerson("Jr.", Address("Paris")), name.set(original, "Jr."))
+    assertEquals(EditablePerson("Blob", Address("Toronto")), address.set(original, Address("Toronto")))
+    assertEquals(original, EditablePersonPaths.name.set(original, "Blob"))
+  }
+
+  @Test
+  fun `copyWritableVals applies to generated sealed-case property paths`() {
+    val text: WritableKeyPath<EditableEvent.Message, String> = EditableEvent.Paths.MessagePaths.text
+    val original = EditableEvent.Message(text = "Hello", isUnread = true)
+
+    assertEquals(EditableEvent.Message(text = "Updated", isUnread = true), text.set(original, "Updated"))
+  }
+
+  @Test
   fun `existing companions expose the canonical generated paths through Paths`() {
     assertEquals(PersonPaths.name, Person.Paths.name)
     assertEquals(PersonPaths.address, Person.Paths.address)

@@ -50,6 +50,10 @@ private class KPathsProcessor(
       ?.firstOrNull { argument -> argument.name?.asString() == "name" }
       ?.value as? String
       ?: ""
+    val copyWritableVals = annotation?.arguments
+      ?.firstOrNull { argument -> argument.name?.asString() == "copyWritableVals" }
+      ?.value as? Boolean
+      ?: false
     val generatedName = when {
       configuredName.isEmpty() -> defaultName
       configuredName.startsWith(generatedInternalPrefix) -> {
@@ -72,6 +76,7 @@ private class KPathsProcessor(
     return KPathsCatalogRequest(
       declaration = declaration,
       generatedName = generatedName,
+      copyWritableVals = copyWritableVals,
       annotationQualifiedName = pathableAnnotation,
       renameSuggestion = "@Pathable(\"Custom$generatedName\")",
     )

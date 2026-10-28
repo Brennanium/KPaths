@@ -16,6 +16,24 @@ data class Person(
   companion object
 }
 
+@Pathable(copyWritableVals = true)
+data class EditablePerson(
+  val name: String,
+  var address: Address,
+) {
+  companion object
+}
+
+@Pathable(copyWritableVals = true)
+sealed interface EditableEvent {
+  data class Message(
+    val text: String,
+    var isUnread: Boolean,
+  ) : EditableEvent
+
+  companion object
+}
+
 @Pathable
 data class NamedProfile(
   @PathName("displayName")
