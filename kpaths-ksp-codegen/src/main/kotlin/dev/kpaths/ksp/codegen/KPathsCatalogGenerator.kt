@@ -43,6 +43,13 @@ public data class KPathsCatalogRequest(
   public val renameSuggestion: String? = null,
   /** Whether primary-constructor `val` properties of data classes receive copy-writable paths. */
   public val copyWritableVals: Boolean = false,
+  /**
+   * Primary-constructor `val` properties that remain read-only when [copyWritableVals] is enabled.
+   *
+   * A requesting processor supplies the exact KSP property declarations it wants to exclude, which
+   * avoids coupling this shared generator to another annotation's naming convention.
+   */
+  public val copyWritableValExclusions: Set<KSPropertyDeclaration> = emptySet(),
 )
 
 /** Returns KPaths' conventional top-level catalog name, or `null` for a local declaration. */
@@ -108,7 +115,13 @@ public class KPathsCatalogGenerator(
     }.forEach { target ->
       val packageName = target.declaration.packageName.asString()
       if (validateTopLevelGeneratedName(target.declaration, resolver, packageName, target.generatedName)) {
-        generatePaths(target.declaration, target.generatedName, target.copyWritableVals, resolver)
+        generatePaths(
+          declaration = target.declaration,
+          generatedName = target.generatedName,
+          copyWritableVals = target.copyWritableVals,
+          copyWritableValExclusions = target.copyWritableValExclusions,
+          resolver = resolver,
+        )
       }
     }
 
@@ -119,6 +132,7 @@ public class KPathsCatalogGenerator(
     declaration: KSClassDeclaration,
     generatedName: String,
     copyWritableVals: Boolean,
+    copyWritableValExclusions: Set<KSPropertyDeclaration>,
     resolver: Resolver,
   ) {
     val qualifiedName = declaration.qualifiedName?.asString() ?: run {
@@ -130,8 +144,11 @@ public class KPathsCatalogGenerator(
     if (!validateUnnamedCompanionPlacement(declaration)) {
       return
     }
-    val pathProperties = pathProperties(declaration, copyWritableVals)
-    val casePaths = casePaths(declaration, copyWritableVals)
+    val copyWritableValExclusionIds = copyWritableValExclusions
+      .mapNotNull(::copyWritableValExclusionId)
+      .toSet()
+    val pathProperties = pathProperties(declaration, copyWritableVals, copyWritableValExclusionIds)
+    val casePaths = casePaths(declaration, copyWritableVals, copyWritableValExclusionIds)
     val companionPaths = companionPathsExtension(declaration, pathProperties, casePaths)
     val genericCompanionPaths = genericCompanionPathsFactory(declaration, pathProperties, casePaths)
     val companionGeneratedMember = when {
@@ -355,6 +372,7 @@ public class KPathsCatalogGenerator(
   private fun casePaths(
     declaration: KSClassDeclaration,
     copyWritableVals: Boolean,
+    copyWritableValExclusionIds: Set<String>,
   ): List<CasePath> {
     if (Modifier.SEALED in declaration.modifiers) {
       return declaration.getSealedSubclasses().mapNotNull { caseDeclaration ->
@@ -382,7 +400,11 @@ public class KPathsCatalogGenerator(
           annotationQualifiedName = pathsNameAnnotation,
           defaultName = sourceName + "Paths",
         ) ?: return@mapNotNull null
-        val propertyPaths = pathProperties(caseDeclaration, copyWritableVals)
+        val propertyPaths = pathProperties(
+          declaration = caseDeclaration,
+          copyWritableVals = copyWritableVals,
+          copyWritableValExclusionIds = copyWritableValExclusionIds,
+        )
         if (
           hasAnnotation(caseDeclaration, pathsNameAnnotation) &&
             propertyPaths.isEmpty()
@@ -487,6 +509,7 @@ public class KPathsCatalogGenerator(
   private fun pathProperties(
     declaration: KSClassDeclaration,
     copyWritableVals: Boolean,
+    copyWritableValExclusionIds: Set<String>,
   ): List<PathProperty> {
     if (declaration.classKind != ClassKind.CLASS) {
       return emptyList()
@@ -521,7 +544,9 @@ public class KPathsCatalogGenerator(
     return accessibleProperties.mapNotNull { property ->
       val generatedName = configuredPathMemberName(property) ?: return@mapNotNull null
       if (
-        (property.isMutable || copyWritableVals) &&
+        (property.isMutable || (
+          copyWritableVals && copyWritableValExclusionId(property) !in copyWritableValExclusionIds
+        )) &&
           property.simpleName.asString() in constructorPropertyNames
       ) {
         PathProperty(property, generatedName, PathKind.COPY_WRITABLE)
@@ -537,6 +562,15 @@ public class KPathsCatalogGenerator(
         PathProperty(property, generatedName, PathKind.READ_ONLY)
       }
     }
+  }
+
+  /** Returns a stable source-level identity for an externally selected property. */
+  private fun copyWritableValExclusionId(property: KSPropertyDeclaration): String? {
+    val owner = (property.parentDeclaration as? KSClassDeclaration)
+      ?.qualifiedName
+      ?.asString()
+      ?: return null
+    return "$owner.${property.simpleName.asString()}"
   }
 
   /** Returns the constructor properties that can form a lossless generated case payload path. */

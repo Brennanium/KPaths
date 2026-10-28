@@ -233,6 +233,25 @@ The processor owns discovering `@DomainModel`; KPaths owns the property analysis
 name-collision checks, generated companion façade, type identity, and source emission. The result
 is the same `ProfilePaths` or `Profile.Paths` API that `@Pathable` would have produced.
 
+An integration can also opt into copy-writable `val` paths while keeping selected properties
+read-only. Pass the exact `KSPropertyDeclaration`s selected by its own annotation rules:
+
+```kotlin
+val readOnlyProperties = declaration.getDeclaredProperties()
+  .filter { property -> property.annotations.any { it.shortName.asString() == "ReadOnlyPath" } }
+  .toSet()
+
+KPathsCatalogRequest(
+  declaration = declaration,
+  generatedName = name,
+  copyWritableVals = true,
+  copyWritableValExclusions = readOnlyProperties,
+)
+```
+
+The exclusions apply only to the opt-in conversion of primary-constructor `val` properties.
+Ordinary `var` properties retain their usual writable behavior.
+
 This is an integration API for processor authors. `kpaths-ksp-codegen` is not itself a KSP
 processor, so application code should continue to configure only `kpaths-ksp` or the library’s
 own processor.
