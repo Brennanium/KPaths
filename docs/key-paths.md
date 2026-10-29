@@ -288,6 +288,39 @@ through a missing `address` has no universal meaning, and assigning `null` to th
 could mean either “clear `address`” or “leave it alone.” Model that policy explicitly with a
 custom `writableKeyPath` instead.
 
+### Following an optional case
+
+`thenCase` gives a nullable writable KeyPath a domain-specific write-back rule: a non-null value
+constructs the selected case, and `null` clears the outer optional. This is useful for optional
+destination-style state:
+
+```kotlin
+@Pathable
+data class State(var destination: Destination?) { companion object }
+
+@Pathable
+sealed interface Destination {
+  data class Sheet(val count: Int) : Destination
+  data object Settings : Destination
+
+  companion object
+}
+
+val sheetState: WritableKeyPath<State, Int?> =
+  State.Paths.destination.thenCase(Destination.Paths.Sheet.count)
+
+sheetState.set(State(Destination.Settings), 2)
+// State(destination = Destination.Sheet(count = 2))
+
+sheetState.set(State(Destination.Sheet(1)), null)
+// State(destination = null)
+```
+
+The read-only form is also available when the outer path is only a `KeyPath`. `thenCase` requires
+a non-null case focus because `null` has the explicit “clear the outer optional” meaning. Use the
+CaseKeyPath’s `match` API when a case payload itself must distinguish a matched `null` from no
+match.
+
 ### Force-unwrapping an optional KeyPath
 
 When absence is a programming error, use `thenForceUnwrapped`. It is the explicit, dangerous

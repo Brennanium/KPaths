@@ -3,6 +3,7 @@ package dev.kpaths.core
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertNull
 import kotlin.test.assertSame
 
 class KeyPathCompositionTest {
@@ -126,6 +127,53 @@ class KeyPathCompositionTest {
       forcedCity.set(OptionalAddressBox(null), "Ottawa")
     }
   }
+
+  @Test
+  fun `thenCase reads matches and replaces an optional case destination`() {
+    val destination = writableKeyPath(
+      get = DestinationState::destination,
+      set = { state, value -> state.copy(destination = value) },
+    )
+    val sheet = caseKeyPath<Destination, Destination.Sheet>()
+    val sheetState: WritableKeyPath<DestinationState, Destination.Sheet?> = destination.thenCase(sheet)
+
+    assertEquals(Destination.Sheet(1), sheetState.get(DestinationState(Destination.Sheet(1))))
+    assertNull(sheetState.get(DestinationState(Destination.Settings)))
+    assertNull(sheetState.get(DestinationState(null)))
+    assertEquals(
+      DestinationState(Destination.Sheet(2)),
+      sheetState.set(DestinationState(Destination.Settings), Destination.Sheet(2)),
+    )
+    assertEquals(
+      DestinationState(null),
+      sheetState.set(DestinationState(Destination.Sheet(1)), null),
+    )
+    assertEquals(
+      PathId(
+        TypeId.of<DestinationState>(),
+        listOf(
+          PathSegment.Property("destination"),
+          PathSegment.OptionalChain,
+          PathSegment.Case("Sheet"),
+        ),
+      ),
+      sheetState.__kpaths_id,
+    )
+    assertEquals(TypeId.of<Destination.Sheet?>(), sheetState.__kpaths_valueType)
+  }
+
+  @Test
+  fun `thenCase preserves reference-writable roots`() {
+    val sheet = caseKeyPath<Destination, Destination.Sheet>()
+    val sheetState: ReferenceWritableKeyPath<DestinationBox, Destination.Sheet?> =
+      BoxDestinationPath.thenCase(sheet)
+    val box = DestinationBox(Destination.Settings)
+
+    assertSame(box, sheetState.set(box, Destination.Sheet(3)))
+    assertEquals(Destination.Sheet(3), box.destination)
+    assertSame(box, sheetState.set(box, null))
+    assertNull(box.destination)
+  }
 }
 
 private data class Person(val address: Address)
@@ -136,9 +184,18 @@ private data class OptionalPerson(val address: OptionalAddress?)
 
 private data class OptionalAddress(val city: String)
 
+private data class DestinationState(val destination: Destination?)
+
+private sealed interface Destination {
+  data object Settings : Destination
+  data class Sheet(val count: Int) : Destination
+}
+
 private class AddressBox(var address: Address)
 
 private class OptionalAddressBox(var address: OptionalAddress?)
+
+private class DestinationBox(var destination: Destination?)
 
 private object PersonAddressPath : WritableKeyPathBase<Person, Address>() {
   override val __kpaths_id: PathId = PathId.property(TypeId("dev.kpaths.core.Person"), "address")
@@ -187,5 +244,19 @@ private object BoxOptionalAddressPath : ReferenceWritableKeyPathBase<OptionalAdd
 
   override fun setInPlace(root: OptionalAddressBox, value: OptionalAddress?) {
     root.address = value
+  }
+}
+
+private object BoxDestinationPath : ReferenceWritableKeyPathBase<DestinationBox, Destination?>() {
+  override val __kpaths_id: PathId = PathId.property(
+    TypeId("dev.kpaths.core.DestinationBox"),
+    "destination",
+  )
+  override val __kpaths_valueType: TypeId = TypeId.of<Destination?>()
+
+  override fun get(root: DestinationBox): Destination? = root.destination
+
+  override fun setInPlace(root: DestinationBox, value: Destination?) {
+    root.destination = value
   }
 }

@@ -105,6 +105,19 @@ public fun <Root, Middle : Any, Value> KeyPath<Root, Middle?>.thenOptional(
 ): KeyPath<Root, Value?> = appendingOptional(next)
 
 /**
+ * Appends a [CaseKeyPath] after a nullable focus.
+ *
+ * This is the case-aware counterpart to [thenOptional]. It focuses the [next] case when the
+ * nullable [Middle] exists and matches; an absent or different case reads as `null`.
+ *
+ * The focused case value is non-null so a writable overload can reserve `null` to mean that the
+ * outer optional should be cleared.
+ */
+public fun <Root, Middle : Any, Value : Any> KeyPath<Root, Middle?>.thenCase(
+  next: CaseKeyPath<Middle, Value>,
+): KeyPath<Root, Value?> = OptionalCaseKeyPath(this, next)
+
+/**
  * Appends a path after force-unwrapping a nullable focus.
  *
  * This is the Kotlin counterpart to a Swift `!` segment in a key path, such as
@@ -146,6 +159,16 @@ public fun <Root, Middle : Any, Value> WritableKeyPath<Root, Middle?>.thenForceU
   next: WritableKeyPath<Middle, Value>,
 ): WritableKeyPath<Root, Value> = appendingForceUnwrapped(next)
 
+/**
+ * Appends a [CaseKeyPath] after a nullable writable focus.
+ *
+ * Setting a non-null value embeds it in [next] and replaces the outer optional, including when it
+ * was previously absent or held another case. Setting `null` clears the outer optional.
+ */
+public fun <Root, Middle : Any, Value : Any> WritableKeyPath<Root, Middle?>.thenCase(
+  next: CaseKeyPath<Middle, Value>,
+): WritableKeyPath<Root, Value?> = OptionalCaseWritableKeyPath(this, next)
+
 private class AppendedKeyPath<Root, Middle, Value>(
   private val outer: KeyPath<Root, Middle>,
   private val inner: KeyPath<Middle, Value>,
@@ -166,6 +189,18 @@ private class OptionalAppendedKeyPath<Root, Middle : Any, Value>(
   override val __kpaths_valueType: TypeId = inner.__kpaths_valueType.withNullability(true)
 
   override fun get(root: Root): Value? = outer.get(root)?.let(inner::get)
+}
+
+private class OptionalCaseKeyPath<Root, Middle : Any, Value : Any>(
+  private val outer: KeyPath<Root, Middle?>,
+  private val inner: CaseKeyPath<Middle, Value>,
+) : KeyPathBase<Root, Value?>() {
+  override val __kpaths_id: PathId = outer.__kpaths_id
+    .appending(PathSegment.OptionalChain)
+    .appending(inner.__kpaths_id)
+  override val __kpaths_valueType: TypeId = inner.__kpaths_valueType.withNullability(true)
+
+  override fun get(root: Root): Value? = outer.get(root)?.let(inner::extract)
 }
 
 private class ForceUnwrappedAppendedKeyPath<Root, Middle : Any, Value>(
@@ -208,6 +243,21 @@ private class ForceUnwrappedAppendedWritableKeyPath<Root, Middle : Any, Value>(
     val middle = forceUnwrappedValue(outer, root)
     return outer.set(root, inner.set(middle, value))
   }
+}
+
+private class OptionalCaseWritableKeyPath<Root, Middle : Any, Value : Any>(
+  private val outer: WritableKeyPath<Root, Middle?>,
+  private val inner: CaseKeyPath<Middle, Value>,
+) : WritableKeyPathBase<Root, Value?>() {
+  override val __kpaths_id: PathId = outer.__kpaths_id
+    .appending(PathSegment.OptionalChain)
+    .appending(inner.__kpaths_id)
+  override val __kpaths_valueType: TypeId = inner.__kpaths_valueType.withNullability(true)
+
+  override fun get(root: Root): Value? = outer.get(root)?.let(inner::extract)
+
+  override fun set(root: Root, value: Value?): Root =
+    outer.set(root, value?.let(inner::embed))
 }
 
 /**
@@ -260,6 +310,14 @@ public fun <Root : Any, Middle : Any, Value> ReferenceWritableKeyPath<Root, Midd
   next: WritableKeyPath<Middle, Value>,
 ): ReferenceWritableKeyPath<Root, Value> = appendingForceUnwrapped(next)
 
+/**
+ * Appends a [CaseKeyPath] after a nullable reference-writable focus while retaining in-place
+ * mutation. A non-null value embeds the selected case; `null` clears the outer optional.
+ */
+public fun <Root : Any, Middle : Any, Value : Any> ReferenceWritableKeyPath<Root, Middle?>.thenCase(
+  next: CaseKeyPath<Middle, Value>,
+): ReferenceWritableKeyPath<Root, Value?> = OptionalCaseReferenceWritableKeyPath(this, next)
+
 private class AppendedReferenceWritableKeyPath<Root : Any, Middle, Value>(
   private val outer: ReferenceWritableKeyPath<Root, Middle>,
   private val inner: WritableKeyPath<Middle, Value>,
@@ -288,6 +346,22 @@ private class ForceUnwrappedAppendedReferenceWritableKeyPath<Root : Any, Middle 
   override fun setInPlace(root: Root, value: Value) {
     val middle = forceUnwrappedValue(outer, root)
     outer.setInPlace(root, inner.set(middle, value))
+  }
+}
+
+private class OptionalCaseReferenceWritableKeyPath<Root : Any, Middle : Any, Value : Any>(
+  private val outer: ReferenceWritableKeyPath<Root, Middle?>,
+  private val inner: CaseKeyPath<Middle, Value>,
+) : ReferenceWritableKeyPathBase<Root, Value?>() {
+  override val __kpaths_id: PathId = outer.__kpaths_id
+    .appending(PathSegment.OptionalChain)
+    .appending(inner.__kpaths_id)
+  override val __kpaths_valueType: TypeId = inner.__kpaths_valueType.withNullability(true)
+
+  override fun get(root: Root): Value? = outer.get(root)?.let(inner::extract)
+
+  override fun setInPlace(root: Root, value: Value?) {
+    outer.setInPlace(root, value?.let(inner::embed))
   }
 }
 

@@ -11,6 +11,7 @@ import dev.kpaths.core.get
 import dev.kpaths.core.match
 import dev.kpaths.core.set
 import dev.kpaths.core.then
+import dev.kpaths.core.thenCase
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -46,6 +47,23 @@ class GeneratedPathsTest {
     val original = EditableEvent.Message(text = "Hello", isUnread = true)
 
     assertEquals(EditableEvent.Message(text = "Updated", isUnread = true), text.set(original, "Updated"))
+  }
+
+  @Test
+  fun `generated optional state and direct case payload paths compose with thenCase`() {
+    val sheetState: WritableKeyPath<PresentationState, Int?> =
+      PresentationState.Paths.destination.thenCase(PresentationDestination.Paths.Sheet.count)
+
+    assertEquals(2, PresentationState(PresentationDestination.Sheet(2))[sheetState])
+    assertNull(PresentationState(PresentationDestination.Settings)[sheetState])
+    assertEquals(
+      PresentationState(PresentationDestination.Sheet(3)),
+      sheetState.set(PresentationState(PresentationDestination.Settings), 3),
+    )
+    assertEquals(
+      PresentationState(null),
+      sheetState.set(PresentationState(PresentationDestination.Sheet(2)), null),
+    )
   }
 
   @Test

@@ -24,6 +24,21 @@ data class EditablePerson(
   companion object
 }
 
+@Pathable
+data class PresentationState(
+  var destination: PresentationDestination?,
+) {
+  companion object
+}
+
+@Pathable
+sealed interface PresentationDestination {
+  data class Sheet(val count: Int) : PresentationDestination
+  data object Settings : PresentationDestination
+
+  companion object
+}
+
 @Pathable(copyWritableVals = true)
 sealed interface EditableEvent {
   data class Message(
