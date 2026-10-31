@@ -255,3 +255,59 @@ Ordinary `var` properties retain their usual writable behavior.
 This is an integration API for processor authors. `kpaths-ksp-codegen` is not itself a KSP
 processor, so application code should continue to configure only `kpaths-ksp` or the library’s
 own processor.
+
+### Specialize one generated property path
+
+An integration can recognize one of its own property types and substitute a specialized
+KeyPath-compatible implementation for that property. This is useful when the property's wrapper
+has behavior that an ordinary field path cannot express, such as a value held by an observable or
+validated container.
+
+The integration supplies an ordered `propertyPathAdapters` list in its `KPathsCatalogRequest`.
+Each adapter receives one already-eligible property. The first adapter that returns a recipe wins;
+return `null` to retain the ordinary generated path.
+
+```kotlin
+private object ObservableValuePathAdapter : KPathsPropertyPathAdapter {
+  override fun pathRecipe(context: KPathsPropertyPathContext): KPathsPropertyPathRecipe? {
+    val wrapper = context.declaration.type.resolve()
+    if (wrapper.declaration.qualifiedName?.asString() != "example.ObservableValue") {
+      return null
+    }
+
+    val valueKspType = wrapper.arguments.singleOrNull()?.type?.resolve()
+      ?: return null
+    val valueType = (context.sourceValueType as? ParameterizedTypeName)
+      ?.typeArguments
+      ?.singleOrNull()
+      ?: return null
+    return KPathsPropertyPathRecipe(
+      publicPathType = WritableObservableValueKeyPath::class.asClassName()
+        .parameterizedBy(context.rootType, valueType),
+      implementationBaseType = WritableObservableValueKeyPathBase::class.asClassName()
+        .parameterizedBy(context.rootType, valueType),
+      constructorArguments = listOf(
+        context.pathId(valueType),
+        context.typeId(valueKspType),
+        CodeBlock.of(
+          "{ root -> %L }",
+          context.propertyAccess(CodeBlock.of("root")),
+        ),
+      ),
+      capability = KPathsPathCapability.WRITABLE,
+    )
+  }
+}
+```
+
+The adapter describes only the public path type, the base type for KPaths' generated anonymous
+object, and that base type's constructor arguments. Its runtime library owns the behavior in the
+base type. KPaths continues to own catalog and namespace names, escaped member access, collision
+diagnostics, property eligibility, and stable `PathId` construction. `context.typeId` renders the
+focused type's KPaths metadata, including generic type tokens and nullability, so a wrapper can
+focus its contained value without inventing a second type-identity scheme.
+
+`TypeName` and `CodeBlock` come from KotlinPoet, Kotlin's standard source-generation library.
+They are small typed source fragments—not a callback that can write arbitrary declarations into a
+catalog. An integration processor adds KotlinPoet to construct these fragments; it does not need
+access to KPaths' catalog writer.

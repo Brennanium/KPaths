@@ -51,6 +51,7 @@ kotlin {
       dependencies {
         implementation(project(":kpaths-annotations"))
         api(libs.ksp.api)
+        api(libs.kotlinpoet)
       }
     }
   }

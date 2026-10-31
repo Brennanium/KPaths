@@ -4,9 +4,11 @@ ksp = "2.3.12"
 junit = "5.13.4"
 dokka = "2.2.0"
 vanniktech-maven-publish = "0.37.0"
+kotlinpoet = "2.2.0"
 
 [libraries]
 ksp-api = { module = "com.google.devtools.ksp:symbol-processing-api", version.ref = "ksp" }
+kotlinpoet = { module = "com.squareup:kotlinpoet", version.ref = "kotlinpoet" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 
 [plugins]

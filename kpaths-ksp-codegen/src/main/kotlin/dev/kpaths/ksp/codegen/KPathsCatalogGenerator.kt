@@ -7,6 +7,7 @@ import com.google.devtools.ksp.processing.Dependencies
 import com.google.devtools.ksp.processing.KSPLogger
 import com.google.devtools.ksp.processing.Resolver
 import com.google.devtools.ksp.symbol.KSClassDeclaration
+import com.google.devtools.ksp.symbol.KSDeclaration
 import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSPropertyDeclaration
 import com.google.devtools.ksp.symbol.KSType
@@ -19,6 +20,13 @@ import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.symbol.Origin
 import com.google.devtools.ksp.symbol.Variance
 import com.google.devtools.ksp.validate
+import com.squareup.kotlinpoet.ClassName
+import com.squareup.kotlinpoet.CodeBlock
+import com.squareup.kotlinpoet.ANY
+import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+import com.squareup.kotlinpoet.STAR
+import com.squareup.kotlinpoet.TypeName
+import com.squareup.kotlinpoet.TypeVariableName
 import dev.kpaths.annotations.CaseName
 import dev.kpaths.annotations.PathName
 import dev.kpaths.annotations.PathsName
@@ -51,6 +59,103 @@ public data class KPathsCatalogRequest(
    * avoids coupling this shared generator to another annotation's naming convention.
    */
   public val copyWritableValExclusions: Set<KSPropertyDeclaration> = emptySet(),
+  /**
+   * Ordered integrations that may replace the ordinary generated path implementation for an
+   * otherwise eligible property. The first non-null recipe wins.
+   *
+   * Adapters cannot alter generated catalog names, member names, collision diagnostics, or path
+   * identity. They only choose the generated property's public path type and anonymous-object base.
+   */
+  public val propertyPathAdapters: List<KPathsPropertyPathAdapter> = emptyList(),
+)
+
+/** Lets an integration provide a specialized KeyPath-compatible implementation for a property. */
+public fun interface KPathsPropertyPathAdapter {
+  /** Returns a recipe for [context], or `null` to keep KPaths' ordinary generated path. */
+  public fun pathRecipe(context: KPathsPropertyPathContext): KPathsPropertyPathRecipe?
+}
+
+/**
+ * The constrained information available while generating a single eligible property path.
+ *
+ * This context intentionally does not expose the containing catalog builder or generated member
+ * names. Use [pathId] and [propertyAccess] rather than reconstructing KPaths source details.
+ */
+public class KPathsPropertyPathContext internal constructor(
+  public val declaration: KSPropertyDeclaration,
+  public val rootType: TypeName,
+  public val sourceValueType: TypeName,
+  public val isPrimaryConstructorProperty: Boolean,
+  public val isDataClass: Boolean,
+  public val isMutable: Boolean,
+  public val copyWritableVals: Boolean,
+  /** The generated catalog member name, escaped when Kotlin source requires it. */
+  public val escapedPropertyName: String,
+  private val rootTypeId: CodeBlock,
+  private val sourcePropertyName: String,
+  private val typeIdRenderer: (KSType) -> CodeBlock,
+) {
+  /** Builds KPaths' stable identity for this property. [valueType] records the adapter's focus. */
+  public fun pathId(valueType: TypeName): CodeBlock {
+    @Suppress("UNUSED_VARIABLE")
+    val ignoredValueType = valueType
+    return CodeBlock.of(
+      "%T.property(%L, %S)",
+      ClassName("dev.kpaths.core", "PathId"),
+      rootTypeId,
+      sourcePropertyName,
+    )
+  }
+
+  /**
+   * Renders KPaths' structural [dev.kpaths.core.TypeId] metadata for [type].
+   *
+   * Specialized paths commonly focus a component of the source property rather than its declared
+   * type (for example, a wrapper's contained value). Using this helper preserves generic type
+   * tokens and nullability without requiring an integration to duplicate KPaths' type-ID rules.
+   */
+  public fun typeId(type: KSType): CodeBlock = typeIdRenderer(type)
+
+  /** Produces safe Kotlin member access for this property, including backtick identifiers. */
+  public fun propertyAccess(rootExpression: CodeBlock): CodeBlock =
+    CodeBlock.of("%L.%L", rootExpression, escapeKotlinIdentifier(sourcePropertyName))
+}
+
+/** The KeyPath capability an adapter-provided implementation exposes. */
+public enum class KPathsPathCapability {
+  READ_ONLY,
+  WRITABLE,
+  REFERENCE_WRITABLE,
+}
+
+/**
+ * Structured replacement for one generated property-path implementation.
+ *
+ * KPaths emits `object : implementationBaseType(constructorArguments...) {}` and assigns it to
+ * [publicPathType]. The integration owns the behavior in its base type; KPaths retains all catalog
+ * structure and identity policy.
+ */
+public data class KPathsPropertyPathRecipe(
+  public val publicPathType: TypeName,
+  public val implementationBaseType: TypeName,
+  public val constructorArguments: List<CodeBlock>,
+  public val capability: KPathsPathCapability,
+)
+
+private fun escapeKotlinIdentifier(identifier: String): String =
+  if (identifier in kotlinKeywordsForCodegen || !identifier.isKotlinIdentifierForCodegen()) "`$identifier`" else identifier
+
+private fun String.isKotlinIdentifierForCodegen(): Boolean =
+  isNotEmpty() && first().isLetterOrUnderscoreForCodegen() && drop(1).all { it.isLetterOrDigitOrUnderscoreForCodegen() }
+
+private fun Char.isLetterOrUnderscoreForCodegen(): Boolean = isLetter() || this == '_'
+
+private fun Char.isLetterOrDigitOrUnderscoreForCodegen(): Boolean = isLetterOrDigit() || this == '_'
+
+private val kotlinKeywordsForCodegen = setOf(
+  "as", "as?", "break", "class", "continue", "do", "else", "false", "for", "fun", "if",
+  "in", "!in", "interface", "is", "!is", "null", "object", "package", "return", "super",
+  "this", "throw", "true", "try", "typealias", "val", "var", "when", "while",
 )
 
 /** Returns KPaths' conventional top-level catalog name, or `null` for a local declaration. */
@@ -121,6 +226,7 @@ public class KPathsCatalogGenerator(
           generatedName = target.generatedName,
           copyWritableVals = target.copyWritableVals,
           copyWritableValExclusions = target.copyWritableValExclusions,
+          propertyPathAdapters = target.propertyPathAdapters,
           resolver = resolver,
         )
       }
@@ -134,6 +240,7 @@ public class KPathsCatalogGenerator(
     generatedName: String,
     copyWritableVals: Boolean,
     copyWritableValExclusions: Set<KSPropertyDeclaration>,
+    propertyPathAdapters: List<KPathsPropertyPathAdapter>,
     resolver: Resolver,
   ) {
     val qualifiedName = declaration.qualifiedName?.asString() ?: run {
@@ -148,10 +255,26 @@ public class KPathsCatalogGenerator(
     val copyWritableValExclusionIds = copyWritableValExclusions
       .mapNotNull(::copyWritableValExclusionId)
       .toSet()
-    val pathProperties = pathProperties(declaration, copyWritableVals, copyWritableValExclusionIds)
-    val casePaths = casePaths(declaration, copyWritableVals, copyWritableValExclusionIds)
-    val companionPaths = companionPathsExtension(declaration, pathProperties, casePaths)
-    val genericCompanionPaths = genericCompanionPathsFactory(declaration, pathProperties, casePaths)
+    val typeTokenNames = declaration.typeParameters.associate { parameter ->
+      parameter.name.asString() to typeTokenName(parameter.name.asString())
+    }
+    val typeTokenArgumentNames = declaration.typeParameters.associate { parameter ->
+      parameter.name.asString() to typeTokenArgumentName(parameter.name.asString())
+    }
+    val generatedRootTypeName = generatedInternalPrefix + "rootType"
+    val rootKotlinType = renderKotlinQualifiedName(qualifiedName) + declaration.typeParameters
+      .takeIf { it.isNotEmpty() }
+      ?.joinToString(prefix = "<", postfix = ">") { escapeIdentifier(it.name.asString()) }
+      .orEmpty()
+    val rootTypeId = renderDeclaredTypeId(qualifiedName, declaration.typeParameters, typeTokenNames)
+    val unadaptedPathProperties = pathProperties(declaration, copyWritableVals, copyWritableValExclusionIds)
+    val unadaptedCasePaths = casePaths(declaration, copyWritableVals, copyWritableValExclusionIds)
+    val companionPaths = companionPathsExtension(declaration, unadaptedPathProperties, unadaptedCasePaths)
+    val genericCompanionPaths = genericCompanionPathsFactory(
+      declaration,
+      unadaptedPathProperties,
+      unadaptedCasePaths,
+    )
     val companionGeneratedMember = when {
       companionPaths != null -> CompanionGeneratedMember(
         companion = companionPaths.companion,
@@ -165,31 +288,53 @@ public class KPathsCatalogGenerator(
     }
     if (!validateGeneratedMemberNames(
         declaration,
-        pathProperties,
-        casePaths,
+        unadaptedPathProperties,
+        unadaptedCasePaths,
         companionGeneratedMember,
         resolver,
       )
     ) {
       return
     }
-    val typeTokenNames = declaration.typeParameters.associate { parameter ->
-      parameter.name.asString() to typeTokenName(parameter.name.asString())
+    val pathProperties = if (propertyPathAdapters.isEmpty()) {
+      unadaptedPathProperties
+    } else {
+      adaptPathProperties(
+        properties = unadaptedPathProperties,
+        rootDeclaration = declaration,
+        rootType = declaredTypeName(declaration),
+        rootTypeId = CodeBlock.of("%L", rootTypeId),
+        copyWritableVals = copyWritableVals,
+        adapters = propertyPathAdapters,
+        typeTokenNames = typeTokenNames,
+      )
     }
-    val typeTokenArgumentNames = declaration.typeParameters.associate { parameter ->
-      parameter.name.asString() to typeTokenArgumentName(parameter.name.asString())
-    }
-    val generatedRootTypeName = generatedInternalPrefix + "rootType"
-    val rootKotlinType = renderKotlinQualifiedName(qualifiedName) + declaration.typeParameters
-      .takeIf { it.isNotEmpty() }
-      ?.joinToString(prefix = "<", postfix = ">") { escapeIdentifier(it.name.asString()) }
-      .orEmpty()
-    val rootTypeId = renderDeclaredTypeId(qualifiedName, declaration.typeParameters, typeTokenNames)
-    val resolvedCasePaths = casePaths.mapNotNull { casePath ->
+    val resolvedCasePaths = unadaptedCasePaths.mapNotNull { casePath ->
       resolveCaseType(declaration, typeTokenNames, casePath)?.let { resolvedCaseType ->
-        ResolvedCasePath(casePath, resolvedCaseType)
+        val substitutions = resolvedCaseType.typeParameterSubstitutions.mapValues { (_, name) ->
+          TypeVariableName(name)
+        }
+        val adaptedProperties = if (propertyPathAdapters.isEmpty()) {
+          casePath.propertyPaths
+        } else {
+          adaptPathProperties(
+            properties = casePath.propertyPaths,
+            rootDeclaration = casePath.declaration,
+            rootType = declaredTypeName(
+              declaration = casePath.declaration,
+              typeParameterSubstitutions = substitutions,
+            ),
+            rootTypeId = CodeBlock.of("%L", resolvedCaseType.typeId),
+            copyWritableVals = copyWritableVals,
+            adapters = propertyPathAdapters,
+            typeParameterSubstitutions = substitutions,
+            typeTokenNames = resolvedCaseType.typeTokenSubstitutions,
+          )
+        }
+        ResolvedCasePath(casePath.copy(propertyPaths = adaptedProperties), resolvedCaseType)
       }
     }
+    val casePaths = resolvedCasePaths.map(ResolvedCasePath::casePath)
     val containingFile = declaration.containingFile ?: run {
       reportGenerationError(declaration, "KPaths catalog types must originate from a source file.")
       return
@@ -506,6 +651,93 @@ public class KPathsCatalogGenerator(
       candidate.annotationType.resolve().declaration.qualifiedName?.asString() == annotationQualifiedName
     }
 
+  /** Applies the first matching restricted integration recipe after KPaths' normal eligibility pass. */
+  private fun adaptPathProperties(
+    properties: List<PathProperty>,
+    rootDeclaration: KSClassDeclaration,
+    rootType: TypeName,
+    rootTypeId: CodeBlock,
+    copyWritableVals: Boolean,
+    adapters: List<KPathsPropertyPathAdapter>,
+    typeParameterSubstitutions: Map<String, TypeName> = emptyMap(),
+    typeTokenNames: Map<String, String> = emptyMap(),
+  ): List<PathProperty> {
+    if (adapters.isEmpty()) return properties
+    val primaryConstructorPropertyNames = rootDeclaration.primaryConstructor
+      ?.parameters
+      ?.filter { it.isVal || it.isVar }
+      ?.mapNotNull { it.name?.asString() }
+      ?.toSet()
+      ?: emptySet()
+    val isDataClass = Modifier.DATA in rootDeclaration.modifiers
+
+    return properties.map { property ->
+      val declaration = property.declaration
+      val context = KPathsPropertyPathContext(
+        declaration = declaration,
+        rootType = rootType,
+        sourceValueType = declaration.type.resolve().toAdapterTypeName(typeParameterSubstitutions),
+        isPrimaryConstructorProperty = declaration.simpleName.asString() in primaryConstructorPropertyNames,
+        isDataClass = isDataClass,
+        isMutable = declaration.isMutable,
+        copyWritableVals = copyWritableVals,
+        escapedPropertyName = escapeIdentifier(property.generatedName),
+        rootTypeId = rootTypeId,
+        sourcePropertyName = declaration.simpleName.asString(),
+        typeIdRenderer = { type ->
+          CodeBlock.of("%L", type.renderTypeId(typeTokenNames))
+        },
+      )
+      property.copy(recipe = adapters.firstNotNullOfOrNull { adapter -> adapter.pathRecipe(context) })
+    }
+  }
+
+  /** Renders a declaration with its in-scope generic arguments for the public adapter API. */
+  private fun declaredTypeName(
+    declaration: KSClassDeclaration,
+    typeParameterSubstitutions: Map<String, TypeName> = emptyMap(),
+  ): TypeName {
+    val rawType = classNameFor(declaration)
+    val arguments = declaration.typeParameters.map { parameter ->
+      typeParameterSubstitutions[parameter.name.asString()] ?: TypeVariableName(parameter.name.asString())
+    }
+    return if (arguments.isEmpty()) rawType else rawType.parameterizedBy(arguments)
+  }
+
+  /** Converts KSP's resolved type to a source type without exposing KSP's type model to recipes. */
+  private fun KSType.toAdapterTypeName(
+    typeParameterSubstitutions: Map<String, TypeName>,
+  ): TypeName {
+    val declaration = declaration
+    if (declaration is KSTypeParameter) {
+      return (typeParameterSubstitutions[declaration.name.asString()]
+        ?: TypeVariableName(declaration.name.asString()))
+        .copy(nullable = isMarkedNullable)
+    }
+    if (declaration.qualifiedName == null) return ANY.copy(nullable = isMarkedNullable)
+    val rawType = classNameFor(declaration)
+    val arguments = arguments.map { argument ->
+      argument.type?.resolve()?.toAdapterTypeName(typeParameterSubstitutions) ?: STAR
+    }
+    return (if (arguments.isEmpty()) rawType else rawType.parameterizedBy(arguments))
+      .copy(nullable = isMarkedNullable)
+  }
+
+  /** Builds a KotlinPoet class name from KSP declarations without guessing from capitalization. */
+  private fun classNameFor(declaration: KSDeclaration): ClassName {
+    val enclosingNames = generateSequence(declaration) { current ->
+      current.parentDeclaration as? KSClassDeclaration
+    }
+      .map { current -> current.simpleName.asString() }
+      .toList()
+      .asReversed()
+    return ClassName(
+      declaration.packageName.asString(),
+      enclosingNames.first(),
+      *enclosingNames.drop(1).toTypedArray(),
+    )
+  }
+
   /** Classifies Kotlin properties into the library's explicit value-style and reference-style APIs. */
   private fun pathProperties(
     declaration: KSClassDeclaration,
@@ -777,7 +1009,7 @@ public class KPathsCatalogGenerator(
       val property = pathProperty.declaration
       val identifier = escapeIdentifier(pathProperty.generatedName)
       val valueType = property.type.resolve().renderKotlinType()
-      writer.appendLine("    public val $identifier: ${pathInterface(pathProperty.kind)}<$rootKotlinType, $valueType>")
+      writer.appendLine("    public val $identifier: ${pathPublicType(pathProperty, rootKotlinType, valueType)}")
     }
     resolvedCasePaths.forEach { resolvedCasePath ->
       val casePath = resolvedCasePath.casePath
@@ -842,7 +1074,7 @@ public class KPathsCatalogGenerator(
       val property = pathProperty.declaration
       val identifier = escapeIdentifier(pathProperty.generatedName)
       val valueType = property.type.resolve().renderKotlinType()
-      writer.appendLine("  override val $identifier: ${pathInterface(pathProperty.kind)}<$rootType, $valueType>")
+      writer.appendLine("  override val $identifier: ${pathPublicType(pathProperty, rootType, valueType)}")
       writer.appendLine("    get() = $generatedIdentifier.$identifier")
     }
     resolvedCasePaths.forEach { resolvedCasePath ->
@@ -880,7 +1112,7 @@ public class KPathsCatalogGenerator(
     casePath.propertyPaths.forEach { pathProperty ->
       val identifier = escapeIdentifier(pathProperty.generatedName)
       val valueType = pathProperty.declaration.type.resolve().renderKotlinType()
-      writer.appendLine("    public val $identifier: ${pathInterface(pathProperty.kind)}<$rootKotlinType, $valueType>")
+      writer.appendLine("    public val $identifier: ${pathPublicType(pathProperty, rootKotlinType, valueType)}")
     }
     writer.appendLine("  }")
   }
@@ -899,7 +1131,7 @@ public class KPathsCatalogGenerator(
     casePath.propertyPaths.forEach { pathProperty ->
       val identifier = escapeIdentifier(pathProperty.generatedName)
       val valueType = pathProperty.declaration.type.resolve().renderKotlinType(resolvedCaseType.typeParameterSubstitutions)
-      writer.appendLine("  override val $identifier: ${pathInterface(pathProperty.kind)}<${resolvedCaseType.kotlinType}, $valueType>")
+      writer.appendLine("  override val $identifier: ${pathPublicType(pathProperty, resolvedCaseType.kotlinType, valueType)}")
       writer.appendLine("    get() = $generatedIdentifier.$namespaceIdentifier.$identifier")
     }
     writer.appendLine("}")
@@ -1114,6 +1346,17 @@ public class KPathsCatalogGenerator(
     val sourceIdentifier = escapeIdentifier(name)
     val valueKotlinType = property.type.resolve().renderKotlinType(typeParameterSubstitutions)
     val valueTypeId = property.type.resolve().renderTypeId(typeTokenNames)
+    pathProperty.recipe?.let { recipe ->
+      val constructorArguments = recipe.constructorArguments.joinToString(", ")
+      writer.appendLine()
+      writer.appendLine(
+        "${declarationIndent}public val $identifier: ${recipe.publicPathType} =",
+      )
+      writer.appendLine(
+        "${declarationIndent}  object : ${recipe.implementationBaseType}($constructorArguments) {}",
+      )
+      return
+    }
     val pathInterface = pathInterface(pathProperty.kind)
     val pathBase = when (pathProperty.kind) {
       PathKind.READ_ONLY -> "dev.kpaths.core.KeyPathBase"
@@ -1145,6 +1388,13 @@ public class KPathsCatalogGenerator(
     PathKind.COPY_WRITABLE, PathKind.COPY_THEN_MUTATE -> "dev.kpaths.core.WritableKeyPath"
     PathKind.REFERENCE_WRITABLE -> "dev.kpaths.core.ReferenceWritableKeyPath"
   }
+
+  private fun pathPublicType(
+    property: PathProperty,
+    rootKotlinType: String,
+    valueKotlinType: String,
+  ): String = property.recipe?.publicPathType?.toString()
+    ?: "${pathInterface(property.kind)}<$rootKotlinType, $valueKotlinType>"
 
   private fun writeCasePath(
     writer: java.io.BufferedWriter,
@@ -1694,6 +1944,7 @@ public class KPathsCatalogGenerator(
     val declaration: KSPropertyDeclaration,
     val generatedName: String,
     val kind: PathKind,
+    val recipe: KPathsPropertyPathRecipe? = null,
   )
 
   private data class CasePath(

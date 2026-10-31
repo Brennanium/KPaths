@@ -9,6 +9,226 @@ import org.junit.jupiter.api.io.TempDir
 
 class KPathsProcessorIntegrationTest {
   @Test
+  fun `external processor can replace an eligible generated property path implementation`(
+    @TempDir fixtureDirectory: Path,
+  ) {
+    val projectDirectory = Path.of(checkNotNull(System.getProperty("kpaths.projectDir")))
+    val annotationsJar = projectDirectory.jvmArtifact("kpaths-annotations")
+    val coreJar = projectDirectory.jvmArtifact("kpaths-core")
+    val codegenJar = projectDirectory.jvmArtifact("kpaths-ksp-codegen")
+
+    Files.writeString(
+      fixtureDirectory.resolve("settings.gradle.kts"),
+      """
+        pluginManagement {
+          repositories {
+            gradlePluginPortal()
+            mavenCentral()
+          }
+        }
+        dependencyResolutionManagement {
+          repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+          repositories {
+            mavenCentral()
+          }
+        }
+        rootProject.name = "adapter-kpaths-fixture"
+        include(":adapter-processor")
+      """.trimIndent(),
+    )
+    Files.writeString(
+      fixtureDirectory.resolve("build.gradle.kts"),
+      """
+        plugins {
+          kotlin("jvm") version "2.4.21"
+          id("com.google.devtools.ksp") version "2.3.12"
+        }
+
+        dependencies {
+          implementation(files("${coreJar.gradlePath()}"))
+          ksp(project(":adapter-processor"))
+        }
+      """.trimIndent(),
+    )
+    val processorDirectory = Files.createDirectories(fixtureDirectory.resolve("adapter-processor"))
+    Files.writeString(
+      processorDirectory.resolve("build.gradle.kts"),
+      """
+        plugins {
+          kotlin("jvm") version "2.4.21"
+        }
+
+        dependencies {
+          implementation("com.google.devtools.ksp:symbol-processing-api:2.3.12")
+          implementation("com.squareup:kotlinpoet:2.2.0")
+          implementation(files("${annotationsJar.gradlePath()}"))
+          implementation(files("${codegenJar.gradlePath()}"))
+        }
+      """.trimIndent(),
+    )
+    val processorSourceDirectory = Files.createDirectories(
+      processorDirectory.resolve("src/main/kotlin/fixtureadapter"),
+    )
+    Files.writeString(
+      processorSourceDirectory.resolve("SharedProcessor.kt"),
+      """
+        package fixtureadapter
+
+        import com.google.devtools.ksp.processing.CodeGenerator
+        import com.google.devtools.ksp.processing.KSPLogger
+        import com.google.devtools.ksp.processing.Resolver
+        import com.google.devtools.ksp.processing.SymbolProcessor
+        import com.google.devtools.ksp.processing.SymbolProcessorEnvironment
+        import com.google.devtools.ksp.processing.SymbolProcessorProvider
+        import com.google.devtools.ksp.symbol.KSAnnotated
+        import com.google.devtools.ksp.symbol.KSClassDeclaration
+        import com.squareup.kotlinpoet.ClassName
+        import com.squareup.kotlinpoet.CodeBlock
+        import com.squareup.kotlinpoet.ParameterizedTypeName.Companion.parameterizedBy
+        import com.squareup.kotlinpoet.ParameterizedTypeName
+        import dev.kpaths.ksp.codegen.KPathsCatalogGenerator
+        import dev.kpaths.ksp.codegen.KPathsCatalogRequest
+        import dev.kpaths.ksp.codegen.KPathsPathCapability
+        import dev.kpaths.ksp.codegen.KPathsPropertyPathAdapter
+        import dev.kpaths.ksp.codegen.KPathsPropertyPathRecipe
+
+        private const val marker = "fixture.PathAdapted"
+
+        class SharedProcessorProvider : SymbolProcessorProvider {
+          override fun create(environment: SymbolProcessorEnvironment): SymbolProcessor =
+            SharedProcessor(environment.codeGenerator, environment.logger)
+        }
+
+        private class SharedProcessor(
+          codeGenerator: CodeGenerator,
+          private val logger: KSPLogger,
+        ) : SymbolProcessor {
+          private val generator = KPathsCatalogGenerator(codeGenerator, logger)
+
+          override fun process(resolver: Resolver): List<KSAnnotated> =
+            generator.generate(
+              resolver,
+              resolver.getSymbolsWithAnnotation(marker)
+                .filterIsInstance<KSClassDeclaration>()
+                .map { declaration ->
+                  KPathsCatalogRequest(
+                    declaration = declaration,
+                    generatedName = declaration.simpleName.asString() + "Paths",
+                    annotationQualifiedName = marker,
+                    annotationDisplayName = "@PathAdapted",
+                    propertyPathAdapters = listOf(SharedValuePathAdapter),
+                  )
+                }
+                .toList(),
+            )
+        }
+
+        private object SharedValuePathAdapter : KPathsPropertyPathAdapter {
+          override fun pathRecipe(context: dev.kpaths.ksp.codegen.KPathsPropertyPathContext): KPathsPropertyPathRecipe? {
+            val sharedType = context.declaration.type.resolve()
+            if (sharedType.declaration.qualifiedName?.asString() != "fixture.Shared") return null
+            val valueType = sharedType.arguments.singleOrNull()?.type?.resolve() ?: return null
+            val value = (context.sourceValueType as? ParameterizedTypeName)
+              ?.typeArguments
+              ?.singleOrNull()
+              ?: return null
+            return KPathsPropertyPathRecipe(
+              publicPathType = ClassName("fixture", "WritableSharedValueKeyPath")
+                .parameterizedBy(context.rootType, value),
+              implementationBaseType = ClassName("fixture", "WritableSharedValueKeyPathBase")
+                .parameterizedBy(context.rootType, value),
+              constructorArguments = listOf(
+                context.pathId(value),
+                context.typeId(valueType),
+                CodeBlock.of("{ root -> %L }", context.propertyAccess(CodeBlock.of("root"))),
+              ),
+              capability = KPathsPathCapability.WRITABLE,
+            )
+          }
+        }
+      """.trimIndent(),
+    )
+    val serviceDirectory = Files.createDirectories(
+      processorDirectory.resolve("src/main/resources/META-INF/services"),
+    )
+    Files.writeString(
+      serviceDirectory.resolve("com.google.devtools.ksp.processing.SymbolProcessorProvider"),
+      "fixtureadapter.SharedProcessorProvider\n",
+    )
+    val sourceDirectory = Files.createDirectories(fixtureDirectory.resolve("src/main/kotlin/fixture"))
+    Files.writeString(
+      sourceDirectory.resolve("State.kt"),
+      """
+        package fixture
+
+        import dev.kpaths.core.PathId
+        import dev.kpaths.core.TypeId
+        import dev.kpaths.core.WritableKeyPath
+
+        @Target(AnnotationTarget.CLASS)
+        annotation class PathAdapted
+
+        class Shared<Value>(var value: Value)
+
+        interface WritableSharedValueKeyPath<Root, Value> : WritableKeyPath<Root, Value>
+
+        abstract class WritableSharedValueKeyPathBase<Root, Value>(
+          override val __kpaths_id: PathId,
+          override val __kpaths_valueType: TypeId,
+          private val resolveShared: (Root) -> Shared<Value>,
+        ) : WritableSharedValueKeyPath<Root, Value> {
+          override fun get(root: Root): Value = resolveShared(root).value
+          override fun set(root: Root, value: Value): Root {
+            resolveShared(root).value = value
+            return root
+          }
+        }
+
+        data class Profile(val name: String)
+
+        @PathAdapted
+        data class State(val profile: Shared<Profile>) {
+          companion object
+        }
+
+        @PathAdapted
+        data class Box<Value>(val shared: Shared<Value>) {
+          companion object Paths
+        }
+
+        @PathAdapted
+        sealed interface Destination {
+          data class Sheet(val profile: Shared<Profile>) : Destination
+
+          companion object
+        }
+
+        fun verifyAdapter() {
+          val path: WritableSharedValueKeyPath<State, Profile> = State.Paths.profile
+          val state = State(Shared(Profile("before")))
+          check(path.get(state) == Profile("before"))
+          check(path.set(state, Profile("after")) === state)
+          check(state.profile.value == Profile("after"))
+
+          val boxPath: WritableSharedValueKeyPath<Box<Profile>, Profile> =
+            Box.Paths.of<Profile>().shared
+
+          val sheetPath: WritableSharedValueKeyPath<Destination.Sheet, Profile> =
+            Destination.Paths.SheetPaths.profile
+          val sheet = Destination.Sheet(Shared(Profile("before")))
+          check(sheetPath.set(sheet, Profile("after")) === sheet)
+          check(sheet.profile.value == Profile("after"))
+        }
+      """.trimIndent(),
+    )
+
+    GradleRunner.create()
+      .withProjectDir(fixtureDirectory.toFile())
+      .withArguments("compileKotlin", "--stacktrace")
+      .build()
+  }
+
+  @Test
   fun `reports an unnamed bare companion before later class members`(
     @TempDir fixtureDirectory: Path,
   ) {
