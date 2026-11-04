@@ -1412,17 +1412,27 @@ public class KPathsCatalogGenerator(
     writer.appendLine()
     if (capturesTypeTokens) {
       if (payload == null) {
-        writer.appendLine("  public val $caseIdentifier: dev.kpaths.core.CaseKeyPath<$rootKotlinType, ${resolvedCaseType.kotlinType}> =")
-        writer.appendLine("    object : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, ${resolvedCaseType.kotlinType}>() {")
-        writeCasePathBody(
-          writer = writer,
-          indent = "      ",
-          rootKotlinType = rootKotlinType,
-          rootTypeId = rootTypeId,
-          casePath = casePath,
-          resolvedCaseType = resolvedCaseType,
-        )
-        writer.appendLine("    }")
+        if (casePath.kind == CaseKind.SEALED_VARIANT && casePath.declaration.classKind == ClassKind.OBJECT) {
+          writeGenericCasePathWithUnitPayload(
+            writer = writer,
+            rootKotlinType = rootKotlinType,
+            rootTypeId = rootTypeId,
+            casePath = casePath,
+            resolvedCaseType = resolvedCaseType,
+          )
+        } else {
+          writer.appendLine("  public val $caseIdentifier: dev.kpaths.core.CaseKeyPath<$rootKotlinType, ${resolvedCaseType.kotlinType}> =")
+          writer.appendLine("    object : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, ${resolvedCaseType.kotlinType}>() {")
+          writeCasePathBody(
+            writer = writer,
+            indent = "      ",
+            rootKotlinType = rootKotlinType,
+            rootTypeId = rootTypeId,
+            casePath = casePath,
+            resolvedCaseType = resolvedCaseType,
+          )
+          writer.appendLine("    }")
+        }
       } else {
         writeGenericCasePathWithPayload(
           writer = writer,
@@ -1453,6 +1463,17 @@ public class KPathsCatalogGenerator(
           resolvedCaseType = resolvedCaseType,
           payload = it,
         )
+      } ?: run {
+        if (casePath.kind == CaseKind.SEALED_VARIANT && casePath.declaration.classKind == ClassKind.OBJECT) {
+          writeCaseUnitPayloadPath(
+            writer = writer,
+            indent = "    ",
+            rootKotlinType = rootKotlinType,
+            rootTypeId = rootTypeId,
+            casePath = casePath,
+            resolvedCaseType = resolvedCaseType,
+          )
+        }
       }
       writer.appendLine("  }")
     }
@@ -1494,6 +1515,25 @@ public class KPathsCatalogGenerator(
     }
   }
 
+  /** Emits the `Unit` payload carried by a Kotlin object case. */
+  private fun writeCaseUnitPayloadPath(
+    writer: java.io.BufferedWriter,
+    indent: String,
+    rootKotlinType: String,
+    rootTypeId: String,
+    casePath: CasePath,
+    resolvedCaseType: ResolvedCaseType,
+  ) {
+    writer.appendLine()
+    writer.appendLine("${indent}public val unit: dev.kpaths.core.CaseKeyPath<$rootKotlinType, kotlin.Unit> =")
+    writer.appendLine("${indent}  object : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, kotlin.Unit>() {")
+    writer.appendLine("${indent}    override val __kpaths_id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.case($rootTypeId, \"${casePath.sourceName}\")")
+    writer.appendLine("${indent}    override val __kpaths_valueType: dev.kpaths.core.TypeId = dev.kpaths.core.TypeId.of<kotlin.Unit>()")
+    writer.appendLine("${indent}    override fun match(root: $rootKotlinType): dev.kpaths.core.CaseMatch<kotlin.Unit> = if (root is ${resolvedCaseType.kotlinType}) dev.kpaths.core.CaseMatch.Matched(kotlin.Unit) else dev.kpaths.core.CaseMatch.NoMatch")
+    writer.appendLine("${indent}    override fun embed(value: kotlin.Unit): $rootKotlinType = ${resolvedCaseType.kotlinType}")
+    writer.appendLine("${indent}  }")
+  }
+
   /**
    * A generic generated namespace cannot use a nested object for a payload path: its root type
    * tokens live on the enclosing namespace instance. An `inner` case-path class captures that
@@ -1530,6 +1570,39 @@ public class KPathsCatalogGenerator(
       resolvedCaseType = resolvedCaseType,
       payload = payload,
       capturesTypeTokens = true,
+    )
+    writer.appendLine("  }")
+  }
+
+  /** Emits a generic object case with its Unit associated-value path. */
+  private fun writeGenericCasePathWithUnitPayload(
+    writer: java.io.BufferedWriter,
+    rootKotlinType: String,
+    rootTypeId: String,
+    casePath: CasePath,
+    resolvedCaseType: ResolvedCaseType,
+  ) {
+    val caseIdentifier = escapeIdentifier(casePath.generatedCaseName)
+    val casePathClassIdentifier = escapeIdentifier(casePath.generatedCaseName + "CasePath")
+
+    writer.appendLine("  public val $caseIdentifier: $casePathClassIdentifier = $casePathClassIdentifier()")
+    writer.appendLine()
+    writer.appendLine("  public inner class $casePathClassIdentifier internal constructor() : dev.kpaths.core.CaseKeyPathBase<$rootKotlinType, ${resolvedCaseType.kotlinType}>() {")
+    writeCasePathBody(
+      writer = writer,
+      indent = "    ",
+      rootKotlinType = rootKotlinType,
+      rootTypeId = rootTypeId,
+      casePath = casePath,
+      resolvedCaseType = resolvedCaseType,
+    )
+    writeCaseUnitPayloadPath(
+      writer = writer,
+      indent = "    ",
+      rootKotlinType = rootKotlinType,
+      rootTypeId = rootTypeId,
+      casePath = casePath,
+      resolvedCaseType = resolvedCaseType,
     )
     writer.appendLine("  }")
   }
@@ -1703,17 +1776,32 @@ public class KPathsCatalogGenerator(
     resolvedCasePaths: List<ResolvedCasePath>,
   ) {
     val partialCasePathType = "dev.kpaths.core.PartialCaseKeyPath<$rootKotlinType>"
-    val paths = resolvedCasePaths.joinToString { resolvedCasePath ->
-      escapeIdentifier(resolvedCasePath.casePath.generatedCaseName)
+    val payloadPaths = resolvedCasePaths.mapNotNull { resolvedCasePath ->
+      val casePath = resolvedCasePath.casePath
+      val caseIdentifier = escapeIdentifier(casePath.generatedCaseName)
+      val payload = generatedCasePayload(casePath)
+      when {
+        casePath.kind == CaseKind.ENUM_ENTRY -> caseIdentifier
+        casePath.declaration.classKind == ClassKind.OBJECT -> "$caseIdentifier.unit"
+        payload != null -> {
+          val member = if (payload.properties.size == 1) {
+            payload.properties.single().declaration.simpleName.asString()
+          } else {
+            "payload"
+          }
+          "$caseIdentifier.${escapeIdentifier(member)}"
+        }
+        else -> null
+      }
     }
 
     writer.appendLine()
-    writer.appendLine("  public val allCasePaths: kotlin.collections.List<$partialCasePathType> =")
-    writer.appendLine("    kotlin.collections.listOf($paths)")
+    writer.appendLine("  public val allCasePaths: kotlin.collections.List<$partialCasePathType> by kotlin.lazy {")
+    writer.appendLine("    kotlin.collections.listOf(${payloadPaths.joinToString()})")
+    writer.appendLine("  }")
     writer.appendLine()
     writer.appendLine("  public fun caseOf(root: $rootKotlinType): $partialCasePathType {")
-    resolvedCasePaths.forEach { resolvedCasePath ->
-      val identifier = escapeIdentifier(resolvedCasePath.casePath.generatedCaseName)
+    payloadPaths.forEach { identifier ->
       writer.appendLine("    if ($identifier.matches(root)) return $identifier")
     }
     writer.appendLine("    error(\"No generated case path matched the supplied ${rootKotlinType.substringBefore('<')} value.\")")

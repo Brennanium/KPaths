@@ -134,6 +134,18 @@ class GeneratedPathsTest {
   }
 
   @Test
+  fun `sealed case catalogs erase canonical associated-value paths`() {
+    assertEquals(
+      listOf(ConnectionPaths.Connected.host, ConnectionPaths.Disconnected.unit),
+      ConnectionPaths.allCasePaths,
+    )
+    assertEquals(
+      ConnectionPaths.Connected.host,
+      ConnectionPaths.caseOf(Connection.Connected("example.com")),
+    )
+  }
+
+  @Test
   fun `non-generic companions expose generated case catalogs`() {
     assertEquals(ConnectionPaths.Connected, Connection.Paths.Connected)
     assertEquals(NamedEventPaths.message, NamedEvent.Paths.message)
