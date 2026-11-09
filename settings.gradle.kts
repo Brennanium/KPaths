@@ -24,4 +24,5 @@ include(
   ":kpaths-ksp-codegen",
   ":kpaths-ksp",
   ":kpaths-sample",
+  ":kpaths-compiler-plugin",
 )
