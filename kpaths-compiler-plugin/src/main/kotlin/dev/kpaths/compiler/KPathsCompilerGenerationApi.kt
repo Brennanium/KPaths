@@ -1,0 +1,70 @@
+package dev.kpaths.compiler
+
+import org.jetbrains.kotlin.fir.FirSession
+import org.jetbrains.kotlin.fir.extensions.FirExtensionSessionComponent
+import org.jetbrains.kotlin.fir.extensions.extensionService
+import org.jetbrains.kotlin.fir.extensions.extensionSessionComponents
+import org.jetbrains.kotlin.fir.symbols.impl.FirClassSymbol
+import org.jetbrains.kotlin.name.ClassId
+import java.util.concurrent.ConcurrentHashMap
+
+/** Marks compiler-integration APIs whose binary compatibility follows the Kotlin compiler. */
+@RequiresOptIn(
+  message = "KPaths compiler integration is experimental and tied to supported Kotlin compiler versions.",
+)
+public annotation class ExperimentalKPathsCompilerApi
+
+/**
+ * Options supplied when another compiler plugin asks KPaths to generate a catalog for a class it
+ * owns or synthesizes.
+ *
+ * Both [catalogName] and [copyWritableVals] are consumed by the current property generator.
+ */
+@ExperimentalKPathsCompilerApi
+public data class KPathsGenerationOptions(
+  public val catalogName: String = "Paths",
+  public val copyWritableVals: Boolean = false,
+)
+
+/**
+ * Session-scoped request registry shared with cooperating compiler plugins.
+ *
+ * A contributing plugin must make its request before KPaths is asked to enumerate nested
+ * classifiers for [generatedClass]. A contributor that owns a generated class normally delegates
+ * KPaths' nested-classifier callbacks to this registry in the same FIR extension.
+ */
+@ExperimentalKPathsCompilerApi
+public class KPathsGenerationRegistry(session: FirSession) : FirExtensionSessionComponent(session) {
+  private val requests = ConcurrentHashMap<ClassId, KPathsGenerationOptions>()
+
+  public fun pathable(
+    generatedClass: FirClassSymbol<*>,
+    options: KPathsGenerationOptions = KPathsGenerationOptions(),
+  ) {
+    require(options.catalogName.isKotlinIdentifier()) {
+      "KPaths catalog names must be a single Kotlin identifier: '${options.catalogName}'."
+    }
+    val previous = requests.putIfAbsent(generatedClass.classId, options)
+    require(previous == null || previous == options) {
+      "KPaths received incompatible catalog requests for ${generatedClass.classId.asSingleFqName()}."
+    }
+  }
+
+  internal fun optionsFor(classSymbol: FirClassSymbol<*>): KPathsGenerationOptions? =
+    requests[classSymbol.classId]
+}
+
+/** Returns the KPaths request registry installed by the KPaths compiler plugin for this session. */
+@ExperimentalKPathsCompilerApi
+public val FirSession.kpaths: KPathsGenerationRegistry
+  get() = extensionService.extensionSessionComponents
+    .filterIsInstance<KPathsGenerationRegistry>()
+    .singleOrNull()
+    ?: error("The KPaths compiler plugin must be applied before requesting generated KPaths catalogs.")
+
+private fun String.isKotlinIdentifier(): Boolean =
+  isNotEmpty() && first().isLetterOrUnderscore() && drop(1).all { it.isLetterOrDigitOrUnderscore() }
+
+private fun Char.isLetterOrUnderscore(): Boolean = isLetter() || this == '_'
+
+private fun Char.isLetterOrDigitOrUnderscore(): Boolean = isLetterOrDigit() || this == '_'
