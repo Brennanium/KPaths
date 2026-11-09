@@ -131,7 +131,9 @@ internal fun IrClass.stableQualifiedName(): String? {
 }
 
 internal fun IrClass.toKPathsTypeIdSpec(): KPathsTypeIdSpec.Declared? =
-  stableQualifiedName()?.let(KPathsTypeIdSpec::Declared)
+  stableQualifiedName()?.let { name ->
+    KPathsTypeIdSpec.declaredRoot(name, typeParameters.map { it.name.asString() })
+  }
 
 internal fun IrType.toKPathsTypeIdSpec(): KPathsTypeIdSpec? {
   val simpleType = this as? IrSimpleType ?: return null

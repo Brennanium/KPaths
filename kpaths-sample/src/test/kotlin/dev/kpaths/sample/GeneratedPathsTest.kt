@@ -258,4 +258,17 @@ class GeneratedPathsTest {
     assertEquals(BoxPaths<String>().value, boxed)
     assertEquals(LoadablePaths<String>().Loaded.value, loaded)
   }
+
+  @Test
+  fun `generic catalog identities retain arguments and nullability`() {
+    val text = Box.Paths<String>().value
+    val optionalText = Box.Paths<String?>().value
+    val number = Box.Paths<Int>().value
+    assertEquals(TypeId.of<String>(), text.__kpaths_valueType)
+    assertEquals(TypeId.of<String?>(), optionalText.__kpaths_valueType)
+    assertEquals(PathId.property(TypeId.of<Box<String>>(), "value"), text.__kpaths_id)
+    assertEquals(PathId.property(TypeId.of<Box<String?>>(), "value"), optionalText.__kpaths_id)
+    assertFalse(text.__kpaths_id == optionalText.__kpaths_id)
+    assertFalse(text.__kpaths_id == number.__kpaths_id)
+  }
 }

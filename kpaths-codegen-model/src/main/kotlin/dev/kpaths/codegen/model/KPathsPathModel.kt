@@ -28,6 +28,14 @@ public sealed interface KPathsTypeIdSpec {
       require(name.isNotBlank()) { "A KPaths type parameter name cannot be blank." }
     }
   }
+
+  public companion object {
+    /** Describes a declared root while retaining the identity of each generic argument. */
+    public fun declaredRoot(classifier: String, typeParameters: List<String>): Declared = Declared(
+      classifier = classifier,
+      arguments = typeParameters.map { KPathsTypeArgumentSpec.invariant(Parameter(it)) },
+    )
+  }
 }
 
 /** One generic argument in [KPathsTypeIdSpec.Declared]. */

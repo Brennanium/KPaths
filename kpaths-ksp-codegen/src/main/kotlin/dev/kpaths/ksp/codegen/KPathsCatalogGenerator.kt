@@ -2106,11 +2106,9 @@ public class KPathsCatalogGenerator(
     parameters: List<com.google.devtools.ksp.symbol.KSTypeParameter>,
     typeTokenNames: Map<String, String>,
   ): String {
-    return KPathsTypeIdSpec.Declared(
-      classifier = qualifiedName,
-      arguments = parameters.map { parameter ->
-        KPathsTypeArgumentSpec.invariant(KPathsTypeIdSpec.Parameter(parameter.name.asString()))
-      },
+    return KPathsTypeIdSpec.declaredRoot(
+      qualifiedName,
+      parameters.map { it.name.asString() },
     ).renderTypeId(typeTokenNames)
   }
 

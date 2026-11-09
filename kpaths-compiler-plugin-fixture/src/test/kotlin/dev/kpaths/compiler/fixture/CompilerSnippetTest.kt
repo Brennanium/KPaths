@@ -11,8 +11,36 @@ import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
+import org.junit.jupiter.api.Disabled
 
 class CompilerSnippetTest {
+  @Disabled("Generic compiler-plugin catalogs and runtime type tokens are not implemented yet.")
+  @Test
+  fun `generic catalogs preserve type arguments nullability and copy writes`() {
+    val result = compileSnippet("GenericCatalog.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      import dev.kpaths.core.PathId
+      import dev.kpaths.core.TypeId
+      import dev.kpaths.core.WritableKeyPath
+      @Pathable data class Box<T>(var value: T)
+      fun run(): Boolean {
+        val text: WritableKeyPath<Box<String>, String> = Box.Paths<String>().value
+        val nullable = Box.Paths<String?>().value
+        val number = Box.Paths<Int>().value
+        val original = Box("before")
+        return text(original) == "before" && text.set(original, "after") == Box("after") &&
+          original.value == "before" && text.__kpaths_valueType == TypeId.of<String>() &&
+          nullable.__kpaths_valueType == TypeId.of<String?>() &&
+          text.__kpaths_id == PathId.property(TypeId.of<Box<String>>(), "value") &&
+          nullable.__kpaths_id == PathId.property(TypeId.of<Box<String?>>(), "value") &&
+          text.__kpaths_id != nullable.__kpaths_id && text.__kpaths_id != number.__kpaths_id
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.GenericCatalogKt").getMethod("run").invoke(null))
+  }
+
   @Test
   fun `generic variants of concrete roots receive the shared diagnostic`() {
     val result = compileSnippet("GenericVariant.kt" to """
