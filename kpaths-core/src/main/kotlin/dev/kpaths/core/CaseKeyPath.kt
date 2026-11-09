@@ -68,6 +68,53 @@ public interface PartialCaseKeyPath<Root> : AnyCaseKeyPath {
 }
 
 /**
+ * A type-erased collection of a type's generated case paths.
+ *
+ * A generator can omit cases for which it cannot construct a canonical payload path; in that
+ * situation [caseOf] cannot identify those cases. See the generator's documented support.
+ *
+ * Kotlin has no static interface requirements, so a generated `Type.Paths` namespace implements
+ * this interface rather than the root type itself. The compiler plugin can additionally make a
+ * supported sealed root [CasePathable]; KSP users can opt into that root conformance manually.
+ * The compiler plugin also supplies the conformance for supported enum classes.
+ */
+public interface CasePathCatalog<Root> {
+  /** Every canonical associated-value CaseKeyPath, erased to its common root type. */
+  public val allCasePaths: List<PartialCaseKeyPath<Root>>
+
+  /** Returns the path whose case matches [root]. */
+  public fun caseOf(root: Root): PartialCaseKeyPath<Root> =
+    allCasePaths.firstOrNull { path -> path.matches(root) }
+      ?: error("No case path matched the supplied value.")
+}
+
+/**
+ * Shared lazy storage for generated [CasePathCatalog] implementations.
+ *
+ * Compiler-plugin catalogs extend this type so accessing a nested case object during outer
+ * catalog initialization cannot leave a partially initialized entry in `allCasePaths`.
+ */
+public abstract class CasePathCatalogBase<Root> : CasePathCatalog<Root> {
+  final override val allCasePaths: List<PartialCaseKeyPath<Root>> by lazy {
+    __kpaths_buildAllCasePaths()
+  }
+
+  /** KPaths-generated hook that constructs the catalog on its first access. */
+  public abstract fun __kpaths_buildAllCasePaths(): List<PartialCaseKeyPath<Root>>
+}
+
+/**
+ * Opt-in root conformance for a sealed hierarchy or enum with a [CasePathCatalog].
+ *
+ * The instance [case] is Kotlin's counterpart to Swift CasePaths' type-erased `case` property.
+ * It enables generic algorithms to classify a value without knowing its concrete case.
+ */
+public interface CasePathable<Root> {
+  /** The canonical type-erased CaseKeyPath for this instance's active case. */
+  public val `case`: PartialCaseKeyPath<Root>
+}
+
+/**
  * A conditional, typed read through one case of a sealed hierarchy.
  *
  * A [CaseKeyPath] is also its lossy Kotlin function view, from [Root] to `Value?`. It can therefore
