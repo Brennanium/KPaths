@@ -6,6 +6,14 @@ import kotlin.test.assertFailsWith
 
 class KPathsPropertyPolicyTest {
   @Test
+  fun `generic variants require generic roots`() {
+    kotlin.test.assertTrue(isKPathsGenericVariantOfConcreteRoot(false, true))
+    kotlin.test.assertFalse(isKPathsGenericVariantOfConcreteRoot(false, false))
+    kotlin.test.assertFalse(isKPathsGenericVariantOfConcreteRoot(true, true))
+    kotlin.test.assertFalse(isKPathsGenericVariantOfConcreteRoot(true, false))
+  }
+
+  @Test
   fun `matches KPaths value and reference property semantics`() {
     assertEquals(
       KPathsPropertyPolicyResult.Supported(KPathsPropertyPathKind.READ_ONLY),

@@ -43,6 +43,7 @@ import dev.kpaths.codegen.model.KPathsCaseShape
 import dev.kpaths.codegen.model.KPathsDiagnostics
 import dev.kpaths.codegen.model.KPathsGeneratedMember as GeneratedMember
 import dev.kpaths.codegen.model.hasAmbiguousKPathsCompanion
+import dev.kpaths.codegen.model.isKPathsGenericVariantOfConcreteRoot
 import dev.kpaths.codegen.model.findKPathsGeneratedMemberCollisions
 import dev.kpaths.codegen.model.isKPathsReservedName
 import dev.kpaths.codegen.model.KPATHS_INTERNAL_PREFIX
@@ -1903,11 +1904,10 @@ public class KPathsCatalogGenerator(
     val caseDeclaration = casePath.declaration
     val caseQualifiedName = requireNotNull(casePath.qualifiedName)
     if (rootDeclaration.typeParameters.isEmpty()) {
-      if (caseDeclaration.typeParameters.isNotEmpty()) {
+      if (isKPathsGenericVariantOfConcreteRoot(false, caseDeclaration.typeParameters.isNotEmpty())) {
         reportGenerationError(
           rootDeclaration,
-          "Cannot generate '${casePath.sourceName}' because this non-generic sealed root has a generic variant. " +
-            "Make the variant non-generic or use a generic sealed root.",
+          KPathsDiagnostics.genericVariantOfConcreteRoot(casePath.sourceName),
         )
         return null
       }

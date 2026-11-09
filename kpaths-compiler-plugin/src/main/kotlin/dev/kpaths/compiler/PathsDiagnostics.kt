@@ -12,6 +12,7 @@ import dev.kpaths.codegen.model.KPathsPropertyShape
 import dev.kpaths.codegen.model.classifyForKPaths
 import dev.kpaths.codegen.model.findKPathsGeneratedMemberCollisions
 import dev.kpaths.codegen.model.hasAmbiguousKPathsCompanion
+import dev.kpaths.codegen.model.isKPathsGenericVariantOfConcreteRoot
 import dev.kpaths.codegen.model.isKPathsReservedName
 import dev.kpaths.codegen.model.validateKPathsConfiguredName
 import dev.kpaths.codegen.model.kPathsConfiguredNameDiagnostic
@@ -147,6 +148,12 @@ internal class PathsDiagnosticCheckers(private val pluginSession: FirSession) : 
             false
           }
         }
+      }
+      supportedSealedCases.filter {
+        isKPathsGenericVariantOfConcreteRoot(declaration.typeParameters.isNotEmpty(), it.typeParameters.isNotEmpty())
+      }.forEach { candidate ->
+        reporter.reportOn(candidate.source, PathsDiagnostics.UNSUPPORTED_SEALED_VARIANT,
+          "[KPaths] ${KPathsDiagnostics.genericVariantOfConcreteRoot(candidate.name.asString())}")
       }
       val cases = when {
         declaration.status.modality == Modality.SEALED -> supportedSealedCases

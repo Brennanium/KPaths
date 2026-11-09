@@ -17,8 +17,9 @@ No companion object and no generated Kotlin source file are involved. For concre
 plugin's IR extension emits a private `KeyPathBase` subclass behind each generated field. That
 subclass stores its `PathId` and structural `TypeId`—including nested nullability, generic
 arguments, use-site variance, and star projections—and calls the source getter directly. There is
-no `KProperty1` reference or stored closure in those emitted paths. Generic *root* catalogs still
-retain the earlier `keyPath(Person::name)` fallback while the generated factory API is expanded.
+no `KProperty1` reference or stored closure in those emitted paths. Generic *root* catalogs do not
+yet expose generated property paths or a typed factory; use a manual factory such as `keyPath` or
+the KSP-generated catalog for those roots for now.
 
 On supported non-generic roots, `@PathName` changes the generated property-path spelling while
 preserving its identity:
@@ -96,6 +97,9 @@ using the same case-shape policy as KSP; use a class or object for a generated c
 
 Case discovery is experimental. There may be edge cases where the plugin omits a generated case
 path without reporting a diagnostic.
+
+When a non-generic sealed root has a generic direct variant, the compiler plugin reports the same
+unsupported-variant diagnostic as KSP rather than silently omitting the case.
 
 As with KSP, a bare unnamed `companion object` must be the last member of an annotated type.
 Otherwise Kotlin can interpret a following keyword as the companion's name and change the parsed

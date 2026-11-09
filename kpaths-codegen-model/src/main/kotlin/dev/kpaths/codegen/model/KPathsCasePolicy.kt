@@ -43,6 +43,10 @@ public fun KPathsCaseShape.classifyForKPaths(): KPathsCasePolicyResult = when (k
   }
 }
 
+/** A concrete root cannot give a generic variant one unambiguous case-path value type. */
+public fun isKPathsGenericVariantOfConcreteRoot(rootHasTypeParameters: Boolean, caseHasTypeParameters: Boolean): Boolean =
+  !rootHasTypeParameters && caseHasTypeParameters
+
 /** Shared, frontend-independent wording for KPaths generation diagnostics. */
 public object KPathsDiagnostics {
   public fun ambiguousCompanion(): String =
@@ -71,6 +75,10 @@ public object KPathsDiagnostics {
 
   public fun sealedVariantRequiresQualifiedName(): String =
     "Sealed variants must have qualified names."
+
+  public fun genericVariantOfConcreteRoot(name: String): String =
+    "Cannot generate '$name' because this non-generic sealed root has a generic variant. " +
+      "Make the variant non-generic or use a generic sealed root."
 
   public fun inaccessibleDataClassSetter(name: String): String =
     "Data-class property '$name' must be declared in the primary constructor or have an accessible " +

@@ -14,6 +14,20 @@ import org.objectweb.asm.Opcodes
 
 class CompilerSnippetTest {
   @Test
+  fun `generic variants of concrete roots receive the shared diagnostic`() {
+    val result = compileSnippet("GenericVariant.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      @Pathable sealed interface Event {
+        data class Item<T>(val value: T) : Event
+        data object Idle : Event
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages, "[KPaths] Cannot generate 'Item' because this non-generic sealed root has a generic variant.")
+  }
+
+  @Test
   fun `bare companion before a case is diagnosed instead of silently dropping it`() {
     val result = compileSnippet("BareCompanion.kt" to """
       package example
