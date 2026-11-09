@@ -28,12 +28,39 @@ import com.squareup.kotlinpoet.STAR
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeVariableName
 import dev.kpaths.annotations.CaseName
+import dev.kpaths.annotations.KPathsAdapter
 import dev.kpaths.annotations.PathName
 import dev.kpaths.annotations.PathsName
+import dev.kpaths.codegen.model.KPathsCaseCatalogAccess
+import dev.kpaths.codegen.model.KPathsCaseKind
+import dev.kpaths.codegen.model.KPathsCasePathModel
+import dev.kpaths.codegen.model.KPathsCasePayload
+import dev.kpaths.codegen.model.KPathsCasePayloadDecision
+import dev.kpaths.codegen.model.KPathsCasePayloadShape
+import dev.kpaths.codegen.model.planKPathsCaseCatalog
+import dev.kpaths.codegen.model.KPathsCasePolicyResult
+import dev.kpaths.codegen.model.KPathsCaseShape
+import dev.kpaths.codegen.model.KPathsDiagnostics
+import dev.kpaths.codegen.model.KPathsGeneratedMember as GeneratedMember
+import dev.kpaths.codegen.model.findKPathsGeneratedMemberCollisions
+import dev.kpaths.codegen.model.isKPathsReservedName
+import dev.kpaths.codegen.model.KPATHS_INTERNAL_PREFIX
+import dev.kpaths.codegen.model.validateKPathsConfiguredName
+import dev.kpaths.codegen.model.kPathsConfiguredNameDiagnostic
+import dev.kpaths.codegen.model.kPathsCasePropertyCatalogName
+import dev.kpaths.codegen.model.planKPathsBoundPayloadMembers
+import dev.kpaths.codegen.model.KPathsPropertyPathKind
+import dev.kpaths.codegen.model.KPathsPropertyPolicyResult
+import dev.kpaths.codegen.model.KPathsPropertyShape
+import dev.kpaths.codegen.model.KPathsTypeArgumentSpec
+import dev.kpaths.codegen.model.KPathsTypeIdSpec
+import dev.kpaths.codegen.model.KPathsTypeVariance
+import dev.kpaths.codegen.model.classifyForKPaths
 import java.nio.file.Files
 import java.nio.file.Path
 
 private val caseNameAnnotation = CaseName::class.qualifiedName!!
+private val kpathsAdapterAnnotation = KPathsAdapter::class.qualifiedName!!
 private val pathNameAnnotation = PathName::class.qualifiedName!!
 private val pathsNameAnnotation = PathsName::class.qualifiedName!!
 
@@ -95,6 +122,30 @@ public class KPathsPropertyPathContext internal constructor(
   private val sourcePropertyName: String,
   private val typeIdRenderer: (KSType) -> CodeBlock,
 ) {
+  /**
+   * The qualified name of the storage type's declared [KPathsAdapter.factory], if it has one.
+   *
+   * An integration uses this as an identity check before returning a specialized recipe. KPaths
+   * does not instantiate the factory: processor and compiler-plugin artifacts own that behavior,
+   * which keeps the annotation module free of compiler dependencies.
+   */
+  public val adapterFactoryQualifiedName: String?
+    get() {
+      val storageType = declaration.type.resolve()
+      val storageDeclaration = storageType.declaration as? KSClassDeclaration ?: return null
+      val adapter = storageDeclaration.annotations.firstOrNull { annotation ->
+        annotation.annotationType.resolve().declaration.qualifiedName?.asString() == kpathsAdapterAnnotation
+      } ?: return null
+      val factory = adapter.arguments
+        .singleOrNull { argument -> argument.name?.asString() == "factory" }
+        ?.value
+      return when (factory) {
+        is KSType -> factory.declaration.qualifiedName?.asString()
+        is KSClassDeclaration -> factory.qualifiedName?.asString()
+        else -> null
+      }
+    }
+
   /** Builds KPaths' stable identity for this property. [valueType] records the adapter's focus. */
   public fun pathId(valueType: TypeName): CodeBlock {
     @Suppress("UNUSED_VARIABLE")
@@ -351,8 +402,13 @@ public class KPathsCatalogGenerator(
       writer.appendLine("package $packageName")
       writer.appendLine()
       writer.appendLine("/** Generated paths for $qualifiedName. */")
+      val caseCatalogSupertype = if (resolvedCasePaths.isEmpty()) {
+        ""
+      } else {
+        " : dev.kpaths.core.CasePathCatalog<$rootKotlinType>"
+      }
       if (declaration.typeParameters.isEmpty()) {
-        writer.appendLine("public object $generatedIdentifier {")
+        writer.appendLine("public object $generatedIdentifier$caseCatalogSupertype {")
       } else {
         val typeParameters = renderTypeParameters(declaration.typeParameters)
         val tokenParameters = declaration.typeParameters.joinToString(", ") { parameter ->
@@ -363,7 +419,7 @@ public class KPathsCatalogGenerator(
         }
         writer.appendLine("public class $generatedIdentifier<${typeParameters.declaration}> private constructor(")
         writer.appendLine("  $constructorParameters,")
-        writer.appendLine(")${typeParameters.whereClause} {")
+        writer.appendLine(")$caseCatalogSupertype${typeParameters.whereClause} {")
         writer.appendLine("  public companion object {")
         writer.appendLine("    public fun <${typeParameters.declaration}> of($tokenParameters): $generatedIdentifier<${typeParameters.names}>${typeParameters.whereClause} =")
         writer.appendLine("      $generatedIdentifier(${declaration.typeParameters.joinToString { typeTokenArgumentNames.getValue(it.name.asString()) }})")
@@ -422,6 +478,7 @@ public class KPathsCatalogGenerator(
       if (resolvedCasePaths.isNotEmpty()) {
         writeCaseCatalog(
           writer = writer,
+          declaration = declaration,
           rootKotlinType = rootKotlinType,
           resolvedCasePaths = resolvedCasePaths,
         )
@@ -522,16 +579,26 @@ public class KPathsCatalogGenerator(
   ): List<CasePath> {
     if (Modifier.SEALED in declaration.modifiers) {
       return declaration.getSealedSubclasses().mapNotNull { caseDeclaration ->
-        if (caseDeclaration.classKind !in setOf(ClassKind.CLASS, ClassKind.OBJECT)) {
-          logger.error(
-            "[KPaths] Sealed variant '${caseDeclaration.simpleName.asString()}' must be a class or object.",
-            caseDeclaration,
-          )
-          return@mapNotNull null
-        }
-        val qualifiedName = caseDeclaration.qualifiedName?.asString() ?: run {
-          logger.error("Sealed variants must have qualified names.", caseDeclaration)
-          return@mapNotNull null
+        val qualifiedName = caseDeclaration.qualifiedName?.asString()
+        when (
+          KPathsCaseShape(
+            kind = KPathsCaseKind.SEALED_VARIANT,
+            isClassOrObject = caseDeclaration.classKind in setOf(ClassKind.CLASS, ClassKind.OBJECT),
+            hasQualifiedName = qualifiedName != null,
+          ).classifyForKPaths()
+        ) {
+          KPathsCasePolicyResult.Supported -> Unit
+          KPathsCasePolicyResult.SealedVariantMustBeClassOrObject -> {
+            logger.error(
+              "[KPaths] ${KPathsDiagnostics.sealedVariantMustBeClassOrObject(caseDeclaration.simpleName.asString())}",
+              caseDeclaration,
+            )
+            return@mapNotNull null
+          }
+          KPathsCasePolicyResult.SealedVariantRequiresQualifiedName -> {
+            logger.error("[KPaths] ${KPathsDiagnostics.sealedVariantRequiresQualifiedName()}", caseDeclaration)
+            return@mapNotNull null
+          }
         }
         val sourceName = caseDeclaration.simpleName.asString()
         val generatedCaseName = configuredGeneratedMemberName(
@@ -544,7 +611,7 @@ public class KPathsCatalogGenerator(
           declaration = caseDeclaration,
           annotationName = "@PathsName",
           annotationQualifiedName = pathsNameAnnotation,
-          defaultName = sourceName + "Paths",
+          defaultName = kPathsCasePropertyCatalogName(sourceName),
         ) ?: return@mapNotNull null
         val propertyPaths = pathProperties(
           declaration = caseDeclaration,
@@ -567,7 +634,7 @@ public class KPathsCatalogGenerator(
           generatedCaseName = generatedCaseName,
           generatedPathsName = generatedPathsName,
           kind = CaseKind.SEALED_VARIANT,
-          qualifiedName = qualifiedName,
+          qualifiedName = requireNotNull(qualifiedName),
           propertyPaths = propertyPaths,
         )
       }.toList()
@@ -615,24 +682,9 @@ public class KPathsCatalogGenerator(
       .firstOrNull { argument -> argument.name?.asString() == "value" }
       ?.value as? String
       ?: ""
-    if (configuredName.isEmpty()) {
-      logger.error("[KPaths] $annotationName requires a non-empty Kotlin identifier.", declaration)
-      return null
-    }
-    if (configuredName.startsWith(generatedInternalPrefix)) {
-      logger.error(
-        "[KPaths] $annotationName value '$configuredName' uses the reserved " +
-          "'$generatedInternalPrefix' prefix for KPaths-generated implementation details.",
-        declaration,
-      )
-      return null
-    }
-    if (!configuredName.isKotlinIdentifier()) {
-      logger.error(
-        "[KPaths] $annotationName value '$configuredName' must be a single Kotlin identifier, " +
-          "without a package or dot.",
-        declaration,
-      )
+    val error = validateKPathsConfiguredName(configuredName)
+    if (error != null) {
+      logger.error("[KPaths] ${kPathsConfiguredNameDiagnostic(annotationName, configuredName, error)}", declaration)
       return null
     }
     return configuredName
@@ -756,14 +808,18 @@ public class KPathsCatalogGenerator(
     if (Modifier.DATA !in declaration.modifiers) {
       return accessibleProperties.mapNotNull { property ->
         val generatedName = configuredPathMemberName(property) ?: return@mapNotNull null
+        val result = KPathsPropertyShape(
+          ownerIsDataClass = false,
+          isMutable = property.isMutable,
+          isPrimaryConstructorProperty = false,
+          hasAccessibleSetter = isSetterAccessible(property),
+          copyWritableVals = copyWritableVals,
+          isExcludedFromCopyWritableVals = false,
+        ).classifyForKPaths() as KPathsPropertyPolicyResult.Supported
         PathProperty(
           declaration = property,
           generatedName = generatedName,
-          kind = if (property.isMutable && isSetterAccessible(property)) {
-            PathKind.REFERENCE_WRITABLE
-          } else {
-            PathKind.READ_ONLY
-          },
+          kind = result.kind,
         )
       }
     }
@@ -777,23 +833,22 @@ public class KPathsCatalogGenerator(
 
     return accessibleProperties.mapNotNull { property ->
       val generatedName = configuredPathMemberName(property) ?: return@mapNotNull null
-      if (
-        (property.isMutable || (
-          copyWritableVals && copyWritableValExclusionId(property) !in copyWritableValExclusionIds
-        )) &&
-          property.simpleName.asString() in constructorPropertyNames
-      ) {
-        PathProperty(property, generatedName, PathKind.COPY_WRITABLE)
-      } else if (property.isMutable && isSetterAccessible(property)) {
-        PathProperty(property, generatedName, PathKind.COPY_THEN_MUTATE)
-      } else if (property.isMutable) {
-        logger.error(
-          "[KPaths] Data-class property '${property.simpleName.asString()}' must be declared in the primary constructor or have an accessible setter to receive a copy-based writable path.",
-          property,
-        )
-        null
-      } else {
-        PathProperty(property, generatedName, PathKind.READ_ONLY)
+      when (val result = KPathsPropertyShape(
+        ownerIsDataClass = true,
+        isMutable = property.isMutable,
+        isPrimaryConstructorProperty = property.simpleName.asString() in constructorPropertyNames,
+        hasAccessibleSetter = isSetterAccessible(property),
+        copyWritableVals = copyWritableVals,
+        isExcludedFromCopyWritableVals = copyWritableValExclusionId(property) in copyWritableValExclusionIds,
+      ).classifyForKPaths()) {
+        is KPathsPropertyPolicyResult.Supported -> PathProperty(property, generatedName, result.kind)
+        KPathsPropertyPolicyResult.InaccessibleDataClassSetter -> {
+          logger.error(
+            "[KPaths] ${KPathsDiagnostics.inaccessibleDataClassSetter(property.simpleName.asString())}",
+            property,
+          )
+          null
+        }
       }
     }
   }
@@ -809,29 +864,23 @@ public class KPathsCatalogGenerator(
 
   /** Returns the constructor properties that can form a lossless generated case payload path. */
   private fun generatedCasePayload(casePath: CasePath): CasePayload? {
-    if (
-      casePath.kind != CaseKind.SEALED_VARIANT ||
-        Modifier.DATA !in casePath.declaration.modifiers
-    ) {
-      return null
-    }
+    if (casePath.kind != CaseKind.SEALED_VARIANT) return null
     val constructor = casePath.declaration.primaryConstructor ?: return null
-    if (Modifier.PRIVATE in constructor.modifiers || Modifier.PROTECTED in constructor.modifiers) {
-      return null
-    }
     val parameters = constructor.parameters
-    if (parameters.size !in 1..3 || parameters.any { !it.isVal && !it.isVar }) {
-      return null
-    }
     val propertiesByName = casePath.propertyPaths.associateBy { property ->
       property.declaration.simpleName.asString()
     }
     val properties = parameters.mapNotNull { parameter ->
       parameter.name?.asString()?.let(propertiesByName::get)
     }
-    if (properties.size != parameters.size) {
-      return null
-    }
+    val decision = KPathsCasePayloadShape(
+      isDataClass = Modifier.DATA in casePath.declaration.modifiers,
+      hasPrimaryConstructor = true,
+      isConstructorAccessible = Modifier.PRIVATE !in constructor.modifiers && Modifier.PROTECTED !in constructor.modifiers,
+      propertyNames = parameters.map { it.name?.asString().orEmpty() },
+      allParametersAreAccessibleProperties = parameters.all { it.isVal || it.isVar } && properties.size == parameters.size,
+    ).classifyForKPaths()
+    if (decision !is KPathsCasePayloadDecision.Available) return null
     return CasePayload(casePath, properties)
   }
 
@@ -1297,33 +1346,29 @@ public class KPathsCatalogGenerator(
     var isValid = true
     (pathProperties.asSequence() + casePaths.asSequence().flatMap { it.propertyPaths.asSequence() })
       .map { it.declaration }
-      .filter { it.simpleName.asString().startsWith(generatedInternalPrefix) }
+      .filter { isKPathsReservedName(it.simpleName.asString()) }
       .forEach { property ->
         reportGenerationError(
           declaration,
-          "Cannot generate paths because property '${property.simpleName.asString()}' uses the reserved " +
-            "'$generatedInternalPrefix' prefix for KPaths-generated implementation details.",
+          KPathsDiagnostics.reservedSourceName("property", property.simpleName.asString()),
         )
         isValid = false
       }
     casePaths
-      .filter { it.sourceName.startsWith(generatedInternalPrefix) }
+      .filter { isKPathsReservedName(it.sourceName) }
       .forEach { casePath ->
         reportGenerationError(
           declaration,
-          "Cannot generate paths because case '${casePath.sourceName}' uses the reserved " +
-            "'$generatedInternalPrefix' prefix for KPaths-generated implementation details.",
+          KPathsDiagnostics.reservedSourceName("case", casePath.sourceName),
         )
         isValid = false
       }
 
-    members.groupBy(GeneratedMember::name)
-      .filterValues { it.size > 1 }
-      .forEach { (name, collisions) ->
+    findKPathsGeneratedMemberCollisions(members)
+      .forEach { collision ->
         reportGenerationError(
           declaration,
-          "Cannot generate paths because '$name' would name both " +
-            collisions.joinToString(" and ") { it.description } + ". Rename one of the model members.",
+          KPathsDiagnostics.generatedMemberCollision(collision),
         )
         isValid = false
       }
@@ -1696,8 +1741,9 @@ public class KPathsCatalogGenerator(
     resolvedCaseType: ResolvedCaseType,
     properties: List<PathProperty>,
   ) {
-    if (properties.size !in 2..3) return
-    properties.forEachIndexed { targetIndex, target ->
+    planKPathsBoundPayloadMembers(properties.map { it.declaration.simpleName.asString() }).forEach { member ->
+      val targetIndex = member.targetIndex
+      val target = properties[targetIndex]
       val targetName = target.declaration.simpleName.asString()
       val targetIdentifier = escapeIdentifier(targetName)
       val targetType = target.declaration.type.resolve().renderKotlinType(resolvedCaseType.typeParameterSubstitutions)
@@ -1772,41 +1818,59 @@ public class KPathsCatalogGenerator(
   /** Emits the generated namespace's finite case catalog and a lookup for a root value's case. */
   private fun writeCaseCatalog(
     writer: java.io.BufferedWriter,
+    declaration: KSClassDeclaration,
     rootKotlinType: String,
     resolvedCasePaths: List<ResolvedCasePath>,
   ) {
     val partialCasePathType = "dev.kpaths.core.PartialCaseKeyPath<$rootKotlinType>"
-    val payloadPaths = resolvedCasePaths.mapNotNull { resolvedCasePath ->
+    val caseModels = resolvedCasePaths.map { resolvedCasePath ->
       val casePath = resolvedCasePath.casePath
-      val caseIdentifier = escapeIdentifier(casePath.generatedCaseName)
-      val payload = generatedCasePayload(casePath)
-      when {
-        casePath.kind == CaseKind.ENUM_ENTRY -> caseIdentifier
-        casePath.declaration.classKind == ClassKind.OBJECT -> "$caseIdentifier.unit"
-        payload != null -> {
-          val member = if (payload.properties.size == 1) {
-            payload.properties.single().declaration.simpleName.asString()
-          } else {
-            "payload"
-          }
-          "$caseIdentifier.${escapeIdentifier(member)}"
-        }
-        else -> null
+      casePath.catalogModel(generatedCasePayload(casePath))
+    }
+    val catalogPlan = planKPathsCaseCatalog(caseModels)
+    if (!catalogPlan.isComplete) {
+      logger.warn(
+        "[KPaths] ${KPathsDiagnostics.incompleteCaseCatalog(catalogPlan.unavailableCases.map { it.sourceName })}",
+        declaration,
+      )
+    }
+    val payloadPaths = catalogPlan.entries.map { entry ->
+      val caseIdentifier = escapeIdentifier(entry.case.generatedName)
+      when (val access = entry.access) {
+        KPathsCaseCatalogAccess.WholeCase -> caseIdentifier
+        is KPathsCaseCatalogAccess.Payload ->
+          "$caseIdentifier.${escapeIdentifier(access.payload.generatedMemberName)}"
       }
     }
 
     writer.appendLine()
-    writer.appendLine("  public val allCasePaths: kotlin.collections.List<$partialCasePathType> by kotlin.lazy {")
+    writer.appendLine("  public override val allCasePaths: kotlin.collections.List<$partialCasePathType> by kotlin.lazy {")
     writer.appendLine("    kotlin.collections.listOf(${payloadPaths.joinToString()})")
     writer.appendLine("  }")
     writer.appendLine()
-    writer.appendLine("  public fun caseOf(root: $rootKotlinType): $partialCasePathType {")
+    writer.appendLine("  public override fun caseOf(root: $rootKotlinType): $partialCasePathType {")
     payloadPaths.forEach { identifier ->
       writer.appendLine("    if ($identifier.matches(root)) return $identifier")
     }
     writer.appendLine("    error(\"No generated case path matched the supplied ${rootKotlinType.substringBefore('<')} value.\")")
     writer.appendLine("  }")
   }
+
+  /** Translates KSP case discovery into the renderer-neutral associated-value model. */
+  private fun CasePath.catalogModel(payload: CasePayload?): KPathsCasePathModel =
+    KPathsCasePathModel(
+      sourceName = sourceName,
+      generatedName = generatedCaseName,
+      kind = kind,
+      payload = when {
+        kind == CaseKind.ENUM_ENTRY -> KPathsCasePayload.Unit
+        declaration.classKind == ClassKind.OBJECT -> KPathsCasePayload.Unit
+        payload != null -> KPathsCasePayload.fromProperties(
+          payload.properties.map { property -> property.declaration.simpleName.asString() },
+        )
+        else -> null
+      },
+    )
 
   private fun writeCasePathBody(
     writer: java.io.BufferedWriter,
@@ -2062,11 +2126,6 @@ public class KPathsCatalogGenerator(
     val properties: List<PathProperty>,
   )
 
-  private data class GeneratedMember(
-    val name: String,
-    val description: String,
-  )
-
   private data class RenderedTypeParameters(
     val declaration: String,
     val names: String,
@@ -2089,31 +2148,20 @@ public class KPathsCatalogGenerator(
     val isDirectCompanionNamespace: Boolean,
   )
 
-  private enum class CaseKind {
-    SEALED_VARIANT,
-    ENUM_ENTRY,
-  }
-
-  private enum class PathKind {
-    READ_ONLY,
-    COPY_WRITABLE,
-    COPY_THEN_MUTATE,
-    REFERENCE_WRITABLE,
-  }
+  private typealias CaseKind = KPathsCaseKind
+  private typealias PathKind = KPathsPropertyPathKind
 
   private fun renderDeclaredTypeId(
     qualifiedName: String,
     parameters: List<com.google.devtools.ksp.symbol.KSTypeParameter>,
     typeTokenNames: Map<String, String>,
   ): String {
-    val arguments = parameters.joinToString { parameter ->
-      "dev.kpaths.core.TypeArgument.invariant(${typeTokenNames.getValue(parameter.name.asString())})"
-    }
-    return if (arguments.isEmpty()) {
-      "dev.kpaths.core.TypeId(\"$qualifiedName\")"
-    } else {
-      "dev.kpaths.core.TypeId(\"$qualifiedName\", listOf($arguments))"
-    }
+    return KPathsTypeIdSpec.Declared(
+      classifier = qualifiedName,
+      arguments = parameters.map { parameter ->
+        KPathsTypeArgumentSpec.invariant(KPathsTypeIdSpec.Parameter(parameter.name.asString()))
+      },
+    ).renderTypeId(typeTokenNames)
   }
 
   /** Renders generic bounds so generated namespaces can use constrained model type parameters. */
@@ -2175,34 +2223,56 @@ public class KPathsCatalogGenerator(
   }
 
   private fun KSType.renderTypeId(typeTokenNames: Map<String, String>): String {
+    return toKPathsTypeIdSpec().renderTypeId(typeTokenNames)
+  }
+
+  /** Converts KSP symbols to the backend-neutral model before KotlinPoet/source rendering. */
+  private fun KSType.toKPathsTypeIdSpec(): KPathsTypeIdSpec {
     val typeDeclaration = declaration
     if (typeDeclaration is KSTypeParameter) {
-      val token = typeTokenNames[typeDeclaration.name.asString()]
-        ?: error("No generated type token for ${typeDeclaration.name.asString()}.")
-      return if (isMarkedNullable) "$token.withNullability(true)" else token
+      return KPathsTypeIdSpec.Parameter(typeDeclaration.name.asString(), isMarkedNullable)
     }
     val qualifiedName = typeDeclaration.qualifiedName?.asString()
     if (qualifiedName == null) {
-      val token = typeTokenNames[typeDeclaration.simpleName.asString()]
-        ?: error("No generated type token for ${typeDeclaration.simpleName.asString()}.")
-      return if (isMarkedNullable) "$token.withNullability(true)" else token
+      return KPathsTypeIdSpec.Parameter(typeDeclaration.simpleName.asString(), isMarkedNullable)
     }
+    return KPathsTypeIdSpec.Declared(
+      classifier = qualifiedName,
+      arguments = arguments.map { argument ->
+        val type = argument.type?.resolve()?.toKPathsTypeIdSpec()
+        when (argument.variance) {
+          Variance.STAR -> KPathsTypeArgumentSpec.star
+          Variance.COVARIANT -> KPathsTypeArgumentSpec.out(requireNotNull(type))
+          Variance.CONTRAVARIANT -> KPathsTypeArgumentSpec.`in`(requireNotNull(type))
+          else -> KPathsTypeArgumentSpec.invariant(requireNotNull(type))
+        }
+      },
+      nullable = isMarkedNullable,
+    )
+  }
 
-    val arguments = arguments.joinToString { argument ->
-      val type = argument.type?.resolve()?.renderTypeId(typeTokenNames)
-      when (argument.variance) {
-        Variance.STAR -> "dev.kpaths.core.TypeArgument.star"
-        Variance.COVARIANT -> "dev.kpaths.core.TypeArgument.out($type)"
-        Variance.CONTRAVARIANT -> "dev.kpaths.core.TypeArgument.`in`($type)"
-        else -> "dev.kpaths.core.TypeArgument.invariant($type)"
+  /** Renders the shared type shape as the `TypeId` expression used in generated Kotlin source. */
+  private fun KPathsTypeIdSpec.renderTypeId(typeTokenNames: Map<String, String>): String = when (this) {
+    is KPathsTypeIdSpec.Parameter -> {
+      val token = typeTokenNames[name] ?: error("No generated type token for $name.")
+      if (nullable) "$token.withNullability(true)" else token
+    }
+    is KPathsTypeIdSpec.Declared -> {
+      val arguments = arguments.joinToString { argument -> argument.renderTypeArgument(typeTokenNames) }
+      val nullableArgument = if (nullable) ", nullable = true" else ""
+      if (arguments.isEmpty()) {
+        "dev.kpaths.core.TypeId(\"$classifier\"$nullableArgument)"
+      } else {
+        "dev.kpaths.core.TypeId(\"$classifier\", listOf($arguments)$nullableArgument)"
       }
     }
-    val nullable = if (isMarkedNullable) ", nullable = true" else ""
-    return if (arguments.isEmpty()) {
-      "dev.kpaths.core.TypeId(\"$qualifiedName\"$nullable)"
-    } else {
-      "dev.kpaths.core.TypeId(\"$qualifiedName\", listOf($arguments)$nullable)"
-    }
+  }
+
+  private fun KPathsTypeArgumentSpec.renderTypeArgument(typeTokenNames: Map<String, String>): String = when (variance) {
+    KPathsTypeVariance.STAR -> "dev.kpaths.core.TypeArgument.star"
+    KPathsTypeVariance.INVARIANT -> "dev.kpaths.core.TypeArgument.invariant(${requireNotNull(type).renderTypeId(typeTokenNames)})"
+    KPathsTypeVariance.IN -> "dev.kpaths.core.TypeArgument.`in`(${requireNotNull(type).renderTypeId(typeTokenNames)})"
+    KPathsTypeVariance.OUT -> "dev.kpaths.core.TypeArgument.out(${requireNotNull(type).renderTypeId(typeTokenNames)})"
   }
 
   private fun typeTokenName(parameterName: String): String =
@@ -2228,7 +2298,7 @@ public class KPathsCatalogGenerator(
   private fun Char.isLetterOrDigitOrUnderscore(): Boolean = isLetterOrDigit() || this == '_'
 
   private companion object {
-    private const val generatedInternalPrefix = "__kpaths_"
+    private const val generatedInternalPrefix = KPATHS_INTERNAL_PREFIX
 
     private val companionObjectPattern = Regex("\\bcompanion\\s+object\\b")
 

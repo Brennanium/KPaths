@@ -50,6 +50,9 @@ kotlin {
       kotlin.srcDir("src/main/kotlin")
       dependencies {
         implementation(project(":kpaths-annotations"))
+        // The processor executes this policy at KSP runtime, so consumers of this artifact must
+        // receive it transitively on their processor classpath.
+        api(project(":kpaths-codegen-model"))
         api(libs.ksp.api)
         api(libs.kotlinpoet)
       }

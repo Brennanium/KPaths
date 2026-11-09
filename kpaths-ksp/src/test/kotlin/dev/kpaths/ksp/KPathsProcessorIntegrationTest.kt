@@ -9,11 +9,32 @@ import org.junit.jupiter.api.io.TempDir
 
 class KPathsProcessorIntegrationTest {
   @Test
+  fun `warns when canonical case catalog cannot cover every case`(@TempDir fixtureDirectory: Path) {
+    val output = compileFixture(
+      fixtureDirectory,
+      "IncompleteCatalog.kt",
+      """
+        package fixture
+        import dev.kpaths.annotations.Pathable
+        @Pathable sealed interface Event {
+          data object Idle : Event
+          data class Many(val a: Int, val b: Int, val c: Int, val d: Int) : Event
+          class Reference(val value: Int) : Event
+        }
+      """.trimIndent(),
+      expectFailure = false,
+    )
+    assertContains(output, "[KPaths] The generated case catalog omits 'Many', 'Reference'")
+    assertContains(output, "allCasePaths is incomplete")
+  }
+
+  @Test
   fun `external processor can replace an eligible generated property path implementation`(
     @TempDir fixtureDirectory: Path,
   ) {
     val projectDirectory = Path.of(checkNotNull(System.getProperty("kpaths.projectDir")))
     val annotationsJar = projectDirectory.jvmArtifact("kpaths-annotations")
+    val codegenModelJar = projectDirectory.jvmArtifact("kpaths-codegen-model")
     val coreJar = projectDirectory.jvmArtifact("kpaths-core")
     val codegenJar = projectDirectory.jvmArtifact("kpaths-ksp-codegen")
 
@@ -45,6 +66,7 @@ class KPathsProcessorIntegrationTest {
         }
 
         dependencies {
+          implementation(files("${annotationsJar.gradlePath()}"))
           implementation(files("${coreJar.gradlePath()}"))
           ksp(project(":adapter-processor"))
         }
@@ -62,6 +84,7 @@ class KPathsProcessorIntegrationTest {
           implementation("com.google.devtools.ksp:symbol-processing-api:2.3.12")
           implementation("com.squareup:kotlinpoet:2.2.0")
           implementation(files("${annotationsJar.gradlePath()}"))
+          implementation(files("${codegenModelJar.gradlePath()}"))
           implementation(files("${codegenJar.gradlePath()}"))
         }
       """.trimIndent(),
@@ -116,26 +139,27 @@ class KPathsProcessorIntegrationTest {
                     generatedName = declaration.simpleName.asString() + "Paths",
                     annotationQualifiedName = marker,
                     annotationDisplayName = "@PathAdapted",
-                    propertyPathAdapters = listOf(SharedValuePathAdapter),
+                    propertyPathAdapters = listOf(CellValuePathAdapter),
                   )
                 }
                 .toList(),
             )
         }
 
-        private object SharedValuePathAdapter : KPathsPropertyPathAdapter {
+        private object CellValuePathAdapter : KPathsPropertyPathAdapter {
           override fun pathRecipe(context: dev.kpaths.ksp.codegen.KPathsPropertyPathContext): KPathsPropertyPathRecipe? {
             val sharedType = context.declaration.type.resolve()
-            if (sharedType.declaration.qualifiedName?.asString() != "fixture.Shared") return null
+            if (context.adapterFactoryQualifiedName != "fixture.CellPathFactory") return null
+            if (sharedType.declaration.qualifiedName?.asString() != "fixture.Cell") return null
             val valueType = sharedType.arguments.singleOrNull()?.type?.resolve() ?: return null
             val value = (context.sourceValueType as? ParameterizedTypeName)
               ?.typeArguments
               ?.singleOrNull()
               ?: return null
             return KPathsPropertyPathRecipe(
-              publicPathType = ClassName("fixture", "WritableSharedValueKeyPath")
+              publicPathType = ClassName("fixture", "WritableCellValueKeyPath")
                 .parameterizedBy(context.rootType, value),
-              implementationBaseType = ClassName("fixture", "WritableSharedValueKeyPathBase")
+              implementationBaseType = ClassName("fixture", "WritableCellValueKeyPathBase")
                 .parameterizedBy(context.rootType, value),
               constructorArguments = listOf(
                 context.pathId(value),
@@ -161,6 +185,8 @@ class KPathsProcessorIntegrationTest {
       """
         package fixture
 
+        import dev.kpaths.annotations.KPathsAdapter
+        import dev.kpaths.annotations.KPathsAdapterFactory
         import dev.kpaths.core.PathId
         import dev.kpaths.core.TypeId
         import dev.kpaths.core.WritableKeyPath
@@ -168,18 +194,21 @@ class KPathsProcessorIntegrationTest {
         @Target(AnnotationTarget.CLASS)
         annotation class PathAdapted
 
-        class Shared<Value>(var value: Value)
+        object CellPathFactory : KPathsAdapterFactory
 
-        interface WritableSharedValueKeyPath<Root, Value> : WritableKeyPath<Root, Value>
+        @KPathsAdapter(factory = CellPathFactory::class)
+        class Cell<Value>(var value: Value)
 
-        abstract class WritableSharedValueKeyPathBase<Root, Value>(
+        interface WritableCellValueKeyPath<Root, Value> : WritableKeyPath<Root, Value>
+
+        abstract class WritableCellValueKeyPathBase<Root, Value>(
           override val __kpaths_id: PathId,
           override val __kpaths_valueType: TypeId,
-          private val resolveShared: (Root) -> Shared<Value>,
-        ) : WritableSharedValueKeyPath<Root, Value> {
-          override fun get(root: Root): Value = resolveShared(root).value
+          private val resolveCell: (Root) -> Cell<Value>,
+        ) : WritableCellValueKeyPath<Root, Value> {
+          override fun get(root: Root): Value = resolveCell(root).value
           override fun set(root: Root, value: Value): Root {
-            resolveShared(root).value = value
+            resolveCell(root).value = value
             return root
           }
         }
@@ -187,35 +216,35 @@ class KPathsProcessorIntegrationTest {
         data class Profile(val name: String)
 
         @PathAdapted
-        data class State(val profile: Shared<Profile>) {
+        data class State(val profile: Cell<Profile>) {
           companion object
         }
 
         @PathAdapted
-        data class Box<Value>(val shared: Shared<Value>) {
+        data class Box<Value>(val cell: Cell<Value>) {
           companion object Paths
         }
 
         @PathAdapted
         sealed interface Destination {
-          data class Sheet(val profile: Shared<Profile>) : Destination
+          data class Sheet(val profile: Cell<Profile>) : Destination
 
           companion object
         }
 
         fun verifyAdapter() {
-          val path: WritableSharedValueKeyPath<State, Profile> = State.Paths.profile
-          val state = State(Shared(Profile("before")))
+          val path: WritableCellValueKeyPath<State, Profile> = State.Paths.profile
+          val state = State(Cell(Profile("before")))
           check(path.get(state) == Profile("before"))
           check(path.set(state, Profile("after")) === state)
           check(state.profile.value == Profile("after"))
 
-          val boxPath: WritableSharedValueKeyPath<Box<Profile>, Profile> =
-            Box.Paths.of<Profile>().shared
+          val boxPath: WritableCellValueKeyPath<Box<Profile>, Profile> =
+            Box.Paths.of<Profile>().cell
 
-          val sheetPath: WritableSharedValueKeyPath<Destination.Sheet, Profile> =
+          val sheetPath: WritableCellValueKeyPath<Destination.Sheet, Profile> =
             Destination.Paths.SheetPaths.profile
-          val sheet = Destination.Sheet(Shared(Profile("before")))
+          val sheet = Destination.Sheet(Cell(Profile("before")))
           check(sheetPath.set(sheet, Profile("after")) === sheet)
           check(sheet.profile.value == Profile("after"))
         }
@@ -476,6 +505,19 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
+  fun `reports data class setter that cannot support copy mutation`(@TempDir fixtureDirectory: Path) {
+    val output = compileFailure(fixtureDirectory, "InaccessibleSetter.kt", """
+      package fixture
+      import dev.kpaths.annotations.Pathable
+      @Pathable data class Item(val id: Int) {
+        var count: Int = 0
+          private set
+      }
+    """.trimIndent())
+    assertContains(output, "[KPaths] Data-class property 'count' must be declared in the primary constructor or have an accessible setter")
+  }
+
+  @Test
   fun `reports use of KPaths reserved internal prefix at Pathable`(
     @TempDir fixtureDirectory: Path,
   ) {
@@ -703,9 +745,17 @@ class KPathsProcessorIntegrationTest {
     fixtureDirectory: Path,
     fileName: String,
     source: String,
+  ): String = compileFixture(fixtureDirectory, fileName, source, expectFailure = true)
+
+  private fun compileFixture(
+    fixtureDirectory: Path,
+    fileName: String,
+    source: String,
+    expectFailure: Boolean,
   ): String {
     val projectDirectory = Path.of(checkNotNull(System.getProperty("kpaths.projectDir")))
     val annotationsJar = projectDirectory.jvmArtifact("kpaths-annotations")
+    val codegenModelJar = projectDirectory.jvmArtifact("kpaths-codegen-model")
     val coreJar = projectDirectory.jvmArtifact("kpaths-core")
     val codegenJar = projectDirectory.jvmArtifact("kpaths-ksp-codegen")
     val processorJar = projectDirectory.jvmArtifact("kpaths-ksp")
@@ -742,6 +792,7 @@ class KPathsProcessorIntegrationTest {
           ksp(files(
             "${processorJar.gradlePath()}",
             "${codegenJar.gradlePath()}",
+            "${codegenModelJar.gradlePath()}",
             "${annotationsJar.gradlePath()}",
           ))
         }
@@ -750,11 +801,10 @@ class KPathsProcessorIntegrationTest {
     val sourceDirectory = Files.createDirectories(fixtureDirectory.resolve("src/main/kotlin/fixture"))
     Files.writeString(sourceDirectory.resolve(fileName), source)
 
-    return GradleRunner.create()
+    val runner = GradleRunner.create()
       .withProjectDir(fixtureDirectory.toFile())
       .withArguments("compileKotlin", "--stacktrace")
-      .buildAndFail()
-      .output
+    return (if (expectFailure) runner.buildAndFail() else runner.build()).output
   }
 
   private fun Path.jvmArtifact(moduleName: String): Path {

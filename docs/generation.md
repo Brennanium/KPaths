@@ -343,6 +343,8 @@ LoadablePaths<String>().Loaded.value
 
 Catalogs expose `allCasePaths` and `caseOf(root)` as `PartialCaseKeyPath<Root>` for type-erased inspection. Use a named CaseKeyPath whenever the payload type matters.
 
+When a case has no supported canonical payload path, the generated catalog omits it and KSP warns at the annotated declaration. `caseOf` cannot identify an omitted case, though its whole-case path remains available.
+
 The default catalog name is `TypeNamePaths`; `@Pathable("CustomPaths")` chooses another name. KSP diagnoses public naming collisions and preserves declared identifiers where Kotlin permits them. See the [API reference](api/index.md) for annotation parameters, and [identity and type metadata](identity.md) for why generated generic catalogs retain a concrete `TypeId`.
 
 > **Note:** A data class can opt in to copy-writable primary-constructor `val` paths with

@@ -2,6 +2,7 @@ package dev.kpaths.sample
 
 import dev.kpaths.core.CaseKeyPath
 import dev.kpaths.core.CaseMatch
+import dev.kpaths.core.CasePathCatalog
 import dev.kpaths.core.KeyPath
 import dev.kpaths.core.PathId
 import dev.kpaths.core.TypeId
@@ -15,10 +16,21 @@ import dev.kpaths.core.thenCase
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class GeneratedPathsTest {
+  @Test
+  fun `case catalog baseline omits unsupported payloads without substituting whole case paths`() {
+    assertEquals(listOf(CatalogPolicyExamplePaths.Idle.unit), CatalogPolicyExamplePaths.allCasePaths)
+    assertFailsWith<IllegalStateException> { CatalogPolicyExamplePaths.caseOf(CatalogPolicyExample.Many(1, 2, 3, 4)) }
+    assertFailsWith<IllegalStateException> { CatalogPolicyExamplePaths.caseOf(CatalogPolicyExample.Reference(1)) }
+    assertEquals(CatalogPolicyExample.Many(1, 2, 3, 4), CatalogPolicyExamplePaths.Many.embed(CatalogPolicyExample.Many(1, 2, 3, 4)))
+    assertTrue(UnsupportedCatalogPolicyExamplePaths.allCasePaths.isEmpty())
+    assertFailsWith<IllegalStateException> { UnsupportedCatalogPolicyExamplePaths.caseOf(UnsupportedCatalogPolicyExample.Many(1, 2, 3, 4)) }
+  }
+
   @Test
   fun `data-class vals generate read-only paths and vars generate copy-writable paths`() {
     val original = Person(name = "Blob", age = 100, address = Address(city = "Paris"))
@@ -135,6 +147,8 @@ class GeneratedPathsTest {
 
   @Test
   fun `sealed case catalogs erase canonical associated-value paths`() {
+    val catalog: CasePathCatalog<Connection> = ConnectionPaths
+
     assertEquals(
       listOf(ConnectionPaths.Connected.host, ConnectionPaths.Disconnected.unit),
       ConnectionPaths.allCasePaths,
@@ -143,6 +157,7 @@ class GeneratedPathsTest {
       ConnectionPaths.Connected.host,
       ConnectionPaths.caseOf(Connection.Connected("example.com")),
     )
+    assertEquals(ConnectionPaths.Connected.host, catalog.caseOf(Connection.Connected("example.com")))
   }
 
   @Test

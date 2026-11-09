@@ -73,6 +73,7 @@ dependencies {
 tasks.named<Test>("jvmTest") {
   dependsOn(
     ":kpaths-annotations:jvmJar",
+    ":kpaths-codegen-model:jvmJar",
     ":kpaths-core:jvmJar",
     ":kpaths-ksp-codegen:jvmJar",
     ":kpaths-ksp:jvmJar",
