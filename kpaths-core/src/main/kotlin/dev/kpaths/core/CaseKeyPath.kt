@@ -14,6 +14,52 @@ public sealed interface CaseMatch<out Value> {
   public data class Matched<out Value>(public val value: Value) : CaseMatch<Value>
 }
 
+/** Runtime support for compiler-generated context-bound payload paths. */
+@PublishedApi
+internal fun <Root, Value> __kpaths_boundCasePayload(
+  wholeCase: CaseKeyPath<Root, *>,
+  payload: CaseKeyPath<Root, *>,
+  caseType: TypeId,
+  focusType: TypeId,
+  focusName: String,
+  focusIndex: Int,
+  bound: List<Any?>,
+): CaseKeyPath<Root, Value> {
+  require(bound.size in 1..2 && focusIndex in 0..bound.size)
+  val id = bound.fold(wholeCase.__kpaths_id.appending(PathId.property(caseType, focusName))) { path, value ->
+    path.appending(PathSegment.Key(value))
+  }
+  @Suppress("UNCHECKED_CAST")
+  val untypedPayload = payload as CaseKeyPath<Root, Any?>
+  return object : CaseKeyPathBase<Root, Value>() {
+    override val __kpaths_id: PathId = id
+    override val __kpaths_valueType: TypeId = focusType
+
+    override fun match(root: Root): CaseMatch<Value> = when (val matched = untypedPayload.match(root)) {
+      CaseMatch.NoMatch -> CaseMatch.NoMatch
+      is CaseMatch.Matched -> {
+        val values = when (val tuple = matched.value) {
+          is Pair<*, *> -> listOf(tuple.first, tuple.second)
+          is Triple<*, *, *> -> listOf(tuple.first, tuple.second, tuple.third)
+          else -> error("A bound case path requires a Pair or Triple payload.")
+        }
+        if (values.size != bound.size + 1 || values.filterIndexed { index, _ -> index != focusIndex } != bound) {
+          CaseMatch.NoMatch
+        } else {
+          @Suppress("UNCHECKED_CAST")
+          CaseMatch.Matched(values[focusIndex] as Value)
+        }
+      }
+    }
+
+    override fun embed(value: Value): Root {
+      val values = bound.toMutableList().apply { add(focusIndex, value) }
+      return if (values.size == 2) untypedPayload.embed(values[0] to values[1])
+      else untypedPayload.embed(Triple(values[0], values[1], values[2]))
+    }
+  }
+}
+
 /** Intentionally collapses [CaseMatch.NoMatch] and [CaseMatch.Matched] with a null value. */
 public val <Value> CaseMatch<Value>.valueOrNull: Value?
   get() = when (this) {

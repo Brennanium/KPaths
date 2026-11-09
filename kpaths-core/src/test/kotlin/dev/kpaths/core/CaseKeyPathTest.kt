@@ -7,6 +7,22 @@ import kotlin.test.assertTrue
 
 class CaseKeyPathTest {
   @Test
+  fun `bound payload helper preserves matching context and embeds`() {
+    val whole = caseKeyPath<MultiEvent, MultiEvent.PairValue>()
+    val payload = caseKeyPath<MultiEvent, MultiEvent.PairValue, _, _>(
+      extract1 = MultiEvent.PairValue::id,
+      extract2 = MultiEvent.PairValue::action,
+      embed = MultiEvent::PairValue,
+    )
+    val bound = __kpaths_boundCasePayload<MultiEvent, String>(
+      whole, payload, TypeId.of<MultiEvent.PairValue>(), TypeId.of<String>(), "action", 1, listOf("one"),
+    )
+    assertEquals(CaseMatch.Matched("go"), bound.match(MultiEvent.PairValue("one", "go")))
+    assertEquals(CaseMatch.NoMatch, bound.match(MultiEvent.PairValue("two", "go")))
+    assertEquals(MultiEvent.PairValue("one", "stop"), bound.embed("stop"))
+  }
+
+  @Test
   fun `CasePathCatalogBase caches its catalog lazily`() {
     var builds = 0
     val catalog = object : CasePathCatalogBase<ManualEvent>() {
