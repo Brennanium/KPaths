@@ -14,6 +14,23 @@ import org.objectweb.asm.Opcodes
 
 class CompilerSnippetTest {
   @Test
+  fun `direct sealed interface variants receive the shared unsupported case diagnostic`() {
+    val result = compileSnippet("UnsupportedVariant.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      typealias EventAlias = Event
+      @Pathable sealed interface Event {
+        sealed interface Child : EventAlias
+        interface Unrelated
+        data object Idle : Event
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages, "[KPaths] Sealed variant 'Child' must be a class or object.")
+    assertTrue(!result.messages.contains("Sealed variant 'Unrelated'"), result.messages)
+  }
+
+  @Test
   fun `sealed cases expose property paths with copy semantics`() {
     val result = compileSnippet("CaseProperties.kt" to """
       package example

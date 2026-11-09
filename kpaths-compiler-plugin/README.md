@@ -91,7 +91,8 @@ data object Idle : Event
 The plugin does not currently generate a case path for `Idle` in this form. The KSP processor
 supports both nested and package-level sealed subclasses. For the compiler plugin, declare cases
 inside the sealed root for now. The local case-discovery experiment records the investigation into
-identifying nested cases.
+identifying nested cases. Direct nested sealed-interface variants are diagnosed as unsupported,
+using the same case-shape policy as KSP; use a class or object for a generated case path.
 
 Case discovery is experimental. There may be edge cases where the plugin omits a generated case
 path without reporting a diagnostic.

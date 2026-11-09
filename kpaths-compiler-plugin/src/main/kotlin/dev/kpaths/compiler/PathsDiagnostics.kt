@@ -2,6 +2,9 @@ package dev.kpaths.compiler
 
 import dev.kpaths.codegen.model.KPathsCasePayloadDecision
 import dev.kpaths.codegen.model.KPathsCasePayloadShape
+import dev.kpaths.codegen.model.KPathsCaseKind
+import dev.kpaths.codegen.model.KPathsCasePolicyResult
+import dev.kpaths.codegen.model.KPathsCaseShape
 import dev.kpaths.codegen.model.KPathsDiagnostics
 import dev.kpaths.codegen.model.KPathsGeneratedMember
 import dev.kpaths.codegen.model.KPathsPropertyPolicyResult
@@ -36,6 +39,7 @@ import org.jetbrains.kotlin.fir.declarations.FirDeclarationOrigin
 import org.jetbrains.kotlin.fir.declarations.FirEnumEntry
 import org.jetbrains.kotlin.fir.declarations.FirProperty
 import org.jetbrains.kotlin.fir.declarations.FirRegularClass
+import org.jetbrains.kotlin.fir.declarations.utils.isLocal
 import org.jetbrains.kotlin.fir.extensions.FirDeclarationPredicateRegistrar
 import org.jetbrains.kotlin.fir.extensions.predicate.DeclarationPredicate
 import org.jetbrains.kotlin.fir.extensions.predicateBasedProvider
@@ -55,6 +59,7 @@ internal object PathsDiagnostics : KtDiagnosticsContainer() {
   val INVALID_PATH_NAME by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
   val INVALID_CASE_NAME by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
   val INVALID_CASE_CATALOG_NAME by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
+  val UNSUPPORTED_SEALED_VARIANT by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
 
   override fun getRendererFactory(): BaseDiagnosticRendererFactory = Renderers
 
@@ -68,6 +73,7 @@ internal object PathsDiagnostics : KtDiagnosticsContainer() {
       it.put(INVALID_PATH_NAME, "{0}", CommonRenderers.STRING)
       it.put(INVALID_CASE_NAME, "{0}", CommonRenderers.STRING)
       it.put(INVALID_CASE_CATALOG_NAME, "{0}", CommonRenderers.STRING)
+      it.put(UNSUPPORTED_SEALED_VARIANT, "{0}", CommonRenderers.STRING)
     }
   }
 }
@@ -97,14 +103,36 @@ internal class PathsDiagnosticCheckers(private val pluginSession: FirSession) : 
         reporter.reportOn(declaration.source, PathsDiagnostics.NESTED_CATALOG_COLLISION,
           "[KPaths] ${KPathsDiagnostics.nestedCatalogCollision(declaration.name.asString(), catalogName)}")
       }
-      val cases = when {
-        declaration.status.modality == Modality.SEALED -> declaration.declarations
+      val directSealedCases = if (declaration.status.modality == Modality.SEALED) {
+        declaration.declarations
           .filterIsInstance<FirRegularClass>()
           .filter { candidate ->
-            candidate.classKind in setOf(ClassKind.CLASS, ClassKind.OBJECT) && candidate.symbol.resolvedSuperTypes.any {
+            candidate.symbol.resolvedSuperTypes.any {
               (it as? ConeClassLikeType)?.fullyExpandedType()?.lookupTag?.classId == declaration.symbol.classId
             }
           }
+      } else emptyList()
+      val supportedSealedCases = directSealedCases.filter { candidate ->
+        when (KPathsCaseShape(
+          kind = KPathsCaseKind.SEALED_VARIANT,
+          isClassOrObject = candidate.classKind in setOf(ClassKind.CLASS, ClassKind.OBJECT),
+          hasQualifiedName = !candidate.symbol.isLocal,
+        ).classifyForKPaths()) {
+          KPathsCasePolicyResult.Supported -> true
+          KPathsCasePolicyResult.SealedVariantMustBeClassOrObject -> {
+            reporter.reportOn(candidate.source, PathsDiagnostics.UNSUPPORTED_SEALED_VARIANT,
+              "[KPaths] ${KPathsDiagnostics.sealedVariantMustBeClassOrObject(candidate.name.asString())}")
+            false
+          }
+          KPathsCasePolicyResult.SealedVariantRequiresQualifiedName -> {
+            reporter.reportOn(candidate.source, PathsDiagnostics.UNSUPPORTED_SEALED_VARIANT,
+              "[KPaths] ${KPathsDiagnostics.sealedVariantRequiresQualifiedName()}")
+            false
+          }
+        }
+      }
+      val cases = when {
+        declaration.status.modality == Modality.SEALED -> supportedSealedCases
           .map { Triple(it, it.name.asString(), it.generatedKPathsCaseName(it.name).asString()) }
         declaration.classKind == ClassKind.ENUM_CLASS -> declaration.declarations
           .filterIsInstance<FirEnumEntry>().map { Triple(it, it.name.asString(), it.generatedKPathsCaseName(it.name).asString()) }
