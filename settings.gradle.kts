@@ -20,6 +20,7 @@ include(
   ":kpaths-jvm",
   ":kpaths-native",
   ":kpaths-reflection-jvm",
+  ":kpaths-codegen-model",
   ":kpaths-ksp-codegen",
   ":kpaths-ksp",
   ":kpaths-sample",
