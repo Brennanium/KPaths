@@ -144,6 +144,12 @@ The companion modules demonstrate two important boundaries:
   resulting `RequestedDocument.Paths` catalog. This is the intended integration path for a type
   owned or synthesized by another compiler plugin.
 
+Contributors can opt individual properties out of `copyWritableVals` by passing their FIR property
+symbols in `KPathsGenerationOptions.copyWritableValExclusions`. An excluded `val` keeps its
+ordinary read-only path; excluding a `var` does not remove its ordinary write access. The same
+option applies to properties of supported sealed cases. Properties are identified by their owners
+as well as their names, so excluding one case's property does not exclude a namesake in another.
+
 Useful verification commands:
 
 ```sh

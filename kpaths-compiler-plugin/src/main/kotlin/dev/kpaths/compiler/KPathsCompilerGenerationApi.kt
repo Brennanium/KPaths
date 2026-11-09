@@ -5,6 +5,7 @@ import org.jetbrains.kotlin.fir.extensions.FirExtensionSessionComponent
 import org.jetbrains.kotlin.fir.extensions.extensionService
 import org.jetbrains.kotlin.fir.extensions.extensionSessionComponents
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassSymbol
+import org.jetbrains.kotlin.fir.symbols.impl.FirPropertySymbol
 import org.jetbrains.kotlin.name.ClassId
 import java.util.concurrent.ConcurrentHashMap
 
@@ -18,12 +19,14 @@ public annotation class ExperimentalKPathsCompilerApi
  * Options supplied when another compiler plugin asks KPaths to generate a catalog for a class it
  * owns or synthesizes.
  *
- * Both [catalogName] and [copyWritableVals] are consumed by the current property generator.
+ * [copyWritableValExclusions] identifies properties that should retain their ordinary path
+ * semantics when [copyWritableVals] is enabled. Excluding a `var` does not make it read-only.
  */
 @ExperimentalKPathsCompilerApi
 public data class KPathsGenerationOptions(
   public val catalogName: String = "Paths",
   public val copyWritableVals: Boolean = false,
+  public val copyWritableValExclusions: Set<FirPropertySymbol> = emptySet(),
 )
 
 /**

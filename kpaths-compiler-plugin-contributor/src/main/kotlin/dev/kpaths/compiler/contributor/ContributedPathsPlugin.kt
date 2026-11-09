@@ -6,6 +6,9 @@ import dev.kpaths.compiler.kpaths
 import org.jetbrains.kotlin.compiler.plugin.CompilerPluginRegistrar
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.fir.FirSession
+import org.jetbrains.kotlin.fir.declarations.DirectDeclarationsAccess
+import org.jetbrains.kotlin.fir.declarations.FirRegularClass
+import org.jetbrains.kotlin.fir.declarations.FirProperty
 import org.jetbrains.kotlin.fir.extensions.DeclarationGenerationContext
 import org.jetbrains.kotlin.fir.extensions.FirDeclarationGenerationExtension
 import org.jetbrains.kotlin.fir.extensions.FirDeclarationPredicateRegistrar
@@ -14,6 +17,7 @@ import org.jetbrains.kotlin.fir.extensions.FirExtensionRegistrarAdapter
 import org.jetbrains.kotlin.fir.extensions.predicate.DeclarationPredicate
 import org.jetbrains.kotlin.fir.extensions.predicateBasedProvider
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassSymbol
+import org.jetbrains.kotlin.fir.symbols.SymbolInternals
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 
@@ -40,7 +44,7 @@ internal class ContributedPathsFirRegistrar : FirExtensionRegistrar() {
  * `session.kpaths.pathable(...)` call, which is the same call an external generator would make
  * for a synthetic class symbol.
  */
-@OptIn(ExperimentalKPathsCompilerApi::class)
+@OptIn(ExperimentalKPathsCompilerApi::class, DirectDeclarationsAccess::class, SymbolInternals::class)
 internal class ContributedPathsGenerator(session: FirSession) : FirDeclarationGenerationExtension(session) {
   override fun FirDeclarationPredicateRegistrar.registerPredicates() {
     register(contributedPredicate)
@@ -51,11 +55,19 @@ internal class ContributedPathsGenerator(session: FirSession) : FirDeclarationGe
     context: DeclarationGenerationContext.Nested,
   ): Set<Name> {
     if (session.predicateBasedProvider.matches(contributedPredicate, classSymbol)) {
+      val declaration = classSymbol.fir as? FirRegularClass
+      val excludedProperties = declaration?.declarations.orEmpty().filterIsInstance<FirProperty>()
+        .filter { it.name.asString() == "identifier" || it.name.asString() == "revision" } +
+        declaration?.declarations.orEmpty().filterIsInstance<FirRegularClass>()
+          .filter { it.name.asString() == "Protected" }
+          .flatMap { it.declarations.filterIsInstance<FirProperty>() }
+          .filter { it.name.asString() == "value" }
       session.kpaths.pathable(
         generatedClass = classSymbol,
         options = KPathsGenerationOptions(
           catalogName = "GeneratedPaths",
           copyWritableVals = true,
+          copyWritableValExclusions = excludedProperties.map { it.symbol }.toSet(),
         ),
       )
     }

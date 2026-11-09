@@ -216,6 +216,13 @@ class GeneratedPathsRuntimeTest {
     val updatedRequested = RequestedDocument.GeneratedPaths.title.set(requested, "Revised")
     assertEquals(RequestedDocument("Original"), requested)
     assertEquals(RequestedDocument("Revised"), updatedRequested)
+    assertEquals("id", RequestedDocument.GeneratedPaths.identifier(requested))
+    assertEquals(false, RequestedDocument.GeneratedPaths.identifier is dev.kpaths.core.WritableKeyPath<*, *>)
+    assertEquals(2, RequestedDocument.GeneratedPaths.revision.set(requested, 2).revision)
+    assertEquals(0, requested.revision)
+    assertEquals(false, RequestedEvent.GeneratedPaths.ProtectedPaths.value is dev.kpaths.core.WritableKeyPath<*, *>)
+    assertEquals(RequestedEvent.Editable("new"),
+      RequestedEvent.GeneratedPaths.EditablePaths.value.set(RequestedEvent.Editable("old"), "new"))
   }
 
   @Test

@@ -137,8 +137,23 @@ annotation class ContributedCatalog
 
 /** Its catalog is requested by a separate compiler plugin through `session.kpaths.pathable`. */
 @ContributedCatalog
-data class RequestedDocument(val title: String)
+data class RequestedDocument(val title: String, val identifier: String = "id", var revision: Int = 0)
 
 val requestedDocumentPaths: RequestedDocument.GeneratedPaths = RequestedDocument.GeneratedPaths
 val requestedDocumentTitlePath: WritableKeyPath<RequestedDocument, String> =
   RequestedDocument.GeneratedPaths.title
+val requestedDocumentIdentifierPath: KeyPath<RequestedDocument, String> =
+  RequestedDocument.GeneratedPaths.identifier
+val requestedDocumentRevisionPath: WritableKeyPath<RequestedDocument, Int> =
+  RequestedDocument.GeneratedPaths.revision
+
+@ContributedCatalog
+sealed interface RequestedEvent {
+  data class Protected(val value: String) : RequestedEvent
+  data class Editable(val value: String) : RequestedEvent
+}
+
+val protectedValuePath: KeyPath<RequestedEvent.Protected, String> =
+  RequestedEvent.GeneratedPaths.ProtectedPaths.value
+val editableValuePath: WritableKeyPath<RequestedEvent.Editable, String> =
+  RequestedEvent.GeneratedPaths.EditablePaths.value

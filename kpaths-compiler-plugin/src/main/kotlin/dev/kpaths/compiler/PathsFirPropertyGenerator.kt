@@ -48,7 +48,8 @@ internal class PathsFirPropertyGenerator(
         isPrimaryConstructorProperty = sourceProperty.name in sourceCase.primaryConstructorPropertyNames(),
         hasAccessibleSetter = sourceProperty.fir.hasKPathsAccessibleSetter(),
         copyWritableVals = pathsClass.propertyCatalogRoot()?.generationOptions()?.copyWritableVals ?: false,
-        isExcludedFromCopyWritableVals = false,
+        isExcludedFromCopyWritableVals = pathsClass.propertyCatalogRoot()?.generationOptions()
+          ?.copyWritableValExclusions?.any { it.callableId == sourceProperty.callableId } == true,
       ).classifyForKPaths()
       val pathType = when ((shape as? KPathsPropertyPolicyResult.Supported)?.kind) {
         KPathsPropertyPathKind.REFERENCE_WRITABLE -> referenceWritableKeyPathClassId
@@ -174,7 +175,8 @@ internal class PathsFirPropertyGenerator(
       isPrimaryConstructorProperty = sourceProperty.name in rootClass.primaryConstructorPropertyNames(),
       hasAccessibleSetter = sourceProperty.fir.hasKPathsAccessibleSetter(),
       copyWritableVals = rootClass.generationOptions()?.copyWritableVals ?: false,
-      isExcludedFromCopyWritableVals = false,
+      isExcludedFromCopyWritableVals = rootClass.generationOptions()?.copyWritableValExclusions
+        ?.any { it.callableId == sourceProperty.callableId } == true,
     ).classifyForKPaths()
     val pathClassId = when (pathKind) {
       is KPathsPropertyPolicyResult.Supported -> when (pathKind.kind) {
