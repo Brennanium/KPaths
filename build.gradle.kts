@@ -96,6 +96,44 @@ tasks.register("verifyMavenPublications") {
   )
 }
 
+/**
+ * Fast, repeatable verification for the experimental K2 compiler-plugin implementation.
+ *
+ * This intentionally covers the plugin's source fixture, runtime tests, and a separate consumer
+ * that does not apply the plugin. Run this after editing FIR/IR generation code.
+ */
+tasks.register("verifyCompilerPluginJvm") {
+  group = "verification"
+  description = "Verifies the K2 compiler plugin on JVM, including binary consumer metadata."
+  dependsOn(
+    ":kpaths-codegen-model:jvmTest",
+    ":kpaths-compiler-plugin-fixture:jvmTest",
+    ":kpaths-compiler-plugin-consumer:compileKotlinJvm",
+  )
+}
+
+/**
+ * Full cross-backend verification for generated `Paths` declarations.
+ *
+ * Kotlin/Native is compiled here rather than run: the fixture's assertions are JVM tests, while
+ * the Native fixture proves that identical FIR/IR generation reaches a second backend.
+ */
+tasks.register("verifyCompilerPlugin") {
+  group = "verification"
+  description = "Verifies the K2 compiler plugin on JVM and Kotlin/Native."
+  dependsOn(
+    "verifyCompilerPluginJvm",
+    ":kpaths-compiler-plugin-fixture:compileKotlinIosSimulatorArm64",
+  )
+}
+
+/** Runs downstream compile contracts, including disabled acceptance specs for planned features. */
+tasks.register("verifyCompilerPluginContracts") {
+  group = "verification"
+  description = "Runs downstream compiler-plugin API acceptance contracts."
+  dependsOn(":kpaths-compiler-plugin-fixture:compilerPluginContractTest")
+}
+
 tasks.register<Exec>("docsServe") {
   group = "documentation"
   description = "Serves the complete generated documentation site at http://localhost:8000."

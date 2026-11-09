@@ -27,4 +27,6 @@ include(
   ":kpaths-compiler-plugin",
   ":kpaths-compiler-plugin-contributor",
   ":kpaths-compiler-plugin-integration-fixture",
+  ":kpaths-compiler-plugin-fixture",
+  ":kpaths-compiler-plugin-consumer",
 )
