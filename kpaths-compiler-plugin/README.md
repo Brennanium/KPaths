@@ -97,6 +97,10 @@ using the same case-shape policy as KSP; use a class or object for a generated c
 Case discovery is experimental. There may be edge cases where the plugin omits a generated case
 path without reporting a diagnostic.
 
+As with KSP, a bare unnamed `companion object` must be the last member of an annotated type.
+Otherwise Kotlin can interpret a following keyword as the companion's name and change the parsed
+declarations. A named companion or `companion object {}` can appear earlier in the body.
+
 Bare Kotlin enums receive the corresponding unit-focused case paths:
 
 ```kotlin

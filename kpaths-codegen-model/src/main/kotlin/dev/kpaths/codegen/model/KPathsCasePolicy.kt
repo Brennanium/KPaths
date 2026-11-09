@@ -45,6 +45,10 @@ public fun KPathsCaseShape.classifyForKPaths(): KPathsCasePolicyResult = when (k
 
 /** Shared, frontend-independent wording for KPaths generation diagnostics. */
 public object KPathsDiagnostics {
+  public fun ambiguousCompanion(): String =
+    "An unnamed `companion object` must be the final member of an @Pathable declaration. " +
+      "Move it to the end of the class body, or use a named companion or `companion object {}`."
+
   public fun nestedCatalogCollision(rootName: String, catalogName: String): String =
     "Cannot generate '$rootName.$catalogName' because '$rootName' already declares a nested type named " +
       "'$catalogName'. Rename the existing type."

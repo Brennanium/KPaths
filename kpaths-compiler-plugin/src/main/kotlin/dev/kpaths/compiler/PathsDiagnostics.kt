@@ -11,6 +11,7 @@ import dev.kpaths.codegen.model.KPathsPropertyPolicyResult
 import dev.kpaths.codegen.model.KPathsPropertyShape
 import dev.kpaths.codegen.model.classifyForKPaths
 import dev.kpaths.codegen.model.findKPathsGeneratedMemberCollisions
+import dev.kpaths.codegen.model.hasAmbiguousKPathsCompanion
 import dev.kpaths.codegen.model.isKPathsReservedName
 import dev.kpaths.codegen.model.validateKPathsConfiguredName
 import dev.kpaths.codegen.model.kPathsConfiguredNameDiagnostic
@@ -18,6 +19,7 @@ import dev.kpaths.codegen.model.kPathsCasePropertyCatalogName
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.descriptors.Visibilities
+import org.jetbrains.kotlin.text
 import org.jetbrains.kotlin.diagnostics.DiagnosticReporter
 import org.jetbrains.kotlin.diagnostics.KtDiagnosticFactoryToRendererMap
 import org.jetbrains.kotlin.diagnostics.KtDiagnosticsContainer
@@ -60,6 +62,7 @@ internal object PathsDiagnostics : KtDiagnosticsContainer() {
   val INVALID_CASE_NAME by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
   val INVALID_CASE_CATALOG_NAME by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
   val UNSUPPORTED_SEALED_VARIANT by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
+  val AMBIGUOUS_COMPANION by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
 
   override fun getRendererFactory(): BaseDiagnosticRendererFactory = Renderers
 
@@ -74,6 +77,7 @@ internal object PathsDiagnostics : KtDiagnosticsContainer() {
       it.put(INVALID_CASE_NAME, "{0}", CommonRenderers.STRING)
       it.put(INVALID_CASE_CATALOG_NAME, "{0}", CommonRenderers.STRING)
       it.put(UNSUPPORTED_SEALED_VARIANT, "{0}", CommonRenderers.STRING)
+      it.put(AMBIGUOUS_COMPANION, "{0}", CommonRenderers.STRING)
     }
   }
 }
@@ -98,6 +102,19 @@ internal class PathsDiagnosticCheckers(private val pluginSession: FirSession) : 
       } || pluginSession.kpaths.optionsFor(declaration.symbol) != null ||
         pluginSession.predicateBasedProvider.matches(metaPathablePredicate, declaration.symbol)
       if (!isPathable) return
+      val companion = declaration.declarations.filterIsInstance<FirRegularClass>()
+        .firstOrNull { it.status.isCompanion }
+      val rootSource = declaration.source
+      val companionSource = companion?.source
+      if (rootSource != null && companionSource != null) {
+        val sourceText = rootSource.text.toString()
+        val offset = (companionSource.startOffset - rootSource.startOffset).coerceIn(0, sourceText.length)
+        val line = sourceText.take(offset).count { it == '\n' } + 1
+        if (hasAmbiguousKPathsCompanion(sourceText, line)) {
+          reporter.reportOn(declaration.source, PathsDiagnostics.AMBIGUOUS_COMPANION,
+            "[KPaths] ${KPathsDiagnostics.ambiguousCompanion()}")
+        }
+      }
       val catalogName = pluginSession.kpaths.optionsFor(declaration.symbol)?.catalogName ?: "Paths"
       if (declaration.hasKPathsCatalogCollision(catalogName)) {
         reporter.reportOn(declaration.source, PathsDiagnostics.NESTED_CATALOG_COLLISION,

@@ -42,6 +42,7 @@ import dev.kpaths.codegen.model.KPathsCasePolicyResult
 import dev.kpaths.codegen.model.KPathsCaseShape
 import dev.kpaths.codegen.model.KPathsDiagnostics
 import dev.kpaths.codegen.model.KPathsGeneratedMember as GeneratedMember
+import dev.kpaths.codegen.model.hasAmbiguousKPathsCompanion
 import dev.kpaths.codegen.model.findKPathsGeneratedMemberCollisions
 import dev.kpaths.codegen.model.isKPathsReservedName
 import dev.kpaths.codegen.model.KPATHS_INTERNAL_PREFIX
@@ -983,64 +984,13 @@ public class KPathsCatalogGenerator(
       ?: return true
     val location = companion.location as? FileLocation ?: return true
     val source = runCatching { Files.readString(Path.of(location.filePath)) }.getOrNull() ?: return true
-    if (!source.hasBareCompanionFollowedByMember(location.lineNumber)) return true
+    if (!hasAmbiguousKPathsCompanion(source, location.lineNumber)) return true
 
     reportGenerationError(
       declaration,
-      "An unnamed `companion object` must be the final member of an @Pathable declaration. " +
-        "Move it to the end of the class body, or use a named companion or `companion object {}`.",
+      KPathsDiagnostics.ambiguousCompanion(),
     )
     return false
-  }
-
-  private fun String.hasBareCompanionFollowedByMember(lineNumber: Int): Boolean {
-    val lineStart = lineStart(lineNumber) ?: return false
-    val lineEnd = indexOf('\n', lineStart).takeIf { it >= 0 } ?: length
-    // KSP reports the phantom companion created by `companion object` + `data class` at the
-    // `data` token, rather than at `companion`. The closest preceding companion declaration is
-    // therefore the one whose spelling needs inspection.
-    val match = companionObjectPattern.findAll(this)
-      .takeWhile { candidate -> candidate.range.first < lineEnd }
-      .lastOrNull()
-      ?: return false
-    var index = match.range.last + 1
-    var crossedLine = false
-
-    while (index < length) {
-      when {
-        this[index].isWhitespace() -> {
-          crossedLine = crossedLine || this[index] == '\n'
-          index += 1
-        }
-        startsWith("//", index) -> {
-          val commentEnd = indexOf('\n', index).takeIf { it >= 0 } ?: return false
-          crossedLine = true
-          index = commentEnd + 1
-        }
-        startsWith("/*", index) -> {
-          val commentEnd = indexOf("*/", index + 2).takeIf { it >= 0 } ?: return false
-          crossedLine = crossedLine || substring(index, commentEnd).contains('\n')
-          index = commentEnd + 2
-        }
-        else -> break
-      }
-    }
-
-    if (!crossedLine || index >= length || this[index] in setOf('{', '}')) return false
-    if (this[index] == '@') return true
-    val token = substring(index).takeWhile { character -> character.isLetterOrDigit() || character == '_' }
-    return token in classMemberStarters
-  }
-
-  private fun String.lineStart(lineNumber: Int): Int? {
-    if (lineNumber < 1) return null
-    var currentLine = 1
-    var index = 0
-    while (currentLine < lineNumber) {
-      index = indexOf('\n', index).takeIf { it >= 0 }?.plus(1) ?: return null
-      currentLine += 1
-    }
-    return index
   }
 
   private fun writeCompanionPathsView(
@@ -2299,15 +2249,6 @@ public class KPathsCatalogGenerator(
 
   private companion object {
     private const val generatedInternalPrefix = KPATHS_INTERNAL_PREFIX
-
-    private val companionObjectPattern = Regex("\\bcompanion\\s+object\\b")
-
-    private val classMemberStarters = setOf(
-      "abstract", "actual", "annotation", "class", "const", "constructor", "data", "enum",
-      "expect", "external", "final", "fun", "infix", "init", "inline", "inner", "interface",
-      "internal", "lateinit", "object", "open", "operator", "override", "private", "protected",
-      "public", "sealed", "suspend", "tailrec", "typealias", "val", "var",
-    )
 
     private val kotlinKeywords = setOf(
       "as", "as?", "break", "class", "continue", "do", "else", "false", "for", "fun", "if",

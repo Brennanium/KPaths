@@ -14,6 +14,46 @@ import org.objectweb.asm.Opcodes
 
 class CompilerSnippetTest {
   @Test
+  fun `bare companion before a case is diagnosed instead of silently dropping it`() {
+    val result = compileSnippet("BareCompanion.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      @Pathable sealed interface Event {
+        companion object
+        // The next keyword must not be mistaken for the companion's name.
+        data object Idle : Event
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages, "[KPaths] An unnamed `companion object` must be the final member")
+  }
+
+  @Test
+  fun `named braced and final bare companions remain valid`() {
+    val result = compileSnippet("ValidCompanions.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      @Pathable sealed interface Named {
+        companion object Factory
+        data object Idle : Named
+      }
+      @Pathable sealed interface Braced {
+        companion object {}
+        data object Idle : Braced
+      }
+      @Pathable sealed interface Final {
+        data object Idle : Final
+        companion object
+      }
+      fun run(): Boolean = Named.Paths.Idle.unit.embed(Unit) == Named.Idle &&
+        Braced.Paths.Idle.unit.embed(Unit) == Braced.Idle &&
+        Final.Paths.Idle.unit.embed(Unit) == Final.Idle
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.ValidCompanionsKt").getMethod("run").invoke(null))
+  }
+
+  @Test
   fun `direct sealed interface variants receive the shared unsupported case diagnostic`() {
     val result = compileSnippet("UnsupportedVariant.kt" to """
       package example
@@ -308,8 +348,8 @@ class CompilerSnippetTest {
       package example
       import dev.kpaths.annotations.Pathable
       @Pathable data class Person(val name: String) {
-        companion object
         object Helpers
+        companion object
       }
       val name = Person.Paths.name
     """)
