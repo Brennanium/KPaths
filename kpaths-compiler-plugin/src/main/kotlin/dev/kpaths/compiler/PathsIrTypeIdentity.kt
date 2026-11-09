@@ -43,6 +43,7 @@ import org.jetbrains.kotlin.types.Variance
 internal fun DeclarationIrBuilder.emitKPathsTypeId(
   pluginContext: IrPluginContext,
   type: KPathsTypeIdSpec,
+  resolveParameter: (String) -> org.jetbrains.kotlin.ir.expressions.IrExpression? = { null },
 ): org.jetbrains.kotlin.ir.expressions.IrExpression? = run {
   val typeId = pluginContext.referenceClass(typeIdClassId) ?: return@run null
   val typeArgument = pluginContext.referenceClass(typeArgumentClassId) ?: return@run null
@@ -90,7 +91,17 @@ internal fun DeclarationIrBuilder.emitKPathsTypeId(
     }
 
   emit = emitter@{ candidate -> when (candidate) {
-    is KPathsTypeIdSpec.Parameter -> null
+    is KPathsTypeIdSpec.Parameter -> {
+      val token = resolveParameter(candidate.name) ?: return@emitter null
+      if (!candidate.nullable) token else {
+        val withNullability = typeId.owner.declarations.filterIsInstance<IrSimpleFunction>()
+          .singleOrNull { it.name.asString() == "withNullability" } ?: return@emitter null
+        irCall(withNullability.symbol).apply {
+          dispatchReceiver = token
+          arguments[1] = irTrue()
+        }
+      }
+    }
     is KPathsTypeIdSpec.Declared -> {
       val argumentExpressions = buildList {
         candidate.arguments.forEach { argument ->

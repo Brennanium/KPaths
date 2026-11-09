@@ -24,6 +24,9 @@ import org.jetbrains.kotlin.fir.plugin.createMemberProperty
 import org.jetbrains.kotlin.fir.symbols.SymbolInternals
 import org.jetbrains.kotlin.fir.symbols.impl.FirPropertySymbol
 import org.jetbrains.kotlin.fir.types.toTypeProjection
+import org.jetbrains.kotlin.fir.types.ConeAttributes
+import org.jetbrains.kotlin.fir.types.impl.ConeTypeParameterTypeImpl
+import org.jetbrains.kotlin.fir.resolve.substitution.ConeSubstitutorByMap
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.types.Variance
 
@@ -38,6 +41,38 @@ internal class PathsFirPropertyGenerator(
     context: DeclarationGenerationContext.Member?,
   ): List<FirPropertySymbol> = with(analysis) {
     val pathsClass = context?.owner ?: return@with emptyList()
+    if (pathsClass.isGeneratedGenericCatalog()) {
+      val root = pathsClass.genericCatalogRoot() ?: return@with emptyList()
+      val property = root.sourceDeclaredProperties()
+        .singleOrNull { it.fir.generatedKPathsName() == callableId.callableName } ?: return@with emptyList()
+      val arguments = pathsClass.fir.typeParameters.map {
+        ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty)
+      }
+      val substitution = root.fir.typeParameters.map { it.symbol }.zip(arguments).toMap()
+      val valueType = ConeSubstitutorByMap.create(substitution, session, false).substituteOrSelf(property.resolvedReturnType)
+      val rootType = root.classId.createConeType(session, arguments.map {
+        it.toTypeProjection(Variance.INVARIANT)
+      }.toTypedArray(), false)
+      val kind = KPathsPropertyShape(
+        ownerIsDataClass = (root.fir as? FirRegularClass)?.status?.isData == true,
+        isMutable = property.fir.isVar,
+        isPrimaryConstructorProperty = property.name in root.primaryConstructorPropertyNames(),
+        hasAccessibleSetter = property.fir.hasKPathsAccessibleSetter(),
+        copyWritableVals = root.generationOptions()?.copyWritableVals ?: false,
+        isExcludedFromCopyWritableVals = root.generationOptions()?.copyWritableValExclusions
+          ?.any { it.callableId == property.callableId } == true,
+      ).classifyForKPaths()
+      val pathClass = when ((kind as? KPathsPropertyPolicyResult.Supported)?.kind) {
+        KPathsPropertyPathKind.REFERENCE_WRITABLE -> referenceWritableKeyPathClassId
+        KPathsPropertyPathKind.COPY_WRITABLE, KPathsPropertyPathKind.COPY_THEN_MUTATE -> writableKeyPathClassId
+        else -> keyPathClassId
+      }
+      val resultType = pathClass.createConeType(session, arrayOf(
+        rootType.toTypeProjection(Variance.INVARIANT), valueType.toTypeProjection(Variance.INVARIANT),
+      ), false)
+      return@with listOf(createMemberProperty(pathsClass, PathsGenericCatalogKey, callableId.callableName,
+        resultType, true, false).symbol)
+    }
     if (pathsClass.isGeneratedCasePropertyCatalog()) {
       val sourceCase = pathsClass.propertyCatalogCase() ?: return@with emptyList()
       val sourceProperty = sourceCase.sourceDeclaredProperties()

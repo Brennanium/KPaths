@@ -148,6 +148,15 @@ internal class PathsFirAnalysis(private val session: FirSession) {
   fun FirClassSymbol<*>.isGeneratedCasePropertyCatalog(): Boolean =
     (origin as? FirDeclarationOrigin.Plugin)?.key == PathsCasePropertyCatalogKey
 
+  fun FirClassSymbol<*>.isGeneratedGenericCatalog(): Boolean =
+    (origin as? FirDeclarationOrigin.Plugin)?.key == PathsGenericCatalogKey
+
+  fun FirClassSymbol<*>.genericCatalogRoot(): FirClassSymbol<*>? {
+    if (!isGeneratedGenericCatalog()) return null
+    val rootId = classId.outerClassId?.outerClassId ?: return null
+    return session.symbolProvider.getClassLikeSymbolByClassId(rootId) as? FirClassSymbol<*>
+  }
+
   fun FirClassSymbol<*>.propertyCatalogRoot(): FirClassSymbol<*>? {
     if (!isGeneratedCasePropertyCatalog()) return null
     val rootId = classId.outerClassId?.outerClassId ?: return null

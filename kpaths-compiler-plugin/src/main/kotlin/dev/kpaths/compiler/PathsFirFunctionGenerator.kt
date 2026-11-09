@@ -14,6 +14,8 @@ import org.jetbrains.kotlin.fir.plugin.createMemberFunction
 import org.jetbrains.kotlin.fir.symbols.SymbolInternals
 import org.jetbrains.kotlin.fir.symbols.impl.FirNamedFunctionSymbol
 import org.jetbrains.kotlin.fir.types.toTypeProjection
+import org.jetbrains.kotlin.fir.types.ConeAttributes
+import org.jetbrains.kotlin.fir.types.impl.ConeTypeParameterTypeImpl
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.types.Variance
 
@@ -28,6 +30,21 @@ internal class PathsFirFunctionGenerator(
     context: DeclarationGenerationContext.Member?,
   ): List<FirNamedFunctionSymbol> = with(analysis) {
     val pathsClass = context?.owner ?: return@with emptyList()
+    if (pathsClass.isGeneratedPaths() && callableId.callableName.asString() in setOf("invoke", "of")) {
+      val root = pathsClass.rootClass() ?: return@with emptyList()
+      if (root.fir.typeParameters.isEmpty()) return@with emptyList()
+      val catalogId = pathsClass.classId.createNestedClassId(Name.identifier("__kpaths_Catalog"))
+      return@with listOf(createMemberFunction(pathsClass, PathsDeclarationKey, callableId.callableName, { parameters ->
+        catalogId.createConeType(session, parameters.map {
+          ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty)
+            .toTypeProjection(Variance.INVARIANT)
+        }.toTypedArray(), false)
+      }) {
+        copyKPathsTypeParameters(root.fir.typeParameters, session, reified = true)
+        status { isOperator = callableId.callableName.asString() == "invoke"; isInline = true }
+        withGeneratedDefaultBody()
+      }.symbol)
+    }
     if (pathsClass.isGeneratedPaths() && callableId.callableName.asString() == "__kpaths_buildAllCasePaths") {
       val root = pathsClass.rootClass() ?: return@with emptyList()
       if (!root.canGenerateCaseCatalog()) return@with emptyList()

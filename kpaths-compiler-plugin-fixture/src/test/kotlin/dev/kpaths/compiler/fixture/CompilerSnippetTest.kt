@@ -11,10 +11,49 @@ import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
-import org.junit.jupiter.api.Disabled
 
 class CompilerSnippetTest {
-  @Disabled("Generic compiler-plugin catalogs and runtime type tokens are not implemented yet.")
+  @Test
+  fun `generic catalog factory rejects type arguments that violate root bounds`() {
+    val result = compileSnippet("InvalidGenericBound.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      @Pathable data class Box<T : CharSequence>(val value: T)
+      val invalid = Box.Paths<Int>().value
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+  }
+
+  @Test
+  fun `generic catalogs preserve constraints nested types and reference writes`() {
+    val result = compileSnippet("BoundedCatalog.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      import dev.kpaths.core.ReferenceWritableKeyPath
+      import dev.kpaths.core.TypeId
+      import dev.kpaths.core.WritableKeyPath
+      @Pathable data class Record<K : Any, V : CharSequence>(var entries: Map<K, V?>)
+      @Pathable class Holder<T>(var value: T)
+      @Pathable data class Ordered<T : Comparable<T>>(var value: T)
+      fun run(): Boolean {
+        val entries: WritableKeyPath<Record<Int, String>, Map<Int, String?>> =
+          Record.Paths<Int, String>().entries
+        val old = Record(mapOf(1 to "a"))
+        val next = entries.set(old, mapOf(2 to null))
+        val value: ReferenceWritableKeyPath<Holder<String?>, String?> = Holder.Paths<String?>().value
+        val holder = Holder<String?>(null)
+        value.setInPlace(holder, "updated")
+        val ordered = Ordered.Paths<Int>().value
+        return old.entries == mapOf(1 to "a") && next.entries == mapOf(2 to null) &&
+          entries.__kpaths_valueType == TypeId.of<Map<Int, String?>>() &&
+          value.__kpaths_valueType == TypeId.of<String?>() && holder.value == "updated" &&
+          ordered.set(Ordered(1), 2) == Ordered(2)
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.BoundedCatalogKt").getMethod("run").invoke(null))
+  }
+
   @Test
   fun `generic catalogs preserve type arguments nullability and copy writes`() {
     val result = compileSnippet("GenericCatalog.kt" to """
@@ -23,13 +62,17 @@ class CompilerSnippetTest {
       import dev.kpaths.core.PathId
       import dev.kpaths.core.TypeId
       import dev.kpaths.core.WritableKeyPath
+      import dev.kpaths.core.keyPath
       @Pathable data class Box<T>(var value: T)
       fun run(): Boolean {
-        val text: WritableKeyPath<Box<String>, String> = Box.Paths<String>().value
+        val catalog = Box.Paths<String>()
+        val text: WritableKeyPath<Box<String>, String> = catalog.value
         val nullable = Box.Paths<String?>().value
         val number = Box.Paths<Int>().value
         val original = Box("before")
-        return text(original) == "before" && text.set(original, "after") == Box("after") &&
+        return text === catalog.value && text == Box.Paths.of<String>().value &&
+          text == keyPath(Box<String>::value) &&
+          text(original) == "before" && text.set(original, "after") == Box("after") &&
           original.value == "before" && text.__kpaths_valueType == TypeId.of<String>() &&
           nullable.__kpaths_valueType == TypeId.of<String?>() &&
           text.__kpaths_id == PathId.property(TypeId.of<Box<String>>(), "value") &&

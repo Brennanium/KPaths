@@ -81,6 +81,7 @@ tasks.register<Test>("compilerPluginContractTest") {
 tasks.withType<KotlinCompilationTask<*>>().configureEach {
   dependsOn(pathsPluginJar)
   dependsOn(contributorPluginJar)
+  inputs.files(pathsPluginFile, contributorPluginFile).withPropertyName("kpathsCompilerPlugins")
   compilerOptions.freeCompilerArgs.addAll(
     listOf(
       "-Xplugin=${contributorPluginFile.get().asFile.absolutePath}",

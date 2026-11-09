@@ -57,7 +57,11 @@ internal object PathsIrSnapshot {
             appendLine("  val ${property.name.asString()}: ${property.getter?.returnType?.snapshotTypeName()}")
           }
         declaration.declarations.filterIsInstance<IrSimpleFunction>()
-          .filter { it.name.asString() in generatedOperationNames || it.name.asString().endsWith("For") }
+          .filter {
+            it.name.asString() in generatedOperationNames || it.name.asString().endsWith("For") ||
+              (it.name.asString() in setOf("invoke", "of") &&
+                (it.origin as? IrDeclarationOrigin.GeneratedByPlugin)?.pluginKey == PathsDeclarationKey)
+          }
           .sortedBy { it.name.asString() }
           .forEach { function ->
             val parameters = function.parameters.drop(1).joinToString(", ") {
@@ -73,7 +77,7 @@ internal object PathsIrSnapshot {
 
   private fun IrClass.isKPathsGeneratedSnapshotClass(): Boolean {
     val pluginOrigin = origin as? IrDeclarationOrigin.GeneratedByPlugin
-    return pluginOrigin?.pluginKey in setOf(PathsDeclarationKey, PathsCaseDeclarationKey, PathsCasePropertyCatalogKey) ||
+    return pluginOrigin?.pluginKey in setOf(PathsDeclarationKey, PathsCaseDeclarationKey, PathsCasePropertyCatalogKey, PathsGenericCatalogKey) ||
       name.asString().startsWith("__KPaths_")
   }
 

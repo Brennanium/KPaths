@@ -17,9 +17,21 @@ No companion object and no generated Kotlin source file are involved. For concre
 plugin's IR extension emits a private `KeyPathBase` subclass behind each generated field. That
 subclass stores its `PathId` and structural `TypeId`—including nested nullability, generic
 arguments, use-site variance, and star projections—and calls the source getter directly. There is
-no `KProperty1` reference or stored closure in those emitted paths. Generic *root* catalogs do not
-yet expose generated property paths or a typed factory; use a manual factory such as `keyPath` or
-the KSP-generated catalog for those roots for now.
+no `KProperty1` reference or stored closure in those emitted paths. Generic class roots also expose
+a typed factory:
+
+```kotlin
+@Pathable
+data class Box<Value>(var value: Value)
+
+val value: WritableKeyPath<Box<String?>, String?> = Box.Paths<String?>().value
+val sameValue = Box.Paths.of<String?>().value
+```
+
+The factory captures each reified type argument as a `TypeId`, so path identity preserves generic
+arguments and nullability. The catalog caches direct path implementations; the `TypeId.of` call
+uses Kotlin type metadata at the factory call site. Generic sealed-case catalogs and the KSP
+catalog's `of(KClass)` factory overload is not implemented by the compiler plugin yet.
 
 On supported non-generic roots, `@PathName` changes the generated property-path spelling while
 preserving its identity:
@@ -192,13 +204,11 @@ backend portability.
 contributing compiler plugin's `KPathsGenerationOptions`. Generated `allCasePaths` catalogs use
 the canonical associated-value paths for object cases and cases with one to three properties.
 Cases without a supported canonical payload are omitted, so `case` can fail for those cases;
-the plugin warns when it generates an incomplete catalog. Generic factories, adapter-backed
-property members, diagnostics, and broader
+the plugin warns when it generates an incomplete catalog. Generic sealed-case catalogs,
+additional generic factory overloads, adapter-backed property members, diagnostics, and broader
 conformance coverage remain future work.
 `@KPathsAdapter` currently establishes the binary metadata contract; producing an adapter's
 specialized path remains the next FIR/IR layer.
 
-`kpaths-compiler-plugin-fixture/LanguageSyntaxExperiments.kt` separately demonstrates that
-an object can expose a generic `operator fun invoke`, so a future nested object can retain the
-pleasant `Box.Paths<String>()` spelling even though the `Paths` object itself has no type
-parameter.
+`kpaths-compiler-plugin-fixture/LanguageSyntaxExperiments.kt` separately demonstrates the Kotlin
+generic `invoke` syntax used by generated catalogs.

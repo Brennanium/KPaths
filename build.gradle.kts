@@ -108,7 +108,7 @@ tasks.register("verifyCompilerPluginJvm") {
   dependsOn(
     ":kpaths-codegen-model:jvmTest",
     ":kpaths-compiler-plugin-fixture:jvmTest",
-    ":kpaths-compiler-plugin-consumer:compileKotlinJvm",
+    ":kpaths-compiler-plugin-consumer:jvmTest",
   )
 }
 

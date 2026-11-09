@@ -12,6 +12,11 @@ import dev.kpaths.core.WritableKeyPath
 @Pathable
 data class NativePerson(val name: String)
 
+@Pathable
+data class NativeBox<T>(var value: T)
+
+val nativeBoxPath: WritableKeyPath<NativeBox<String?>, String?> = NativeBox.Paths<String?>().value
+
 val nativePersonPaths: NativePerson.Paths = NativePerson.Paths
 val nativePersonNamePath: KeyPath<NativePerson, String> = NativePerson.Paths.name
 

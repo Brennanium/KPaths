@@ -248,7 +248,22 @@ class FutureCompilerPluginContractTest {
     assertEquals(false, references.any { it == "dev/kpaths/core/CaseKeyPathKt" })
   }
 
-  @Disabled("Acceptance contract: generic roots expose the invoke-style Paths factory.")
+  @Test
+  fun `IR snapshot records generic catalog and writable path implementation`(@TempDir directory: Path) {
+    val snapshot = directory.resolve("generic.ir.txt")
+    compileSuccessfully(directory, """
+      package fixture
+      import dev.kpaths.annotations.Pathable
+      @Pathable data class Box<T>(var value: T)
+      val path = Box.Paths<String>().value
+    """, irSnapshot = snapshot)
+    val ir = Files.readString(snapshot)
+    assertContains(ir, "class fixture.Box.Paths.__kpaths_Catalog")
+    assertContains(ir, "val value: dev.kpaths.core.WritableKeyPath<fixture.Box<T>, T>")
+    assertContains(ir, "extends dev.kpaths.core.WritableKeyPathBase<fixture.Box<T>, T>")
+    assertContains(ir, "fun set(root: fixture.Box<T>, value: T): fixture.Box<T>")
+  }
+
   @Test
   fun `generic root Paths factory retains root and focus types`(@TempDir directory: Path) {
     compileSuccessfully(

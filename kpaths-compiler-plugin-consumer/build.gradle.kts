@@ -19,5 +19,14 @@ kotlin {
         implementation(project(":kpaths-compiler-plugin-fixture"))
       }
     }
+    jvmTest {
+      dependencies {
+        implementation(kotlin("test"))
+        implementation(libs.junit.jupiter)
+        runtimeOnly("org.junit.platform:junit-platform-launcher")
+      }
+    }
   }
 }
+
+tasks.named<Test>("jvmTest") { useJUnitPlatform() }

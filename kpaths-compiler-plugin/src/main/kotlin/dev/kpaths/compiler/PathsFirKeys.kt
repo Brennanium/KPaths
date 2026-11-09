@@ -6,3 +6,4 @@ import org.jetbrains.kotlin.GeneratedDeclarationKey
 internal object PathsDeclarationKey : GeneratedDeclarationKey()
 internal object PathsCaseDeclarationKey : GeneratedDeclarationKey()
 internal object PathsCasePropertyCatalogKey : GeneratedDeclarationKey()
+internal object PathsGenericCatalogKey : GeneratedDeclarationKey()

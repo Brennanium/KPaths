@@ -139,6 +139,9 @@ annotation class ContributedCatalog
 @ContributedCatalog
 data class RequestedDocument(val title: String, val identifier: String = "id", var revision: Int = 0)
 
+@Pathable
+data class FixtureBox<T>(var value: T)
+
 val requestedDocumentPaths: RequestedDocument.GeneratedPaths = RequestedDocument.GeneratedPaths
 val requestedDocumentTitlePath: WritableKeyPath<RequestedDocument, String> =
   RequestedDocument.GeneratedPaths.title

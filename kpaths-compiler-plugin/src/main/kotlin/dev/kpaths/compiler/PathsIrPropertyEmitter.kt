@@ -10,7 +10,6 @@ import dev.kpaths.compiler.PathsIrSymbols.writableKeyPathBaseClassId
 import dev.kpaths.compiler.PathsIrSymbols.pathIdClassId
 import dev.kpaths.compiler.PathsIrSymbols.typeIdClassId
 
-import dev.kpaths.codegen.model.KPathsTypeIdSpec
 import org.jetbrains.kotlin.backend.common.extensions.IrPluginContext
 import org.jetbrains.kotlin.backend.common.lower.DeclarationIrBuilder
 import org.jetbrains.kotlin.descriptors.ClassKind
@@ -19,9 +18,11 @@ import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.builders.declarations.addBackingField
 import org.jetbrains.kotlin.ir.builders.declarations.addConstructor
 import org.jetbrains.kotlin.ir.builders.declarations.addDefaultGetter
+import org.jetbrains.kotlin.ir.builders.declarations.addGetter
 import org.jetbrains.kotlin.ir.builders.declarations.addFunction
 import org.jetbrains.kotlin.ir.builders.declarations.addProperty
 import org.jetbrains.kotlin.ir.builders.declarations.addValueParameter
+import org.jetbrains.kotlin.ir.builders.declarations.addTypeParameter
 import org.jetbrains.kotlin.ir.builders.declarations.buildClass
 import org.jetbrains.kotlin.ir.builders.declarations.buildReceiverParameter
 import org.jetbrains.kotlin.ir.builders.irBlockBody
@@ -32,6 +33,7 @@ import org.jetbrains.kotlin.ir.builders.irAs
 import org.jetbrains.kotlin.ir.builders.irExprBody
 import org.jetbrains.kotlin.ir.builders.irGet
 import org.jetbrains.kotlin.ir.builders.irGetObject
+import org.jetbrains.kotlin.ir.builders.irGetField
 import org.jetbrains.kotlin.ir.builders.irReturn
 import org.jetbrains.kotlin.ir.builders.irString
 import org.jetbrains.kotlin.ir.builders.irTemporary
@@ -43,7 +45,9 @@ import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.expressions.impl.IrInstanceInitializerCallImpl
 import org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI
 import org.jetbrains.kotlin.ir.types.typeWith
+import org.jetbrains.kotlin.ir.types.IrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.impl.IrSimpleTypeImpl
+import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.primaryConstructor
 import org.jetbrains.kotlin.name.Name
@@ -67,8 +71,8 @@ internal class PathsIrPropertyEmitter(
    * ```
    *
    * It is private implementation detail nested in `Paths`, and the public path field caches its
-   * one instance. This emitter handles concrete generic values and nullable focuses directly.
-   * Paths whose root itself has type parameters still use the temporary `KProperty1` fallback.
+   * one instance. Generic roots receive a parameterized implementation whose constructor captures
+   * the catalog's structural root and value identities.
    */
   fun DeclarationIrBuilder.directKeyPathInitializer(
     pathsClass: IrClass,
@@ -76,7 +80,7 @@ internal class PathsIrPropertyEmitter(
     sourceProperty: IrProperty,
     pathKind: GeneratedPathKind,
   ) = run {
-    if (rootClass.typeParameters.isNotEmpty()) return@run null
+    val isGeneric = rootClass.typeParameters.isNotEmpty()
     val sourceGetter = sourceProperty.getter ?: return@run null
     val rootCopy = if (
       pathKind == GeneratedPathKind.COPY_WRITABLE ||
@@ -136,15 +140,25 @@ internal class PathsIrPropertyEmitter(
       origin = IrDeclarationOrigin.DEFINED
     }.apply {
       parent = pathsClass
-      superTypes = listOf(
-        selectedBase.typeWith(rootClass.defaultType, sourceGetter.returnType),
-      )
     }
+    val implementationParameters = rootClass.typeParameters.map { parameter ->
+      implementation.addTypeParameter(parameter.name.asString(), pluginContext.irBuiltIns.anyNType)
+    }
+    val implementationArguments = implementationParameters.map {
+      IrSimpleTypeImpl(it.symbol, false, emptyList(), emptyList())
+    }
+    val substitutor = IrTypeSubstitutor(rootClass.typeParameters.map { it.symbol }, implementationArguments)
+    implementationParameters.zip(rootClass.typeParameters).forEach { (generated, original) ->
+      generated.superTypes = original.superTypes.map(substitutor::substitute)
+    }
+    val generatedRootType = substitutor.substitute(rootClass.defaultType)
+    val generatedFocusType = substitutor.substitute(sourceGetter.returnType)
+    implementation.superTypes = listOf(selectedBase.typeWith(generatedRootType, generatedFocusType))
     deferredDeclarations.getOrPut(pathsClass, ::mutableListOf) += implementation
     val implementationType = IrSimpleTypeImpl(
       implementation.symbol,
       false,
-      emptyList(),
+      implementationArguments,
       emptyList(),
     )
     implementation.thisReceiver = implementation.buildReceiverParameter {
@@ -160,6 +174,8 @@ internal class PathsIrPropertyEmitter(
       returnType = implementationType
       origin = IrDeclarationOrigin.DEFINED
     }
+    val idParameter = if (isGeneric) constructor.addValueParameter("__kpaths_id", pathId.owner.defaultType) else null
+    val typeParameter = if (isGeneric) constructor.addValueParameter("__kpaths_valueType", typeId.owner.defaultType) else null
     constructor.body = irBlockBody {
       +irDelegatingConstructorCall(baseConstructor)
       +IrInstanceInitializerCallImpl(
@@ -170,8 +186,16 @@ internal class PathsIrPropertyEmitter(
       )
     }
 
-    val rootTypeIdExpression = typeIdExpression(rootTypeSpec) ?: return@run null
-    val valueTypeIdExpression = typeIdExpression(valueTypeSpec) ?: return@run null
+    fun resolveParameter(name: String) = pathsClass.declarations.filterIsInstance<IrField>()
+      .singleOrNull { it.name.asString() == "__kpaths_type_$name" }
+      ?.let { field -> irGetField(irGet(checkNotNull(pathsClass.thisReceiver)), field) }
+    val rootTypeIdExpression = emitKPathsTypeId(pluginContext, rootTypeSpec, ::resolveParameter) ?: return@run null
+    val valueTypeIdExpression = emitKPathsTypeId(pluginContext, valueTypeSpec, ::resolveParameter) ?: return@run null
+    val idExpression = irCall(pathIdProperty.symbol).apply {
+      dispatchReceiver = irGetObject(pathIdCompanion.symbol)
+      arguments[1] = rootTypeIdExpression
+      arguments[2] = irString(sourceProperty.name.asString())
+    }
 
     val generatedId = implementation.addProperty {
       name = Name.identifier("__kpaths_id")
@@ -188,14 +212,19 @@ internal class PathsIrPropertyEmitter(
       visibility = DescriptorVisibilities.PRIVATE
       isFinal = true
     }
-    generatedIdField.initializer = irExprBody(
-      irCall(pathIdProperty.symbol).apply {
-        dispatchReceiver = irGetObject(pathIdCompanion.symbol)
-        arguments[1] = rootTypeIdExpression
-        arguments[2] = irString(sourceProperty.name.asString())
-      },
-    )
-    generatedId.addDefaultGetter(implementation, pluginContext.irBuiltIns)
+    generatedIdField.initializer = irExprBody(idParameter?.let(::irGet) ?: idExpression)
+    if (isGeneric) {
+      val getter = generatedId.addGetter {
+        returnType = pathId.owner.defaultType
+        visibility = DescriptorVisibilities.PUBLIC
+      }
+      getter.overriddenSymbols = listOf(checkNotNull(idProperty.getter).symbol)
+      getter.parameters += getter.buildReceiverParameter { type = implementationType }
+      val builder = DeclarationIrBuilder(pluginContext, getter.symbol)
+      getter.body = builder.irBlockBody {
+        +irReturn(irGetField(irGet(checkNotNull(getter.dispatchReceiverParameter)), generatedIdField))
+      }
+    } else generatedId.addDefaultGetter(implementation, pluginContext.irBuiltIns)
 
     val generatedValueType = implementation.addProperty {
       name = Name.identifier("__kpaths_valueType")
@@ -212,14 +241,25 @@ internal class PathsIrPropertyEmitter(
       visibility = DescriptorVisibilities.PRIVATE
       isFinal = true
     }
-    generatedValueTypeField.initializer = irExprBody(valueTypeIdExpression)
-    generatedValueType.addDefaultGetter(implementation, pluginContext.irBuiltIns)
+    generatedValueTypeField.initializer = irExprBody(typeParameter?.let(::irGet) ?: valueTypeIdExpression)
+    if (isGeneric) {
+      val getter = generatedValueType.addGetter {
+        returnType = typeId.owner.defaultType
+        visibility = DescriptorVisibilities.PUBLIC
+      }
+      getter.overriddenSymbols = listOf(checkNotNull(valueTypeProperty.getter).symbol)
+      getter.parameters += getter.buildReceiverParameter { type = implementationType }
+      val builder = DeclarationIrBuilder(pluginContext, getter.symbol)
+      getter.body = builder.irBlockBody {
+        +irReturn(irGetField(irGet(checkNotNull(getter.dispatchReceiverParameter)), generatedValueTypeField))
+      }
+    } else generatedValueType.addDefaultGetter(implementation, pluginContext.irBuiltIns)
 
     val generatedGet = implementation.addFunction {
       name = Name.identifier("get")
       visibility = DescriptorVisibilities.PUBLIC
       modality = Modality.FINAL
-      returnType = sourceGetter.returnType
+      returnType = generatedFocusType
       origin = IrDeclarationOrigin.DEFINED
     }
     val generatedGetReceiver = generatedGet.buildReceiverParameter {
@@ -229,7 +269,7 @@ internal class PathsIrPropertyEmitter(
     generatedGet.parameters += generatedGetReceiver
     val rootParameter = generatedGet.addValueParameter(
       name = Name.identifier("root"),
-      type = rootClass.defaultType,
+      type = generatedRootType,
       origin = IrDeclarationOrigin.DEFINED,
     )
     val generatedGetBuilder = DeclarationIrBuilder(pluginContext, generatedGet.symbol)
@@ -259,12 +299,12 @@ internal class PathsIrPropertyEmitter(
       generatedSetInPlace.parameters += generatedSetInPlaceReceiver
       val setRoot = generatedSetInPlace.addValueParameter(
         name = Name.identifier("root"),
-        type = rootClass.defaultType,
+        type = generatedRootType,
         origin = IrDeclarationOrigin.DEFINED,
       )
       val setValue = generatedSetInPlace.addValueParameter(
         name = Name.identifier("value"),
-        type = sourceGetter.returnType,
+        type = generatedFocusType,
         origin = IrDeclarationOrigin.DEFINED,
       )
       val setBuilder = DeclarationIrBuilder(pluginContext, generatedSetInPlace.symbol)
@@ -291,7 +331,7 @@ internal class PathsIrPropertyEmitter(
         name = Name.identifier("set")
         visibility = DescriptorVisibilities.PUBLIC
         modality = Modality.FINAL
-        returnType = rootClass.defaultType
+        returnType = generatedRootType
         origin = IrDeclarationOrigin.DEFINED
       }.apply {
         overriddenSymbols = listOf(set.symbol)
@@ -303,12 +343,12 @@ internal class PathsIrPropertyEmitter(
       generatedSet.parameters += generatedSetReceiver
       val setRoot = generatedSet.addValueParameter(
         name = Name.identifier("root"),
-        type = rootClass.defaultType,
+        type = generatedRootType,
         origin = IrDeclarationOrigin.DEFINED,
       )
       val setValue = generatedSet.addValueParameter(
         name = Name.identifier("value"),
-        type = sourceGetter.returnType,
+        type = generatedFocusType,
         origin = IrDeclarationOrigin.DEFINED,
       )
       val setBuilder = DeclarationIrBuilder(pluginContext, generatedSet.symbol)
@@ -373,16 +413,22 @@ internal class PathsIrPropertyEmitter(
     val erasedGetBuilder = DeclarationIrBuilder(pluginContext, erasedGet.symbol)
     val erasedRead = erasedGetBuilder.irCall(generatedGet.symbol).apply {
       dispatchReceiver = erasedGetBuilder.irGet(checkNotNull(erasedGet.dispatchReceiverParameter))
-      arguments[1] = erasedGetBuilder.irAs(erasedGetBuilder.irGet(erasedRoot), rootClass.defaultType)
+      arguments[1] = erasedGetBuilder.irAs(erasedGetBuilder.irGet(erasedRoot), generatedRootType)
     }
     erasedGet.body = erasedGetBuilder.irBlockBody {
       +erasedGetBuilder.irReturn(erasedRead)
     }
-    irCallConstructor(constructor.symbol, emptyList())
+    val callerTypeArguments = pathsClass.typeParameters.map {
+      IrSimpleTypeImpl(it.symbol, false, emptyList(), emptyList())
+    }
+    irCallConstructor(constructor.symbol, callerTypeArguments).apply {
+      if (isGeneric) {
+        arguments[0] = idExpression
+        arguments[1] = valueTypeIdExpression
+      }
+    }
   }
 
-  private fun DeclarationIrBuilder.typeIdExpression(type: KPathsTypeIdSpec) =
-    emitKPathsTypeId(pluginContext, type)
 }
 
 internal enum class GeneratedPathKind {
