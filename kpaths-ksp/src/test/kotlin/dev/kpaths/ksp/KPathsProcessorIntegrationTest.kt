@@ -9,6 +9,64 @@ import org.junit.jupiter.api.io.TempDir
 
 class KPathsProcessorIntegrationTest {
   @Test
+  fun `declarative adapter reports invalid factory from dependency metadata`(@TempDir fixtureDirectory: Path) {
+    val output = compileFixture(fixtureDirectory, "InvalidBinaryAdapter.kt", """
+      package fixture
+      import dev.kpaths.annotations.Pathable
+      @Pathable data class Document(val title: InvalidBinaryCell<String>)
+    """.trimIndent(), expectFailure = true, dependencySource = """
+      package fixture
+      import dev.kpaths.annotations.*
+      @PathsAdapter(factory = InvalidBinaryFactory::class) class InvalidBinaryCell<T>(val value: T)
+      object InvalidBinaryFactory : KPathsAdapterFactory
+    """.trimIndent())
+    assertContains(output, "Invalid @PathsAdapter on 'title': the adapter factory must declare exactly one make function.")
+  }
+
+  @Test
+  fun `declarative adapter diagnoses a storage type alias`(@TempDir fixtureDirectory: Path) {
+    val output = compileFailure(fixtureDirectory, "AdapterAlias.kt", """
+      package fixture
+      import dev.kpaths.annotations.*
+      import dev.kpaths.core.*
+      @PathsAdapter(factory = Factory::class) class Cell<T>(val value: T)
+      object Factory : KPathsAdapterFactory {
+        fun <R, V> make(path: KeyPath<R, Cell<V>>): KeyPath<R, Cell<V>> = path
+      }
+      typealias AliasedCell<T> = Cell<T>
+      typealias NestedAlias<T> = AliasedCell<T>
+      @Pathable data class Document(val title: AliasedCell<String>, val nested: NestedAlias<String>)
+    """.trimIndent())
+    assertContains(output, "Invalid @PathsAdapter on 'title': type aliases of adapted storage types are not yet supported.")
+    assertContains(output, "Invalid @PathsAdapter on 'nested': type aliases of adapted storage types are not yet supported.")
+  }
+
+  @Test
+  fun `declarative adapter reports precise factory shape errors`(@TempDir fixtureDirectory: Path) {
+    val output = compileFailure(fixtureDirectory, "AdapterShapes.kt", """
+      package fixture
+      import dev.kpaths.annotations.*
+      import dev.kpaths.core.*
+      @PathsAdapter(factory = WrongReturn::class) class Cell<T>(val value: T)
+      object WrongReturn : KPathsAdapterFactory {
+        fun <R, V> make(path: KeyPath<R, Cell<V>>): String = "invalid"
+      }
+      @PathsAdapter(factory = Bounded::class) class TextCell<T>(val value: T)
+      object Bounded : KPathsAdapterFactory {
+        fun <R, V : CharSequence> make(path: KeyPath<R, TextCell<V>>): KeyPath<R, TextCell<V>> = path
+      }
+      @PathsAdapter(factory = Projected::class) class ProjectedCell<T>(val value: T)
+      object Projected : KPathsAdapterFactory {
+        fun <R, V> make(path: KeyPath<R, ProjectedCell<V>>): KeyPath<R, ProjectedCell<V>> = path
+      }
+      @Pathable data class Document(val first: Cell<String>, val second: TextCell<String>, val third: ProjectedCell<out String>)
+    """.trimIndent())
+    assertContains(output, "Invalid @PathsAdapter on 'first': make must return a KeyPath subtype.")
+    assertContains(output, "Invalid @PathsAdapter on 'second': make type parameters must not have explicit bounds.")
+    assertContains(output, "Invalid @PathsAdapter on 'third': storage type has unsupported projections or nullable type parameters.")
+  }
+
+  @Test
   fun `declarative adapter diagnoses a nullable wrapper`(@TempDir fixtureDirectory: Path) {
     val output = compileFailure(fixtureDirectory, "NullableWrapper.kt", """
       package fixture

@@ -1,6 +1,7 @@
 package dev.kpaths.compiler
 
 import dev.kpaths.codegen.model.KPathsAdapterFactoryShape
+import dev.kpaths.codegen.model.KPathsAdapterDiagnostics
 import dev.kpaths.codegen.model.KPathsAdapterPlan
 import dev.kpaths.codegen.model.KPathsAdapterType
 import dev.kpaths.codegen.model.planKPathsAdapter
@@ -30,54 +31,65 @@ import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.IrTypeSubstitutor
-import org.jetbrains.kotlin.ir.util.classId
-import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.symbols.UnsafeDuringIrConstructionAPI
-import org.jetbrains.kotlin.name.Name
+
+@OptIn(ExperimentalKPathsCompilerApi::class)
+internal sealed interface CompilerAdapterAnalysis {
+  data object Absent : CompilerAdapterAnalysis
+  data class Invalid(val reason: String, val isIntegration: Boolean = false) : CompilerAdapterAnalysis
+  data class Available(val recipe: KPathsCompilerPropertyRecipe) : CompilerAdapterAnalysis
+}
 
 /** Resolve a declarative object factory without loading or executing application code. */
 @OptIn(ExperimentalKPathsCompilerApi::class, SymbolInternals::class, DirectDeclarationsAccess::class, UnsafeDuringIrConstructionAPI::class)
 internal fun declarativeCompilerAdapter(
   session: FirSession, rootType: ConeKotlinType, storageType: ConeKotlinType,
-): KPathsCompilerPropertyRecipe? {
-  val storage = (storageType as? ConeClassLikeType)?.fullyExpandedType(session) ?: return null
-  val storageClass = session.symbolProvider.getClassLikeSymbolByClassId(storage.lookupTag.classId) as? FirClassSymbol<*> ?: return null
-  val factoryId = session.kpaths.adapterFactoryFor(storageClass) ?: return null
-  val factory = session.symbolProvider.getClassLikeSymbolByClassId(factoryId) as? FirClassSymbol<*> ?: return null
-  val declaration = factory.fir as? FirRegularClass ?: return null
+): CompilerAdapterAnalysis {
+  fun invalid(reason: String) = CompilerAdapterAnalysis.Invalid(reason)
+  val storage = (storageType as? ConeClassLikeType)?.fullyExpandedType(session) ?: return CompilerAdapterAnalysis.Absent
+  val storageClass = session.symbolProvider.getClassLikeSymbolByClassId(storage.lookupTag.classId) as? FirClassSymbol<*> ?: return CompilerAdapterAnalysis.Absent
+  if (session.kpaths.adapterAnnotation(storageClass) == null) return CompilerAdapterAnalysis.Absent
+  val factoryId = session.kpaths.adapterFactoryFor(storageClass) ?: return invalid(KPathsAdapterDiagnostics.UNRESOLVED_FACTORY)
+  val factory = session.symbolProvider.getClassLikeSymbolByClassId(factoryId) as? FirClassSymbol<*> ?: return invalid(KPathsAdapterDiagnostics.UNRESOLVED_FACTORY)
+  val declaration = factory.fir as? FirRegularClass ?: return invalid(KPathsAdapterDiagnostics.UNRESOLVED_FACTORY)
   val functions = declaration.declarations.filterIsInstance<FirNamedFunction>().filter { it.name.asString() == "make" }
-  val function = functions.singleOrNull() ?: return null
-  val parameters = function.typeParameters.map { it.symbol.name.asString() }.toSet()
-  val parameterType = (function.valueParameters.singleOrNull()?.returnTypeRef as? FirResolvedTypeRef)?.coneType
-  val returnType = (function.returnTypeRef as? FirResolvedTypeRef)?.coneType ?: return null
-  if (!returnType.isAdapterKeyPath(session)) return null
+  val function = functions.singleOrNull()
+  val parameters = function?.typeParameters?.map { it.symbol.name.asString() }?.toSet().orEmpty()
+  val parameterType = (function?.valueParameters?.singleOrNull()?.returnTypeRef as? FirResolvedTypeRef)?.coneType
+  val returnType = (function?.returnTypeRef as? FirResolvedTypeRef)?.coneType
   val actualTypes = mutableMapOf<KPathsAdapterType, ConeKotlinType>()
-  val rootModel = rootType.toAdapterModel(session, actualTypes) ?: return null
-  val storageModel = storage.toAdapterModel(session, actualTypes) ?: return null
+  val rootModel = rootType.toAdapterModel(session, actualTypes) ?: return invalid(KPathsAdapterDiagnostics.UNSUPPORTED_ROOT)
+  val storageModel = storage.toAdapterModel(session, actualTypes) ?: return invalid(KPathsAdapterDiagnostics.UNSUPPORTED_STORAGE)
   val shape = KPathsAdapterFactoryShape(
     functionCount = functions.size,
     isObjectFactory = declaration.classKind == ClassKind.OBJECT,
-    isAccessible = function.status.visibility !in setOf(Visibilities.Private, Visibilities.Protected, Visibilities.Internal) &&
+    isAccessible = function != null && function.status.visibility !in setOf(Visibilities.Private, Visibilities.Protected, Visibilities.Internal) &&
       declaration.status.visibility !in setOf(Visibilities.Private, Visibilities.Protected, Visibilities.Internal),
-    isSuspend = function.status.isSuspend,
-    isExtension = function.receiverParameter != null,
-    hasExplicitBounds = function.typeParameters.any { parameter -> parameter.symbol.resolvedBounds.any { bound ->
+    isSuspend = function?.status?.isSuspend == true,
+    isExtension = function?.receiverParameter != null,
+    hasExplicitBounds = function?.typeParameters?.any { parameter -> parameter.symbol.resolvedBounds.any { bound ->
       val type = bound.coneType as? ConeClassLikeType
       type?.lookupTag?.classId?.asSingleFqName()?.asString() != "kotlin.Any" || type.isMarkedNullable != true
-    } },
-    parameterCount = function.valueParameters.size,
+    } } == true,
+    parameterCount = function?.valueParameters?.size ?: 0,
     parameterType = parameterType?.toAdapterModel(session),
-    resultType = returnType.toAdapterModel(session),
+    resultType = returnType?.toAdapterModel(session),
     typeParameters = parameters,
+    resultIsKeyPath = returnType?.isAdapterKeyPath(session),
   )
-  val plan = planKPathsAdapter(shape, rootModel, storageModel) as? KPathsAdapterPlan.Supported ?: return null
-  val substitutions = function.typeParameters.associate { parameter ->
-    parameter.symbol to (actualTypes[plan.substitutions[parameter.symbol.name.asString()]] ?: return null)
+  val plan = when (val result = planKPathsAdapter(shape, rootModel, storageModel)) {
+    is KPathsAdapterPlan.Invalid -> return invalid(result.reason)
+    is KPathsAdapterPlan.Supported -> result
   }
-  val publicType = ConeSubstitutorByMap.create(substitutions, session, false).substituteOrSelf(returnType)
+  val resolvedFunction = requireNotNull(function)
+  val substitutions = resolvedFunction.typeParameters.associate { parameter ->
+    parameter.symbol to (actualTypes[plan.substitutions[parameter.symbol.name.asString()]]
+      ?: return invalid("make's type arguments could not be resolved"))
+  }
+  val publicType = ConeSubstitutorByMap.create(substitutions, session, false).substituteOrSelf(requireNotNull(returnType))
   val pattern = shape.parameterType as KPathsAdapterType.Classifier
-  val names = function.typeParameters.map { it.symbol.name.asString() }
-  return KPathsCompilerPropertyRecipe(publicPathType = publicType, requiresDirectPath = true, emit = { ir ->
+  val names = resolvedFunction.typeParameters.map { it.symbol.name.asString() }
+  return CompilerAdapterAnalysis.Available(KPathsCompilerPropertyRecipe(publicPathType = publicType, requiresDirectPath = true, emit = { ir ->
     val objectSymbol = requireNotNull(ir.pluginContext.referenceClass(factoryId))
     val make = objectSymbol.owner.declarations.filterIsInstance<IrSimpleFunction>().single { it.name.asString() == "make" }
     val implementationType = ir.defaultPath.type as IrSimpleType
@@ -103,11 +115,11 @@ internal fun declarativeCompilerAdapter(
       names.forEachIndexed { index, name -> typeArguments[index] = requireNotNull(bindings[name]) }
       arguments[make.parameters.indexOfFirst { it.kind == IrParameterKind.Regular }] = ir.defaultPath
     }
-  })
+  }))
 }
 
 @OptIn(SymbolInternals::class)
-private fun ConeKotlinType.isAdapterKeyPath(session: FirSession, visited: MutableSet<org.jetbrains.kotlin.name.ClassId> = mutableSetOf()): Boolean {
+internal fun ConeKotlinType.isAdapterKeyPath(session: FirSession, visited: MutableSet<org.jetbrains.kotlin.name.ClassId> = mutableSetOf()): Boolean {
   val type = (this as? ConeClassLikeType)?.fullyExpandedType(session) ?: return false
   val id = type.lookupTag.classId
   if (id.asSingleFqName().asString() == "dev.kpaths.core.KeyPath") return true

@@ -25,6 +25,8 @@ public data class KPathsAdapterFactoryShape(
   public val parameterType: KPathsAdapterType?,
   public val resultType: KPathsAdapterType?,
   public val typeParameters: Set<String>,
+  /** Whether the resolved return type is a KeyPath subtype, or null when unavailable. */
+  public val resultIsKeyPath: Boolean? = null,
 )
 
 /** Result of validating and specializing a declarative factory. */
@@ -54,6 +56,7 @@ public fun planKPathsAdapter(
   }
   if (shape.isExtension) return invalid("make must not be an extension function")
   if (shape.hasExplicitBounds) return invalid("make type parameters must not have explicit bounds")
+  if (shape.resultIsKeyPath == false) return invalid("make must return a KeyPath subtype")
   val parameter = shape.parameterType as? KPathsAdapterType.Classifier
     ?: return invalid("make must accept KeyPath<Root, Storage>")
   if (parameter.name != "dev.kpaths.core.KeyPath" || parameter.nullable || parameter.arguments.size != 2) {
@@ -88,4 +91,21 @@ public fun planKPathsAdapter(
   val result = shape.resultType?.let(::substitute)
     ?: return invalid("make's return type must be explicit and use only inferred type parameters")
   return KPathsAdapterPlan.Supported(bindings.toMap(), result)
+}
+
+/** Shared user-facing wording for a property whose declarative adapter cannot be generated. */
+public fun kPathsAdapterDiagnostic(propertyName: String, reason: String): String =
+  "Invalid @PathsAdapter on '$propertyName': $reason."
+
+/** Shared user-facing wording for an invalid integration-provided adapter recipe. */
+public fun kPathsIntegrationAdapterDiagnostic(propertyName: String, reason: String): String =
+  "Invalid KPaths adapter recipe for '$propertyName': $reason."
+
+/** Shared wording for failures that arise before a factory shape can be planned. */
+public object KPathsAdapterDiagnostics {
+  public const val UNRESOLVED_FACTORY: String = "factory must name a resolvable object"
+  public const val UNSUPPORTED_STORAGE: String = "storage type has unsupported projections or nullable type parameters"
+  public const val UNSUPPORTED_ROOT: String = "root type has unsupported projections or nullable type parameters"
+  public const val UNSUPPORTED_STORAGE_ALIAS: String = "type aliases of adapted storage types are not yet supported"
+  public const val INVALID_RECIPE_TYPE: String = "the integration recipe must expose a KeyPath subtype"
 }

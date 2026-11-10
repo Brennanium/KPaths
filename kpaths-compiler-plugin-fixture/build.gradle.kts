@@ -37,6 +37,7 @@ kotlin {
         implementation("dev.zacsweers.kctfork:core:0.14.0")
         implementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:${libs.versions.kotlin.get()}")
         implementation(project(":kpaths-compiler-plugin"))
+        implementation(project(":kpaths-compiler-plugin-contributor"))
         runtimeOnly("org.junit.platform:junit-platform-launcher")
       }
     }

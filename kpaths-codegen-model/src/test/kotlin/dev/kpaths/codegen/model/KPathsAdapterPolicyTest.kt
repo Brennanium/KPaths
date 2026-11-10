@@ -36,4 +36,18 @@ class KPathsAdapterPolicyTest {
     assertIs<KPathsAdapterPlan.Invalid>(planKPathsAdapter(shape.copy(isExtension = true), root, value))
     assertIs<KPathsAdapterPlan.Invalid>(planKPathsAdapter(shape.copy(hasExplicitBounds = true), root, value))
   }
+
+  @Test fun `returns shared precise reasons for invalid contracts`() {
+    fun reason(shape: KPathsAdapterFactoryShape, storage: KPathsAdapterType = type("example.Cell", type("kotlin.String"))) =
+      assertIs<KPathsAdapterPlan.Invalid>(planKPathsAdapter(shape, type("example.Root"), storage)).reason
+    assertEquals("the adapter factory must be an object", reason(shape.copy(isObjectFactory = false)))
+    assertEquals("the adapter factory must declare exactly one make function", reason(shape.copy(functionCount = 0)))
+    assertEquals("make must return a KeyPath subtype", reason(shape.copy(resultIsKeyPath = false)))
+    assertEquals("make must not be an extension function", reason(shape.copy(isExtension = true)))
+    assertEquals("make type parameters must not have explicit bounds", reason(shape.copy(hasExplicitBounds = true)))
+    assertEquals("make's KeyPath parameter does not match the generated root and storage types",
+      reason(shape, type("example.Cell", type("kotlin.String"), nullable = true)))
+    assertEquals("Invalid @PathsAdapter on 'value': make must not be an extension function.",
+      kPathsAdapterDiagnostic("value", reason(shape.copy(isExtension = true))))
+  }
 }

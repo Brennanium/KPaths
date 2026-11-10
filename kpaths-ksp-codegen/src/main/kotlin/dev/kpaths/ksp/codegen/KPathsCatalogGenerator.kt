@@ -62,6 +62,7 @@ import dev.kpaths.codegen.model.KPathsPropertyShape
 import dev.kpaths.codegen.model.KPathsTypeArgumentSpec
 import dev.kpaths.codegen.model.KPathsTypeIdSpec
 import dev.kpaths.codegen.model.KPathsTypeVariance
+import dev.kpaths.codegen.model.kPathsAdapterDiagnostic
 import dev.kpaths.codegen.model.classifyForKPaths
 import java.nio.file.Files
 import java.nio.file.Path
@@ -745,7 +746,7 @@ public class KPathsCatalogGenerator(
           DeclarativeAdapterResult.Absent -> property
           is DeclarativeAdapterResult.Available -> property.copy(declarativeAdapter = result.adapter)
           is DeclarativeAdapterResult.Invalid -> {
-            logger.error("[KPaths] Invalid @PathsAdapter on '${declaration.simpleName.asString()}': ${result.reason}.", declaration)
+            logger.error("[KPaths] ${kPathsAdapterDiagnostic(declaration.simpleName.asString(), result.reason)}", declaration)
             property
           }
         }

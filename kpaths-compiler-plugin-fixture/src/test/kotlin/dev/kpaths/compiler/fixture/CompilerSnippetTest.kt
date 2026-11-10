@@ -14,6 +14,91 @@ import org.objectweb.asm.Opcodes
 
 class CompilerSnippetTest {
   @Test
+  fun `invalid lower level adapter public type receives a diagnostic`() {
+    val result = compileSnippetWithContributor("InvalidRecipe.kt" to """
+      package dev.kpaths.compiler.fixture
+      @Target(AnnotationTarget.CLASS) annotation class ContributedCatalog
+      @ContributedCatalog data class InvalidRecipeDocument(val value: String)
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages, "Invalid KPaths adapter recipe for 'value': the integration recipe must expose a KeyPath subtype.")
+  }
+
+  @Test
+  fun `declarative adapter reports invalid factory from dependency metadata`() {
+    val result = compileSnippet("InvalidBinaryAdapter.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      import dev.kpaths.compiler.integration.InvalidBinaryCell
+      @Pathable data class Document(val title: InvalidBinaryCell<String>)
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages, "Invalid @PathsAdapter on 'title': the adapter factory must declare exactly one make function.")
+  }
+
+  @Test
+  fun `matching lower level adapter takes precedence over an invalid declarative factory`() {
+    val result = compileSnippetWithContributor("AdapterOverride.kt" to """
+      package dev.kpaths.compiler.fixture
+      import dev.kpaths.annotations.*
+      @Target(AnnotationTarget.CLASS) annotation class ContributedCatalog
+      @PathsAdapter(factory = Broken::class) class Cell<T>(val value: T)
+      object Broken : KPathsAdapterFactory
+      @ContributedCatalog data class OverrideDocument(val title: Cell<String>)
+      fun run(): Boolean = OverrideDocument.GeneratedPaths.title.get(OverrideDocument(Cell("ok"))).value == "ok"
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("dev.kpaths.compiler.fixture.AdapterOverrideKt").getMethod("run").invoke(null))
+  }
+
+  @Test
+  fun `unmatched lower level adapters do not suppress declarative diagnostics`() {
+    val result = compileSnippetWithContributor(
+      "ContributedCatalog.kt" to """
+        package dev.kpaths.compiler.fixture
+        @Target(AnnotationTarget.CLASS) annotation class ContributedCatalog
+      """,
+      "UnmatchedAdapter.kt" to """
+        package example
+        import dev.kpaths.annotations.*
+        import dev.kpaths.compiler.fixture.ContributedCatalog
+        @PathsAdapter(factory = Broken::class) class Cell<T>(val value: T)
+        object Broken : KPathsAdapterFactory
+        @ContributedCatalog data class Document(val title: Cell<String>)
+      """,
+    )
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages,
+      "[KPaths] Invalid @PathsAdapter on 'title': the adapter factory must declare exactly one make function.")
+  }
+
+  @Test
+  fun `declarative adapter reports precise factory shape errors`() {
+    val result = compileSnippet("DeclarativeFactoryShapes.kt" to """
+      package example
+      import dev.kpaths.annotations.*
+      import dev.kpaths.core.*
+      @PathsAdapter(factory = WrongReturn::class) class Cell<T>(val value: T)
+      object WrongReturn : KPathsAdapterFactory {
+        fun <R, V> make(path: KeyPath<R, Cell<V>>): String = "invalid"
+      }
+      @PathsAdapter(factory = Bounded::class) class TextCell<T>(val value: T)
+      object Bounded : KPathsAdapterFactory {
+        fun <R, V : CharSequence> make(path: KeyPath<R, TextCell<V>>): KeyPath<R, TextCell<V>> = path
+      }
+      @PathsAdapter(factory = Projected::class) class ProjectedCell<T>(val value: T)
+      object Projected : KPathsAdapterFactory {
+        fun <R, V> make(path: KeyPath<R, ProjectedCell<V>>): KeyPath<R, ProjectedCell<V>> = path
+      }
+      @Pathable data class Document(val first: Cell<String>, val second: TextCell<String>, val third: ProjectedCell<out String>)
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages, "Invalid @PathsAdapter on 'first': make must return a KeyPath subtype.")
+    assertContains(result.messages, "Invalid @PathsAdapter on 'second': make type parameters must not have explicit bounds.")
+    assertContains(result.messages, "Invalid @PathsAdapter on 'third': storage type has unsupported projections or nullable type parameters.")
+  }
+
+  @Test
   fun `declarative adapter diagnoses a nullable wrapper`() {
     val result = compileSnippet("NullableAdapterWrapper.kt" to """
       package example
@@ -26,7 +111,7 @@ class CompilerSnippetTest {
       @Pathable data class Document(val title: Cell<String>?)
     """)
     assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
-    assertContains(result.messages, "[KPaths] Invalid @PathsAdapter on 'title'")
+    assertContains(result.messages, "[KPaths] Invalid @PathsAdapter on 'title': make's KeyPath parameter does not match the generated root and storage types.")
   }
 
   @Test
@@ -39,7 +124,7 @@ class CompilerSnippetTest {
       @Pathable data class Document(val title: Cell<String>)
     """)
     assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
-    assertContains(result.messages, "[KPaths] Invalid @PathsAdapter on 'title'")
+    assertContains(result.messages, "[KPaths] Invalid @PathsAdapter on 'title': the adapter factory must declare exactly one make function.")
   }
 
   @Test
@@ -60,8 +145,8 @@ class CompilerSnippetTest {
       @Pathable data class Document(val first: Cell<String>, val second: Other<String>)
     """)
     assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
-    assertContains(result.messages, "Invalid @PathsAdapter on 'first'")
-    assertContains(result.messages, "Invalid @PathsAdapter on 'second'")
+    assertContains(result.messages, "Invalid @PathsAdapter on 'first': make must return a KeyPath subtype.")
+    assertContains(result.messages, "Invalid @PathsAdapter on 'second': the adapter factory must declare exactly one make function.")
   }
 
   @Test
@@ -100,6 +185,8 @@ class CompilerSnippetTest {
         override fun get(root: Root): Boolean = storage.get(root).enabled
       }
       @Pathable data class Document(val title: Cell<List<String?>>)
+      typealias Alias<T> = Cell<T>
+      @Pathable data class AliasDocument(val title: Alias<String?>)
       @Pathable data class Flags(val flag: Flag)
       @Pathable data class Box<T>(val title: Cell<T>)
       @Pathable(copyWritableVals = true) data class Panel<T>(val reader: Reader<T>)
@@ -111,12 +198,14 @@ class CompilerSnippetTest {
       }
       fun run(): Boolean {
         val title: CellPath<Document, List<String?>> = Document.Paths.title
+        val aliased: CellPath<AliasDocument, String?> = AliasDocument.Paths.title
         val generic: CellPath<Box<String?>, String?> = Box.Paths<String?>().title
         val caseProperty: CellPath<Event.Message<String?>, String?> = Event.Paths<String?>().MessagePaths.title
         val flag: FlagPath<Flags> = Flags.Paths.flag
         val reader: ReaderPath<Panel<List<String?>>, List<String?>> = Panel.Paths<List<String?>>().reader
         val caseReader: ReaderPath<ReadScreen.Showing, String?> = ReadScreen.Paths.ShowingPaths.reader
         return title.get(Document(Cell(listOf(null)))) == listOf(null) &&
+          aliased.get(AliasDocument(Cell(null))) == null && aliased.__kpaths_valueType == TypeId.of<String?>() &&
           generic.get(Box(Cell(null))) == null && generic.__kpaths_valueType == TypeId.of<String?>() &&
           generic.__kpaths_id == PathId.property(TypeId.of<Box<String?>>(), "title") &&
           caseProperty.get(Event.Message(Cell(null))) == null &&

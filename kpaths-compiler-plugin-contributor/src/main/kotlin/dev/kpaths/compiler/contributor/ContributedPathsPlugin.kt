@@ -123,6 +123,20 @@ internal class ContributedPathsGenerator(session: FirSession) : FirDeclarationGe
 
   private companion object {
     private val cellAdapter = KPathsCompilerPropertyAdapter { context ->
+      if (context.property.callableId?.classId?.asSingleFqName()?.asString() ==
+        "dev.kpaths.compiler.fixture.InvalidRecipeDocument") {
+        return@KPathsCompilerPropertyAdapter KPathsCompilerPropertyRecipe(
+          publicPathType = ClassId.topLevel(FqName("kotlin.String")).createConeType(context.session),
+          emit = { it.defaultPath },
+        )
+      }
+      if (context.property.callableId?.classId?.asSingleFqName()?.asString() ==
+        "dev.kpaths.compiler.fixture.OverrideDocument") {
+        return@KPathsCompilerPropertyAdapter KPathsCompilerPropertyRecipe(
+          publicPathType = context.defaultPathType,
+          emit = { it.defaultPath },
+        )
+      }
       val storage = (context.storageType as? ConeClassLikeType)?.lookupTag?.classId
         ?.let(context.session.symbolProvider::getClassLikeSymbolByClassId) as? FirClassSymbol<*>
         ?: return@KPathsCompilerPropertyAdapter null

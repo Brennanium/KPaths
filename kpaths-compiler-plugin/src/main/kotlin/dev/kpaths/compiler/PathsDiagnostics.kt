@@ -18,6 +18,9 @@ import dev.kpaths.codegen.model.isKPathsReservedName
 import dev.kpaths.codegen.model.validateKPathsConfiguredName
 import dev.kpaths.codegen.model.kPathsConfiguredNameDiagnostic
 import dev.kpaths.codegen.model.kPathsCasePropertyCatalogName
+import dev.kpaths.codegen.model.kPathsAdapterDiagnostic
+import dev.kpaths.codegen.model.kPathsIntegrationAdapterDiagnostic
+import dev.kpaths.codegen.model.KPathsPropertyPathKind
 import org.jetbrains.kotlin.descriptors.ClassKind
 import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.descriptors.Visibilities
@@ -195,22 +198,44 @@ internal class PathsDiagnosticCheckers(private val pluginSession: FirSession) : 
         .filter { it.name.asString() in sourceCaseNames }
         .flatMap { it.declarations.filterIsInstance<FirProperty>() }
         .filter { it.origin == FirDeclarationOrigin.Source && it.isKPathsAccessible() }
-      if (pluginSession.kpaths.optionsFor(declaration.symbol)?.propertyPathAdapters.isNullOrEmpty()) {
-        (properties + caseProperties).forEach { property ->
-          val storage = ((property.returnTypeRef as? FirResolvedTypeRef)?.coneType as? ConeClassLikeType)
-            ?.fullyExpandedType() ?: return@forEach
-          val storageClass = pluginSession.symbolProvider.getClassLikeSymbolByClassId(storage.lookupTag.classId)
-            as? FirClassSymbol<*> ?: return@forEach
-          if (pluginSession.kpaths.adapterFactoryFor(storageClass) == null) return@forEach
-          val ownerId = property.symbol.callableId?.classId ?: return@forEach
-          val owner = pluginSession.symbolProvider.getClassLikeSymbolByClassId(ownerId) as? FirClassSymbol<*> ?: return@forEach
-          val rootType = owner.classId.createConeType(pluginSession, owner.fir.typeParameters.map {
-            ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty).toTypeProjection(Variance.INVARIANT)
-          }.toTypedArray(), false)
-          if (declarativeCompilerAdapter(pluginSession, rootType, storage) == null) {
-            reporter.reportOn(property.source, PathsDiagnostics.INVALID_PATHS_ADAPTER,
-              "[KPaths] Invalid @PathsAdapter on '${property.name}': factory must declare one accessible, non-suspending make(KeyPath<Root, Storage>) returning a KeyPath subtype, with inferable type parameters and supported invariant types.")
-          }
+      (properties + caseProperties).forEach { property ->
+        val storage = (property.returnTypeRef as? FirResolvedTypeRef)?.coneType ?: return@forEach
+        val ownerId = property.symbol.callableId?.classId ?: return@forEach
+        val owner = pluginSession.symbolProvider.getClassLikeSymbolByClassId(ownerId) as? FirClassSymbol<*> ?: return@forEach
+        val ownerClass = owner.fir as? FirRegularClass ?: return@forEach
+        val rootType = owner.classId.createConeType(pluginSession, owner.fir.typeParameters.map {
+          ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty).toTypeProjection(Variance.INVARIANT)
+        }.toTypedArray(), false)
+        val options = pluginSession.kpaths.optionsFor(declaration.symbol)
+        val constructorNames = ownerClass.declarations.filterIsInstance<FirConstructor>()
+          .singleOrNull { it.isPrimary }?.valueParameters.orEmpty()
+          .filter { it.isVal || it.isVar }.map { it.name }.toSet()
+        val kind = KPathsPropertyShape(
+          ownerIsDataClass = ownerClass.status.isData,
+          isMutable = property.isVar,
+          isPrimaryConstructorProperty = property.name in constructorNames,
+          hasAccessibleSetter = property.hasKPathsAccessibleSetter(),
+          copyWritableVals = options?.copyWritableVals ?: false,
+          isExcludedFromCopyWritableVals = options?.copyWritableValExclusions
+            ?.any { it.callableId == property.symbol.callableId } == true,
+        ).classifyForKPaths()
+        val pathClass = when ((kind as? KPathsPropertyPolicyResult.Supported)?.kind) {
+          KPathsPropertyPathKind.REFERENCE_WRITABLE -> PathsFirSymbols.referenceWritableKeyPathClassId
+          KPathsPropertyPathKind.COPY_WRITABLE, KPathsPropertyPathKind.COPY_THEN_MUTATE -> PathsFirSymbols.writableKeyPathClassId
+          else -> PathsFirSymbols.keyPathClassId
+        }
+        val defaultType = pathClass.createConeType(pluginSession, arrayOf(
+          rootType.toTypeProjection(Variance.INVARIANT), storage.toTypeProjection(Variance.INVARIANT),
+        ), false)
+        val selected = selectCompilerPropertyAdapter(
+          KPathsCompilerPropertyContext(pluginSession, property.symbol, rootType, storage, defaultType),
+          options?.propertyPathAdapters.orEmpty(),
+        )
+        if (selected is CompilerAdapterAnalysis.Invalid) {
+          val message = if (selected.isIntegration) kPathsIntegrationAdapterDiagnostic(property.name.asString(), selected.reason)
+            else kPathsAdapterDiagnostic(property.name.asString(), selected.reason)
+          reporter.reportOn(property.source, PathsDiagnostics.INVALID_PATHS_ADAPTER,
+            "[KPaths] $message")
         }
       }
       (properties + caseProperties).forEach { property ->

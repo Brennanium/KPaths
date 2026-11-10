@@ -218,8 +218,9 @@ and [runtime fixture](../kpaths-compiler-plugin-fixture/src/main/kotlin/dev/kpat
 for an end-to-end example using a storage type from a compiled dependency.
 
 This compiler integration is experimental: adapters must generate type-correct IR and preserve
-the intended identity and value semantics. The callback is compiler-version-specific, and KPaths
-does not yet validate adapter types or provide dedicated diagnostics for malformed recipes.
+the intended identity and value semantics. The callback is compiler-version-specific. KPaths
+diagnoses a recipe whose public type is not a KeyPath subtype, but cannot verify the callback's
+emitted IR or the integration's identity and value semantics.
 These lower-level IR adapters are supplied on explicit compiler-plugin catalog requests. The
 declarative factory route does not require an integration-specific compiler plugin.
 

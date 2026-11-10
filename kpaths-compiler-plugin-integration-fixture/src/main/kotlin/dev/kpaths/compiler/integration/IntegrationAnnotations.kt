@@ -30,6 +30,11 @@ object Adapters {
 
 class PlainStorage
 
+@PathsAdapter(factory = InvalidBinaryFactory::class)
+class InvalidBinaryCell<T>(val value: T)
+
+object InvalidBinaryFactory : KPathsAdapterFactory
+
 @PathsAdapter(factory = BinaryFactory::class)
 class BinaryCell<Value>(val value: Value)
 

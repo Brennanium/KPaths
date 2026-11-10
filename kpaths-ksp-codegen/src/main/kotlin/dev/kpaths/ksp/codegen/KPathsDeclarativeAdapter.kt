@@ -11,6 +11,7 @@ import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.symbol.Variance
 import dev.kpaths.annotations.PathsAdapter
 import dev.kpaths.codegen.model.KPathsAdapterFactoryShape
+import dev.kpaths.codegen.model.KPathsAdapterDiagnostics
 import dev.kpaths.codegen.model.KPathsAdapterPlan
 import dev.kpaths.codegen.model.KPathsAdapterType
 import dev.kpaths.codegen.model.planKPathsAdapter
@@ -32,11 +33,18 @@ internal fun declarativeAdapter(
   val storageType = property.type.resolve()
   val alias = storageType.declaration as? KSTypeAlias
   if (alias != null) {
-    val target = alias.type.resolve().declaration as? KSClassDeclaration
-    if (target?.annotations?.any {
+    var target: com.google.devtools.ksp.symbol.KSDeclaration = alias
+    val seen = mutableSetOf<String>()
+    while (target is KSTypeAlias) {
+      val name = target.qualifiedName?.asString() ?: target.simpleName.asString()
+      if (!seen.add(name)) return DeclarativeAdapterResult.Invalid("storage type alias could not be resolved")
+      target = target.type.resolve().declaration
+    }
+    val targetClass = target as? KSClassDeclaration
+    if (targetClass?.annotations?.any {
         it.annotationType.resolve().declaration.qualifiedName?.asString() == PathsAdapter::class.qualifiedName
       } == true) {
-      return DeclarativeAdapterResult.Invalid("type aliases of adapted storage types are not yet supported")
+      return DeclarativeAdapterResult.Invalid(KPathsAdapterDiagnostics.UNSUPPORTED_STORAGE_ALIAS)
     }
   }
   val storage = storageType.declaration as? KSClassDeclaration ?: return DeclarativeAdapterResult.Absent
@@ -45,23 +53,20 @@ internal fun declarativeAdapter(
   } ?: return DeclarativeAdapterResult.Absent
   val factory = (annotation.arguments.firstOrNull { it.name?.asString() == "factory" }?.value as? KSType)
     ?.declaration as? KSClassDeclaration
-    ?: return DeclarativeAdapterResult.Invalid("factory must name a resolvable object")
+    ?: return DeclarativeAdapterResult.Invalid(KPathsAdapterDiagnostics.UNRESOLVED_FACTORY)
   val factoryName = factory.qualifiedName?.asString()
     ?: return DeclarativeAdapterResult.Invalid("factory must have a qualified name")
   val functions = factory.declarations.filterIsInstance<KSFunctionDeclaration>()
     .filter { it.simpleName.asString() == "make" }.toList()
   val function = functions.singleOrNull()
   val resultType = function?.returnType?.resolve()
-  if (resultType != null && !resultType.isAdapterKeyPath()) {
-    return DeclarativeAdapterResult.Invalid("make must return a KeyPath subtype")
-  }
   val variables = function?.typeParameters?.map { it.name.asString() }?.toSet().orEmpty()
   val rootName = root.qualifiedName?.asString() ?: return DeclarativeAdapterResult.Invalid("root must have a qualified name")
   val rootType = KPathsAdapterType.Classifier(rootName, root.typeParameters.map {
     KPathsAdapterType.Parameter(rootParameters[it.name.asString()] ?: it.name.asString())
   })
   val actualStorage = storageType.toAdapterModel(emptySet(), rootParameters)
-    ?: return DeclarativeAdapterResult.Invalid("storage type has unsupported projections or nullable type parameters")
+    ?: return DeclarativeAdapterResult.Invalid(KPathsAdapterDiagnostics.UNSUPPORTED_STORAGE)
   val shape = KPathsAdapterFactoryShape(
     functionCount = functions.size,
     isObjectFactory = factory.classKind == ClassKind.OBJECT,
@@ -78,6 +83,7 @@ internal fun declarativeAdapter(
     parameterType = function?.parameters?.singleOrNull()?.type?.resolve()?.toAdapterModel(variables),
     resultType = resultType?.toAdapterModel(variables),
     typeParameters = variables,
+    resultIsKeyPath = resultType?.isAdapterKeyPath(),
   )
   return when (val plan = planKPathsAdapter(shape, rootType, actualStorage)) {
     is KPathsAdapterPlan.Invalid -> DeclarativeAdapterResult.Invalid(plan.reason)

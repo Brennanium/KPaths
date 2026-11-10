@@ -72,10 +72,7 @@ public class KPathsGenerationRegistry internal constructor(session: FirSession, 
    */
   @OptIn(org.jetbrains.kotlin.fir.symbols.SymbolInternals::class)
   public fun adapterFactoryFor(storageClass: FirClassSymbol<*>): ClassId? {
-    val annotation = storageClass.fir.annotations.firstOrNull {
-      ((it.annotationTypeRef as? FirResolvedTypeRef)?.coneType as? ConeClassLikeType)
-        ?.lookupTag?.classId == adapterAnnotationId
-    } ?: return null
+    val annotation = adapterAnnotation(storageClass) ?: return null
     val factory = annotation.argumentMapping.mapping[org.jetbrains.kotlin.name.Name.identifier("factory")]
       as? FirGetClassCall ?: return null
     return when (val argument = factory.argument) {
@@ -84,6 +81,12 @@ public class KPathsGenerationRegistry internal constructor(session: FirSession, 
         ((argument.classTypeRef as? FirResolvedTypeRef)?.coneType as? ConeClassLikeType)?.lookupTag?.classId
       else -> null
     }
+  }
+
+  @OptIn(org.jetbrains.kotlin.fir.symbols.SymbolInternals::class)
+  internal fun adapterAnnotation(storageClass: FirClassSymbol<*>) = storageClass.fir.annotations.firstOrNull {
+    ((it.annotationTypeRef as? FirResolvedTypeRef)?.coneType as? ConeClassLikeType)
+      ?.lookupTag?.classId == adapterAnnotationId
   }
 
   private companion object {

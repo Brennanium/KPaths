@@ -14,7 +14,11 @@ import java.util.concurrent.ConcurrentHashMap
 /** Describes a replacement for a generated property path in a cooperating compiler plugin. */
 @ExperimentalKPathsCompilerApi
 public fun interface KPathsCompilerPropertyAdapter {
-  /** Return null to leave this property to the next adapter or KPaths' normal generation. */
+  /**
+   * Return null to leave this property to the next adapter or KPaths' normal generation.
+   * The compiler may query the same property more than once, including for diagnostics, so
+   * implementations must not rely on invocation count or side effects.
+   */
   public fun pathRecipe(context: KPathsCompilerPropertyContext): KPathsCompilerPropertyRecipe?
 }
 
@@ -49,6 +53,19 @@ public data class KPathsCompilerPropertyIrContext(
   public val generatedProperty: IrProperty,
   public val defaultPath: IrExpression,
 )
+
+/** Apply integration recipes first, then the declarative contract, consistently in FIR and diagnostics. */
+@OptIn(ExperimentalKPathsCompilerApi::class)
+internal fun selectCompilerPropertyAdapter(
+  context: KPathsCompilerPropertyContext,
+  adapters: List<KPathsCompilerPropertyAdapter>,
+): CompilerAdapterAnalysis {
+  adapters.firstNotNullOfOrNull { it.pathRecipe(context) }?.let {
+    return if (it.publicPathType.isAdapterKeyPath(context.session)) CompilerAdapterAnalysis.Available(it)
+    else CompilerAdapterAnalysis.Invalid(dev.kpaths.codegen.model.KPathsAdapterDiagnostics.INVALID_RECIPE_TYPE, isIntegration = true)
+  }
+  return declarativeCompilerAdapter(context.session, context.rootType, context.storageType)
+}
 
 /** Shared only between FIR sessions and IR generation for one compiler invocation. */
 @OptIn(ExperimentalKPathsCompilerApi::class)

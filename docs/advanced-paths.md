@@ -322,7 +322,8 @@ projections remain unsupported. A nullable value, such as `ObservableValue<Strin
 supported, while a nullable wrapper, `ObservableValue<String>?`, does not match this factory and
 is diagnosed.
 
-KSP currently diagnoses a type alias of an adapted storage type as unsupported. When an external
+KSP currently diagnoses a type alias of an adapted storage type as unsupported; the compiler
+plugin expands it before selecting the adapter. When an external
 generator supplies its own `propertyPathAdapters`, the first matching lower-level recipe takes
 precedence over the declarative factory. Remove or change that recipe when migrating an existing
 integration to `@PathsAdapter`.
