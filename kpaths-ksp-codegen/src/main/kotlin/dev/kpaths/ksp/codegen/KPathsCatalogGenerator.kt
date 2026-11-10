@@ -42,6 +42,10 @@ import dev.kpaths.codegen.model.KPathsCasePolicyResult
 import dev.kpaths.codegen.model.KPathsCaseShape
 import dev.kpaths.codegen.model.KPathsDiagnostics
 import dev.kpaths.codegen.model.KPathsGeneratedMember as GeneratedMember
+import dev.kpaths.codegen.model.KPathsGenericRootParameter
+import dev.kpaths.codegen.model.KPathsGenericCaseArgument
+import dev.kpaths.codegen.model.KPathsGenericCasePlan
+import dev.kpaths.codegen.model.planKPathsGenericCase
 import dev.kpaths.codegen.model.hasAmbiguousKPathsCompanion
 import dev.kpaths.codegen.model.isKPathsGenericVariantOfConcreteRoot
 import dev.kpaths.codegen.model.findKPathsGeneratedMemberCollisions
@@ -1931,55 +1935,44 @@ public class KPathsCatalogGenerator(
       return null
     }
 
-    val caseParameterNames = caseDeclaration.typeParameters.map { it.name.asString() }.toSet()
-    val kotlinSubstitutions = mutableMapOf<String, String>()
-    val tokenSubstitutions = mutableMapOf<String, String>()
-    for ((index, rootParameter) in rootDeclaration.typeParameters.withIndex()) {
-      val caseArgument = caseRootSupertype.arguments.getOrNull(index)?.type?.resolve()
-      val caseParameter = caseArgument?.declaration as? KSTypeParameter
-      val caseParameterName = caseParameter?.name?.asString()
-      if (
-        caseParameterName != null &&
-        caseParameterName in caseParameterNames &&
-        !caseArgument.isMarkedNullable
-      ) {
-        val rootParameterName = rootParameter.name.asString()
-        val existingSubstitution = kotlinSubstitutions[caseParameterName]
-        if (existingSubstitution != null && existingSubstitution != rootParameterName) {
-          reportGenerationError(
-            rootDeclaration,
-            "Cannot generate '${casePath.sourceName}' because its type parameter '$caseParameterName' " +
-              "would need to represent both '$existingSubstitution' and '$rootParameterName'.",
-          )
-          return null
-        }
-        kotlinSubstitutions[caseParameterName] = rootParameterName
-        tokenSubstitutions[caseParameterName] = rootTypeTokenNames.getValue(rootParameterName)
-      } else if (rootParameter.variance == Variance.COVARIANT && caseArgument?.isNothing() == true) {
-        // A covariant `Root<Nothing>` can be embedded as `Root<T>` for every T.
-      } else {
-        val renderedArgument = caseArgument?.renderKotlinType() ?: "<unresolved>"
-        reportGenerationError(
-          rootDeclaration,
-          "Cannot generate '${casePath.sourceName}' because it implements $rootQualifiedName<$renderedArgument> " +
-            "where the generic root requires '${rootParameter.name.asString()}'. " +
-            "The variant must forward that type parameter, or refine it to Nothing through an `out` parameter.",
+    val plan = planKPathsGenericCase(
+      rootParameters = rootDeclaration.typeParameters.map {
+        KPathsGenericRootParameter(it.name.asString(), it.variance == Variance.COVARIANT)
+      },
+      caseParameters = caseDeclaration.typeParameters.map { it.name.asString() },
+      arguments = caseRootSupertype.arguments.map { argument ->
+        val type = argument.type?.resolve()
+        KPathsGenericCaseArgument(
+          forwardedParameter = (type?.declaration as? KSTypeParameter)?.name?.asString(),
+          isNullable = type?.isMarkedNullable == true,
+          isNothing = type?.isNothing() == true,
+          rendered = type?.renderKotlinType() ?: "<unresolved>",
         )
+      },
+    )
+    val kotlinSubstitutions = when (plan) {
+      is KPathsGenericCasePlan.Supported -> plan.substitutions
+      is KPathsGenericCasePlan.ConflictingParameter -> {
+        reportGenerationError(rootDeclaration,
+          "Cannot generate '${casePath.sourceName}' because its type parameter '${plan.caseParameter}' " +
+            "would need to represent both '${plan.firstRootParameter}' and '${plan.secondRootParameter}'.")
+        return null
+      }
+      is KPathsGenericCasePlan.UnsupportedArgument -> {
+        reportGenerationError(rootDeclaration,
+          "Cannot generate '${casePath.sourceName}' because it implements $rootQualifiedName<${plan.argument}> " +
+            "where the generic root requires '${plan.rootParameter}'. " +
+            "The variant must forward that type parameter, or refine it to Nothing through an `out` parameter.")
+        return null
+      }
+      is KPathsGenericCasePlan.UnmappedParameters -> {
+        reportGenerationError(rootDeclaration,
+          "Cannot generate '${casePath.sourceName}' because its type parameter(s) " +
+            "${plan.names.joinToString()} cannot be determined from the sealed root.")
         return null
       }
     }
-
-    val missingParameters = caseDeclaration.typeParameters
-      .map { it.name.asString() }
-      .filterNot(kotlinSubstitutions::containsKey)
-    if (missingParameters.isNotEmpty()) {
-      reportGenerationError(
-        rootDeclaration,
-        "Cannot generate '${casePath.sourceName}' because its type parameter(s) " +
-          "${missingParameters.joinToString()} cannot be determined from the sealed root.",
-      )
-      return null
-    }
+    val tokenSubstitutions = kotlinSubstitutions.mapValues { (_, rootName) -> rootTypeTokenNames.getValue(rootName) }
 
     val caseTypeArguments = caseDeclaration.typeParameters.joinToString { parameter ->
       escapeIdentifier(kotlinSubstitutions.getValue(parameter.name.asString()))
