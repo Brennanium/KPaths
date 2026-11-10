@@ -1,0 +1,10 @@
+gradle.projectsEvaluated {
+  rootProject.allprojects { p ->
+    if (p.extensions.findByName('publishing') != null) {
+      p.extensions.getByName('publishing').repositories.maven {
+        name = 'ConsumerVerification'
+        url = p.rootProject.layout.buildDirectory.dir('consumer-verification/repository').get().asFile.toURI()
+      }
+    }
+  }
+}

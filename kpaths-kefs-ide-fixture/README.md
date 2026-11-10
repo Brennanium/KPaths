@@ -30,3 +30,61 @@ From the KPaths root, with JDK 17 for Gradle and a JDK 25 toolchain available:
 ./gradlew :kpaths-compiler-plugin:jvmJar :kpaths-compiler-plugin-contributor:jvmJar :kpaths-core:jvmJar :kpaths-annotations:jvmJar
 ./gradlew -p kpaths-kefs-ide-fixture test --tests '*KefsIntegrationTest' -Pkpaths.idePath="/path/to/Android Studio.app"
 ```
+
+## Real Gradle consumer and IDE analysis
+
+The `consumer` project uses the experimental Gradle plugin and published KPaths dependencies as a
+standalone JVM project. The sandbox-only `ConsumerProbe` checks real PSI references in this project
+after Android Studio imports it. It checks ordinary `@Pathable` and `Person::name` references as
+controls, then checks generated property and case paths. Those generated references must resolve
+when KEFS is enabled and be unresolved when it is disabled.
+
+This was verified locally with Android Studio 2026.2.2 and KEFS 0.5.0-262: Gradle sync succeeded,
+and both enabled and disabled checks passed. The IDE-compatible compiler artifact was published to
+an actual local Maven repository. KEFS has no built-in KPaths entry, so `configure-consumer.py`
+writes a **test-project-only** KEFS descriptor. It is a way to reproduce this experiment, not an
+installation mechanism or evidence of automatic KPaths discovery. The probe verifies symbol
+resolution; it does not yet verify editor highlighting, completion, navigation, or editing. The
+separate fixture above checks highlighting in a synthetic project.
+
+To reproduce, set `JAVA_HOME` for Gradle as needed and have a JDK 25 toolchain available. The
+standalone consumer currently pins KPaths 0.1.0 and Kotlin 2.4.21 to match the checked-out fixture.
+First publish the build artifacts locally:
+
+```sh
+./gradlew --no-configuration-cache -I kpaths-kefs-ide-fixture/local-repository.init.gradle \
+  :kpaths-gradle-plugin:publishAllPublicationsToConsumerVerificationRepository \
+  :kpaths-compiler-plugin:publishJvmPublicationToConsumerVerificationRepository \
+  :kpaths-core:publishKotlinMultiplatformPublicationToConsumerVerificationRepository \
+  :kpaths-core:publishJvmPublicationToConsumerVerificationRepository \
+  :kpaths-annotations:publishKotlinMultiplatformPublicationToConsumerVerificationRepository \
+  :kpaths-annotations:publishJvmPublicationToConsumerVerificationRepository
+
+./gradlew -p kpaths-kefs-ide-fixture publishIdeCompilerPluginPublicationToKefsLocalRepository \
+  -Pkpaths.idePath="/path/to/Android Studio.app" \
+  -Pkpaths.ideKotlinVersion="2.4.20-ij262-52"
+
+./gradlew -p kpaths-kefs-ide-fixture/consumer build
+```
+
+The IDE Kotlin version above applies to the tested Android Studio build. For another IDE, obtain
+its version using **KEFS: Copy Kotlin IDE Version**, adapt the IDE compiler sources if necessary,
+and pass the corresponding version. This experimental publication task does not independently
+verify that the supplied version matches the selected IDE.
+
+Configure the enabled case, then launch the isolated sandbox and import the fixture:
+
+```sh
+python3 kpaths-kefs-ide-fixture/configure-consumer.py enabled
+./gradlew -p kpaths-kefs-ide-fixture runIde \
+  --args="$(pwd)/kpaths-kefs-ide-fixture/consumer" \
+  -Pkpaths.idePath="/path/to/Android Studio.app" \
+  -Pkpaths.consumerExpected=enabled
+```
+
+On the first launch Android Studio may ask for its SDK and Gradle setup. After import, inspect
+`kpaths-kefs-ide-fixture/build/consumer-probe.txt` for `PASS (enabled)`. Close the sandbox before
+repeating with `configure-consumer.py disabled` and `-Pkpaths.consumerExpected=disabled`; expect
+`PASS (disabled)`. `WAITING` and `TIMEOUT` indicate that the expected result was not established.
+The run task clears the previous report at startup. The probe runs only in this fixture sandbox and
+does not change the user's installed IDE or its settings.
