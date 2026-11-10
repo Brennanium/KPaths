@@ -354,10 +354,7 @@ public class KPathsCatalogGenerator(
     ) {
       return
     }
-    val pathProperties = if (propertyPathAdapters.isEmpty()) {
-      unadaptedPathProperties
-    } else {
-      adaptPathProperties(
+    val pathProperties = adaptPathProperties(
         properties = unadaptedPathProperties,
         rootDeclaration = declaration,
         rootType = declaredTypeName(declaration),
@@ -366,16 +363,12 @@ public class KPathsCatalogGenerator(
         adapters = propertyPathAdapters,
         typeTokenNames = typeTokenNames,
       )
-    }
     val resolvedCasePaths = unadaptedCasePaths.mapNotNull { casePath ->
       resolveCaseType(declaration, typeTokenNames, casePath)?.let { resolvedCaseType ->
         val substitutions = resolvedCaseType.typeParameterSubstitutions.mapValues { (_, name) ->
           TypeVariableName(name)
         }
-        val adaptedProperties = if (propertyPathAdapters.isEmpty()) {
-          casePath.propertyPaths
-        } else {
-          adaptPathProperties(
+        val adaptedProperties = adaptPathProperties(
             properties = casePath.propertyPaths,
             rootDeclaration = casePath.declaration,
             rootType = declaredTypeName(
@@ -388,7 +381,6 @@ public class KPathsCatalogGenerator(
             typeParameterSubstitutions = substitutions,
             typeTokenNames = resolvedCaseType.typeTokenSubstitutions,
           )
-        }
         ResolvedCasePath(casePath.copy(propertyPaths = adaptedProperties), resolvedCaseType)
       }
     }
@@ -721,7 +713,6 @@ public class KPathsCatalogGenerator(
     typeParameterSubstitutions: Map<String, TypeName> = emptyMap(),
     typeTokenNames: Map<String, String> = emptyMap(),
   ): List<PathProperty> {
-    if (adapters.isEmpty()) return properties
     val primaryConstructorPropertyNames = rootDeclaration.primaryConstructor
       ?.parameters
       ?.filter { it.isVal || it.isVar }
@@ -747,7 +738,18 @@ public class KPathsCatalogGenerator(
           CodeBlock.of("%L", type.renderTypeId(typeTokenNames))
         },
       )
-      property.copy(recipe = adapters.firstNotNullOfOrNull { adapter -> adapter.pathRecipe(context) })
+      val recipe = adapters.firstNotNullOfOrNull { adapter -> adapter.pathRecipe(context) }
+      if (recipe != null) property.copy(recipe = recipe) else {
+        when (val result = declarativeAdapter(declaration, rootDeclaration,
+          typeParameterSubstitutions.mapValues { it.value.toString() })) {
+          DeclarativeAdapterResult.Absent -> property
+          is DeclarativeAdapterResult.Available -> property.copy(declarativeAdapter = result.adapter)
+          is DeclarativeAdapterResult.Invalid -> {
+            logger.error("[KPaths] Invalid @PathsAdapter on '${declaration.simpleName.asString()}': ${result.reason}.", declaration)
+            property
+          }
+        }
+      }
     }
   }
 
@@ -1366,7 +1368,17 @@ public class KPathsCatalogGenerator(
       PathKind.REFERENCE_WRITABLE -> "dev.kpaths.core.ReferenceWritableKeyPathBase"
     }
     writer.appendLine()
-    if (capturesTypeTokens) {
+    val declarative = pathProperty.declarativeAdapter
+    if (declarative != null) {
+      val factory = declarative.factoryName.split('.').joinToString(".", transform = ::escapeIdentifier)
+      writer.appendLine("${declarationIndent}public val $identifier: ${declarative.publicType} =")
+      writer.appendLine("${declarationIndent}  $factory.make(object : $pathBase<$rootKotlinType, $valueKotlinType>() {")
+      writer.appendLine("${declarationIndent}    override val __kpaths_id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property($rootTypeId, \"$name\")")
+      writer.appendLine("${declarationIndent}    override val __kpaths_valueType: dev.kpaths.core.TypeId = $valueTypeId")
+      writer.appendLine("${declarationIndent}    override fun get(root: $rootKotlinType): $valueKotlinType = root.$sourceIdentifier")
+      writeSetter(writer, pathProperty.kind, rootKotlinType, valueKotlinType, sourceIdentifier, indent = "${declarationIndent}    ")
+      writer.appendLine("${declarationIndent}  })")
+    } else if (capturesTypeTokens) {
       writer.appendLine("${declarationIndent}public val $identifier: $pathInterface<$rootKotlinType, $valueKotlinType> =")
       writer.appendLine("${declarationIndent}  object : $pathBase<$rootKotlinType, $valueKotlinType>() {")
       writer.appendLine("${declarationIndent}    override val __kpaths_id: dev.kpaths.core.PathId = dev.kpaths.core.PathId.property($rootTypeId, \"$name\")")
@@ -1394,7 +1406,7 @@ public class KPathsCatalogGenerator(
     property: PathProperty,
     rootKotlinType: String,
     valueKotlinType: String,
-  ): String = property.recipe?.publicPathType?.toString()
+  ): String = property.recipe?.publicPathType?.toString() ?: property.declarativeAdapter?.publicType
     ?: "${pathInterface(property.kind)}<$rootKotlinType, $valueKotlinType>"
 
   private fun writeCasePath(
@@ -2023,6 +2035,7 @@ public class KPathsCatalogGenerator(
     val generatedName: String,
     val kind: PathKind,
     val recipe: KPathsPropertyPathRecipe? = null,
+    val declarativeAdapter: DeclarativeAdapter? = null,
   )
 
   private data class CasePath(

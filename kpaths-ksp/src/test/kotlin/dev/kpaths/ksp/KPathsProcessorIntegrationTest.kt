@@ -9,6 +9,51 @@ import org.junit.jupiter.api.io.TempDir
 
 class KPathsProcessorIntegrationTest {
   @Test
+  fun `declarative adapter diagnoses an overloaded factory`(@TempDir fixtureDirectory: Path) {
+    val output = compileFailure(fixtureDirectory, "InvalidAdapter.kt", """
+      package fixture
+      import dev.kpaths.annotations.*
+      import dev.kpaths.core.*
+      @PathsAdapter(factory = Factory::class) class Cell<T>(val value: T)
+      object Factory : KPathsAdapterFactory {
+        fun <R, V> make(path: KeyPath<R, Cell<V>>): KeyPath<R, Cell<V>> = path
+        fun make(value: String): String = value
+      }
+      @Pathable data class Document(val title: Cell<String>)
+    """.trimIndent())
+    assertContains(output, "the adapter factory must declare exactly one make function")
+  }
+
+  @Test
+  fun `declarative adapter exposes a specialized path through the companion facade`(@TempDir fixtureDirectory: Path) {
+    compileFixture(fixtureDirectory, "DeclarativeAdapter.kt", """
+      package fixture
+      import dev.kpaths.annotations.*
+      import dev.kpaths.core.*
+      @PathsAdapter(factory = CellFactory::class)
+      class Cell<T>(val value: T)
+      object CellFactory : KPathsAdapterFactory {
+        fun <Root, Value> make(storage: KeyPath<Root, Cell<Value>>): CellPath<Root, Value> = CellPath(storage)
+      }
+      class CellPath<Root, Value>(private val storage: KeyPath<Root, Cell<Value>>) : KeyPathBase<Root, Value>() {
+        override val __kpaths_id get() = storage.__kpaths_id
+        override val __kpaths_valueType get() = requireNotNull(storage.__kpaths_valueType.arguments.single().type)
+        override fun get(root: Root): Value = storage.get(root).value
+      }
+      @Pathable data class Document(val title: Cell<List<String?>>) { companion object }
+      val title: CellPath<Document, List<String?>> = Document.Paths.title
+      @Pathable data class Box<T>(val title: Cell<T>) { companion object Factory }
+      val generic: CellPath<Box<String?>, String?> = Box.Paths.of<String?>().title
+      fun main() {
+        check(title.get(Document(Cell(listOf(null, "value")))) == listOf(null, "value"))
+        check(generic.get(Box(Cell(null))) == null)
+        check(generic.__kpaths_valueType == TypeId.of<String?>())
+        check(generic.__kpaths_id == PathId.property(TypeId.of<Box<String?>>(), "title"))
+      }
+    """.trimIndent(), expectFailure = false, runMain = true)
+  }
+
+  @Test
   fun `warns when canonical case catalog cannot cover every case`(@TempDir fixtureDirectory: Path) {
     val output = compileFixture(
       fixtureDirectory,
@@ -752,6 +797,7 @@ class KPathsProcessorIntegrationTest {
     fileName: String,
     source: String,
     expectFailure: Boolean,
+    runMain: Boolean = false,
   ): String {
     val projectDirectory = Path.of(checkNotNull(System.getProperty("kpaths.projectDir")))
     val annotationsJar = projectDirectory.jvmArtifact("kpaths-annotations")
@@ -789,6 +835,7 @@ class KPathsProcessorIntegrationTest {
         dependencies {
           implementation(files("${annotationsJar.gradlePath()}"))
           implementation(files("${coreJar.gradlePath()}"))
+          ksp("com.squareup:kotlinpoet:2.2.0")
           ksp(files(
             "${processorJar.gradlePath()}",
             "${codegenJar.gradlePath()}",
@@ -796,6 +843,13 @@ class KPathsProcessorIntegrationTest {
             "${annotationsJar.gradlePath()}",
           ))
         }
+
+        ${if (runMain) """
+        tasks.register<JavaExec>("runFixture") {
+          classpath = sourceSets["main"].runtimeClasspath
+          mainClass.set("fixture.DeclarativeAdapterKt")
+        }
+        """ else ""}
       """.trimIndent(),
     )
     val sourceDirectory = Files.createDirectories(fixtureDirectory.resolve("src/main/kotlin/fixture"))
@@ -803,7 +857,7 @@ class KPathsProcessorIntegrationTest {
 
     val runner = GradleRunner.create()
       .withProjectDir(fixtureDirectory.toFile())
-      .withArguments("compileKotlin", "--stacktrace")
+      .withArguments(if (runMain) "runFixture" else "compileKotlin", "--stacktrace")
     return (if (expectFailure) runner.buildAndFail() else runner.build()).output
   }
 

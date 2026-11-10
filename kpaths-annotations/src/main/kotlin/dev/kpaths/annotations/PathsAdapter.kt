@@ -5,9 +5,8 @@ import kotlin.reflect.KClass
 /**
  * Identifies an integration-owned KPaths adapter family.
  *
- * The marker deliberately has no code-generation methods: those belong in the integration's KSP
- * processor or Kotlin compiler plugin, where compiler symbols are available. It gives
- * [PathsAdapter.factory] a type-safe, stable identity shared by runtime and codegen artifacts.
+ * The marker gives [PathsAdapter.factory] a type-safe identity shared by runtime and codegen
+ * artifacts. A declarative factory may also expose a `make` function for generated paths.
  */
 public interface KPathsAdapterFactory
 
@@ -20,9 +19,11 @@ public interface KPathsAdapterFactory
  * a generic type, a non-generic type, several values, or expose a specialized path subtype with
  * entirely different semantics.
  *
- * An integration compiler plugin registers the implementation with KPaths. This binary-visible
- * marker lets that integration recognize its storage types across module boundaries without
- * making ordinary KPaths users depend on compiler-plugin APIs.
+ * The KSP generator supports an accessible object with one non-suspending `make` function of the
+ * form `fun <Root, Value> make(path: KeyPath<Root, Storage<Value>>): SpecializedPath<Root, Value>`.
+ * It uses the return type for the generated member and emits a call to the factory. The compiler
+ * plugin's automatic declarative support is under development. Integrations may also use their
+ * respective lower-level code-generation APIs.
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)

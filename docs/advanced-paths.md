@@ -263,6 +263,30 @@ KeyPath-compatible implementation for that property. This is useful when the pro
 has behavior that an ordinary field path cannot express, such as a value held by an observable or
 validated container.
 
+With KSP, an integration can mark its storage type and supply a factory directly:
+
+```kotlin
+@PathsAdapter(factory = ObservablePathFactory::class)
+class ObservableValue<Value>(var value: Value)
+
+object ObservablePathFactory : KPathsAdapterFactory {
+  fun <Root, Value> make(
+    storage: KeyPath<Root, ObservableValue<Value>>,
+  ): ObservableValueKeyPath<Root, Value> = ObservableValueKeyPath(storage)
+}
+```
+
+Here `ObservableValueKeyPath` is an integration-owned `KeyPath` subtype. For a property of type
+`ObservableValue<String>`, `@Pathable` generates a path whose public type is
+`ObservableValueKeyPath<Root, String>` and calls the factory with the ordinary storage path. The
+factory owns its path's focused type, behavior, and metadata. The factory must be an accessible
+object with exactly one accessible, non-suspending `make` function, one `KeyPath` parameter, and
+a `KeyPath` return type. All its type parameters must be inferred from that parameter. The current
+declarative matcher accepts invariant arguments and non-nullable type parameters; unsupported
+shapes receive a diagnostic.
+
+Processor integrations can instead use the lower-level recipe API for custom generation.
+
 The integration supplies an ordered `propertyPathAdapters` list in its `KPathsCatalogRequest`.
 Each adapter receives one already-eligible property. The first adapter that returns a recipe wins;
 return `null` to retain the ordinary generated path.
