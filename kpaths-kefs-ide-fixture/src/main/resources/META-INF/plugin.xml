@@ -1,0 +1,11 @@
+<idea-plugin>
+  <id>dev.kpaths.kefs.fixture</id>
+  <name>KPaths KEFS Fixture</name>
+  <vendor>KPaths</vendor>
+  <depends>com.intellij.modules.platform</depends>
+  <depends>org.jetbrains.kotlin</depends>
+  <depends>com.github.mr3zee.kotlinPlugins</depends>
+  <extensions defaultExtensionNs="org.jetbrains.kotlin">
+    <supportsKotlinPluginMode supportsK2="true" supportsK1="false"/>
+  </extensions>
+</idea-plugin>

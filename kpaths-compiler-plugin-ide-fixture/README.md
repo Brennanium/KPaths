@@ -24,15 +24,22 @@ The IDE source copy currently adapts `FirResolvedQualifier.qualifierSymbol` to t
 `symbol` API. This is a version-specific experiment, not a general compiler compatibility layer.
 The test was verified against Android Studio 2026.2.2 (build 262.10968.63.2622.16730706).
 
-## Next integration step
+## IDE integration direction
 
-A Gradle consumer's compiler JAR is not loaded by the IDE by default. An installable provider must
+For now, KPaths targets Kotlin External FIR Support (KEFS) for IntelliJ-based IDEs. An isolated
+[KEFS integration fixture](../kpaths-kefs-ide-fixture/README.md) resolved IDE-compatible KPaths and contributor artifacts
+from a local repository and highlighted generated paths from both. The contributor's separate
+version in that test was simulated. Gradle import, user-facing configuration, distribution, and
+the future third-party compiler plugin still need verification.
+
+A Gradle consumer's compiler JAR is not loaded by the IDE by default. An IDE provider must
 recognize the consumer's build artifact, resolve a KPaths compiler JAR built for that IDE's Kotlin
 compiler, and return it to the IDE. The [Kotlin External FIR Support developer guide](https://github.com/Mr3zee/Kotlin-External-FIR-Support/blob/main/PLUGIN_AUTHORS.md)
 describes one possible distribution and resolution strategy. Its default artifact convention is
 `<ide-kotlin-version>-<library-version>`; it also supports configurable matching. Its Android Studio
-version mapping and Maven metadata requirements must be verified before choosing that approach.
+version mapping and Maven metadata requirements need verification across the IDE versions we support.
 
 In particular, this fixture's direct local provider deliberately avoids artifact resolution, Kotlin
 version discovery, Gradle import, and plugin installation. Those parts require their own end-to-end
-checks in an isolated Android Studio sandbox before making IDE support available to users.
+checks in a real Gradle consumer before making IDE support available to users. KEFS is an
+IntelliJ-platform plugin; Kotlin language servers, including VS Code, need separate investigation.
