@@ -3,6 +3,7 @@ import org.gradle.jvm.tasks.Jar
 
 plugins {
   alias(libs.plugins.kotlin.multiplatform)
+  `maven-publish`
 }
 
 /**
@@ -15,7 +16,8 @@ val embeddedCodegenModel = configurations.create("embeddedCodegenModel")
 /**
  * Research implementation of a K2 compiler-plugin version of `@Pathable`.
  *
- * This module is intentionally not published and is not part of KPaths' production API.
+ * Publishing is configured so a local Maven repository can exercise the consumer integration.
+ * The plugin remains experimental and is not included in the public release workflow yet.
  */
 kotlin {
   jvm {
@@ -31,7 +33,7 @@ kotlin {
       resources.srcDir("src/main/resources")
       dependencies {
         compileOnly("org.jetbrains.kotlin:kotlin-compiler-embeddable:${libs.versions.kotlin.get()}")
-        implementation(project(":kpaths-codegen-model"))
+        compileOnly(project(":kpaths-codegen-model"))
       }
     }
   }
