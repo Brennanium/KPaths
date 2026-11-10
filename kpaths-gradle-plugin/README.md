@@ -1,6 +1,6 @@
 # KPaths compiler Gradle plugin
 
-This plugin is experimental and has not yet been released. It connects the KPaths compiler plugin to Kotlin compilations; the compiler plugin must match the Kotlin version used by the project. The version built from this checkout supports Kotlin 2.4.21.
+This plugin is experimental and has not yet been released. It connects the KPaths compiler plugin to Kotlin compilations. The same compiler plugin build is tested with Kotlin 2.4.20 and 2.4.21; other Kotlin versions are rejected until verified. See the [compiler compatibility guide](../kpaths-compiler-plugin/COMPATIBILITY.md).
 
 Once matching artifacts are available in a configured plugin repository, apply it alongside the Kotlin plugin:
 

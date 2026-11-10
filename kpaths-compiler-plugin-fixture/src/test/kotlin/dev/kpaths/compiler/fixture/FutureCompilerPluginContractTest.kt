@@ -385,7 +385,7 @@ class FutureCompilerPluginContractTest {
     Files.writeString(
       directory.resolve("build.gradle.kts"),
       """
-        plugins { kotlin("jvm") version "2.4.21" }
+        plugins { kotlin("jvm") version "${checkNotNull(System.getProperty("kpaths.testKotlinVersion"))}" }
 
         dependencies {
           implementation(files("${annotations.toGradlePath()}"))

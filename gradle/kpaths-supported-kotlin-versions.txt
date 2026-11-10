@@ -1,0 +1,3 @@
+# Stable Kotlin compiler versions tested with this compiler plugin.
+2.4.20
+2.4.21

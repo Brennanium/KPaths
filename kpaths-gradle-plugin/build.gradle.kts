@@ -16,7 +16,10 @@ java {
 }
 
 dependencies {
-  implementation("org.jetbrains.kotlin:kotlin-gradle-plugin-api:${libs.versions.kotlin.get()}")
+  // The consumer supplies its Kotlin Gradle plugin. Publishing this as a runtime dependency
+  // would silently upgrade a consumer's Kotlin version to the version used to build KPaths.
+  compileOnly("org.jetbrains.kotlin:kotlin-gradle-plugin-api:${libs.versions.kotlin.get()}")
+  testImplementation("org.jetbrains.kotlin:kotlin-gradle-plugin-api:${libs.versions.kotlin.get()}")
   testImplementation(kotlin("test"))
   testImplementation(gradleTestKit())
   testImplementation(libs.junit.jupiter)
@@ -38,10 +41,12 @@ val generateCoordinates = tasks.register("generateCoordinates") {
   val output = layout.buildDirectory.dir("generated/kpaths-coordinates")
   val artifactGroup = project.group.toString()
   val artifactVersion = project.version.toString()
-  val kotlinVersion = libs.versions.kotlin.get()
+  val supportedVersions = rootProject.file("gradle/kpaths-supported-kotlin-versions.txt")
+    .readLines().map(String::trim).filter { it.isNotEmpty() && !it.startsWith("#") }
+  require(supportedVersions.isNotEmpty() && supportedVersions.distinct().size == supportedVersions.size)
   inputs.property("artifactGroup", artifactGroup)
   inputs.property("artifactVersion", artifactVersion)
-  inputs.property("kotlinVersion", kotlinVersion)
+  inputs.property("supportedKotlinVersions", supportedVersions)
   outputs.dir(output)
   doLast {
     val file = output.get().file("dev/kpaths/gradle/KPathsCoordinates.kt").asFile
@@ -50,7 +55,7 @@ val generateCoordinates = tasks.register("generateCoordinates") {
       package dev.kpaths.gradle
       internal const val KPATHS_GROUP = "$artifactGroup"
       internal const val KPATHS_VERSION = "$artifactVersion"
-      internal const val KPATHS_KOTLIN_VERSION = "$kotlinVersion"
+      internal val KPATHS_SUPPORTED_KOTLIN_VERSIONS = setOf(${supportedVersions.joinToString { "\"$it\"" }})
     """.trimIndent() + "\n")
   }
 }
@@ -64,4 +69,5 @@ tasks.test {
   systemProperty("kpaths.projectDir", rootProject.projectDir.absolutePath)
   systemProperty("kpaths.version", project.version.toString())
   systemProperty("kpaths.kotlinVersion", libs.versions.kotlin.get())
+  systemProperty("kpaths.testKotlinVersion", providers.gradleProperty("kpaths.testKotlinVersion").orElse(libs.versions.kotlin).get())
 }

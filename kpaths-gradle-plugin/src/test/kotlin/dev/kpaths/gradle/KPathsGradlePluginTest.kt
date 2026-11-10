@@ -1,19 +1,28 @@
 package dev.kpaths.gradle
 
 import org.gradle.testkit.runner.GradleRunner
+import org.gradle.api.GradleException
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 
 class KPathsGradlePluginTest {
+  @Test
+  fun `unsupported compiler versions report the tested versions`() {
+    val error = assertFailsWith<GradleException> { checkKPathsKotlinVersion("2.4.10") }
+    assertContains(error.message.orEmpty(), "2.4.10")
+    KPATHS_SUPPORTED_KOTLIN_VERSIONS.forEach { assertContains(error.message.orEmpty(), it) }
+  }
+
   @Test
   fun `plugin supplies compiler artifact to a downstream JVM build`(@TempDir directory: Path) {
     val project = Path.of(checkNotNull(System.getProperty("kpaths.projectDir")))
     val version = checkNotNull(System.getProperty("kpaths.version"))
-    val kotlinVersion = checkNotNull(System.getProperty("kpaths.kotlinVersion"))
+    val testKotlinVersion = checkNotNull(System.getProperty("kpaths.testKotlinVersion"))
     val repo = directory.resolve("repo")
     val module = repo.resolve("io/github/brennanium/kpaths-compiler-plugin-jvm/$version")
     Files.createDirectories(module)
@@ -29,9 +38,7 @@ class KPathsGradlePluginTest {
       gradleModule.resolve("kpaths-gradle-plugin-$version.jar"))
     Files.writeString(gradleModule.resolve("kpaths-gradle-plugin-$version.pom"), """
       <project><modelVersion>4.0.0</modelVersion><groupId>io.github.brennanium</groupId>
-      <artifactId>kpaths-gradle-plugin</artifactId><version>$version</version>
-      <dependencies><dependency><groupId>org.jetbrains.kotlin</groupId><artifactId>kotlin-gradle-plugin-api</artifactId>
-      <version>$kotlinVersion</version></dependency></dependencies></project>
+      <artifactId>kpaths-gradle-plugin</artifactId><version>$version</version></project>
     """.trimIndent())
     val marker = repo.resolve("dev/kpaths/compiler/dev.kpaths.compiler.gradle.plugin/$version")
     Files.createDirectories(marker)
@@ -49,8 +56,13 @@ class KPathsGradlePluginTest {
     val core = project.resolve("kpaths-core/build/libs/kpaths-core-jvm-$version.jar")
     val annotations = project.resolve("kpaths-annotations/build/libs/kpaths-annotations-jvm-$version.jar")
     Files.writeString(directory.resolve("build.gradle.kts"), """
-      plugins { kotlin("jvm") version "$kotlinVersion"; id("dev.kpaths.compiler") version "$version" }
+      plugins { id("dev.kpaths.compiler") version "$version"; kotlin("jvm") version "$testKotlinVersion" }
       dependencies { implementation(files("${core.toGradlePath()}", "${annotations.toGradlePath()}")) }
+      val loader = extensions.getByName("kotlin").javaClass.classLoader
+      val wrapper = Class.forName("org.jetbrains.kotlin.gradle.plugin.KotlinPluginWrapperKt", true, loader)
+      val actual = wrapper.getMethod("getKotlinPluginVersion", org.gradle.api.Project::class.java)
+        .invoke(null, project) as String
+      check(actual == "$testKotlinVersion") { "Expected Kotlin $testKotlinVersion, resolved ${'$'}actual" }
       tasks.register<JavaExec>("runFixture") {
         classpath = sourceSets["main"].runtimeClasspath
         mainClass.set("fixture.MainKt")

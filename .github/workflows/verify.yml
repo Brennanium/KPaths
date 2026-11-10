@@ -10,6 +10,81 @@ permissions:
   contents: read
 
 jobs:
+  compiler-compatibility-matrix:
+    name: Read compiler compatibility matrix
+    runs-on: ubuntu-latest
+    outputs:
+      kotlin: ${{ steps.versions.outputs.kotlin }}
+    steps:
+      - uses: actions/checkout@v6
+      - id: versions
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import re
+          from pathlib import Path
+          versions = [line.strip() for line in Path('gradle/kpaths-supported-kotlin-versions.txt').read_text().splitlines()
+                      if line.strip() and not line.lstrip().startswith('#')]
+          if (not versions or len(versions) != len(set(versions))
+                  or any(not re.fullmatch(r'\d+\.\d+\.\d+', version) for version in versions)):
+              raise SystemExit('The compiler compatibility matrix must contain distinct versions')
+          print('kotlin=' + json.dumps(versions, separators=(',', ':')))
+          PY
+
+  compiler-compatibility:
+    name: Compiler consumer / Kotlin ${{ matrix.kotlin }}
+    needs: compiler-compatibility-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        kotlin: ${{ fromJSON(needs.compiler-compatibility-matrix.outputs.kotlin) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Verify compiler plugin in downstream consumers
+        run: >-
+          ./gradlew
+          :kpaths-gradle-plugin:test
+          :kpaths-compiler-plugin-fixture:compilerPluginContractTest
+          -Pkpaths.testKotlinVersion=${{ matrix.kotlin }}
+          --no-configuration-cache
+
+  compiler-compatibility-native:
+    name: Compiler Native consumer / Kotlin ${{ matrix.kotlin }}
+    needs: compiler-compatibility-matrix
+    runs-on: macos-15
+    strategy:
+      fail-fast: false
+      matrix:
+        kotlin: ${{ fromJSON(needs.compiler-compatibility-matrix.outputs.kotlin) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Publish local test artifacts
+        run: >-
+          ./gradlew --no-configuration-cache -I gradle/local-test-repository.init.gradle
+          :kpaths-gradle-plugin:publishAllPublicationsToConsumerVerificationRepository
+          :kpaths-compiler-plugin:publishJvmPublicationToConsumerVerificationRepository
+          :kpaths-core:publishKotlinMultiplatformPublicationToConsumerVerificationRepository
+          :kpaths-core:publishIosSimulatorArm64PublicationToConsumerVerificationRepository
+          :kpaths-annotations:publishKotlinMultiplatformPublicationToConsumerVerificationRepository
+          :kpaths-annotations:publishIosSimulatorArm64PublicationToConsumerVerificationRepository
+      - name: Verify generated paths on iOS simulator
+        run: >-
+          ./gradlew -p kpaths-compiler-plugin-compatibility-fixture
+          iosSimulatorArm64Test
+          -Pkpaths.testKotlinVersion=${{ matrix.kotlin }}
+          --no-configuration-cache
+
   jvm:
     name: JVM and documentation
     runs-on: ubuntu-latest

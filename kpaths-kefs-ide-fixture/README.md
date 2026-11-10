@@ -52,7 +52,7 @@ standalone consumer currently pins KPaths 0.1.0 and Kotlin 2.4.21 to match the c
 First publish the build artifacts locally:
 
 ```sh
-./gradlew --no-configuration-cache -I kpaths-kefs-ide-fixture/local-repository.init.gradle \
+./gradlew --no-configuration-cache -I gradle/local-test-repository.init.gradle \
   :kpaths-gradle-plugin:publishAllPublicationsToConsumerVerificationRepository \
   :kpaths-compiler-plugin:publishJvmPublicationToConsumerVerificationRepository \
   :kpaths-core:publishKotlinMultiplatformPublicationToConsumerVerificationRepository \

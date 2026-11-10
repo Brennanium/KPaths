@@ -59,6 +59,7 @@ tasks.named<Test>("jvmTest") {
     excludeTags("compiler-plugin-contract")
   }
   systemProperty("kpaths.projectDir", rootProject.projectDir.absolutePath)
+  systemProperty("kpaths.testKotlinVersion", providers.gradleProperty("kpaths.testKotlinVersion").orElse(libs.versions.kotlin).get())
 }
 
 val pathsPluginJar = project(":kpaths-compiler-plugin").tasks.named("jvmJar")
@@ -83,6 +84,7 @@ tasks.register<Test>("compilerPluginContractTest") {
     includeTags("compiler-plugin-contract")
   }
   systemProperty("kpaths.projectDir", rootProject.projectDir.absolutePath)
+  systemProperty("kpaths.testKotlinVersion", providers.gradleProperty("kpaths.testKotlinVersion").orElse(libs.versions.kotlin).get())
 }
 
 tasks.withType<KotlinCompilationTask<*>>().configureEach {

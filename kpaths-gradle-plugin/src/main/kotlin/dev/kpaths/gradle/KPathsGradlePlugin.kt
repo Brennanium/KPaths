@@ -28,9 +28,7 @@ public class KPathsGradlePlugin : KotlinCompilerPluginSupportPlugin {
     } catch (error: ReflectiveOperationException) {
       throw GradleException("KPaths could not determine the Kotlin Gradle plugin version for ${project.path}.", error)
     }
-    if (version != KPATHS_KOTLIN_VERSION) {
-      throw GradleException("KPaths compiler plugin $KPATHS_VERSION requires Kotlin $KPATHS_KOTLIN_VERSION; this project uses $version.")
-    }
+    checkKPathsKotlinVersion(version)
     return true
   }
 
@@ -41,4 +39,10 @@ public class KPathsGradlePlugin : KotlinCompilerPluginSupportPlugin {
 
   override fun applyToCompilation(kotlinCompilation: KotlinCompilation<*>): Provider<List<SubpluginOption>> =
     kotlinCompilation.target.project.provider { emptyList() }
+}
+
+internal fun checkKPathsKotlinVersion(version: String) {
+  if (version !in KPATHS_SUPPORTED_KOTLIN_VERSIONS) {
+    throw GradleException("KPaths compiler plugin $KPATHS_VERSION supports Kotlin ${KPATHS_SUPPORTED_KOTLIN_VERSIONS.joinToString()}; this project uses $version.")
+  }
 }
