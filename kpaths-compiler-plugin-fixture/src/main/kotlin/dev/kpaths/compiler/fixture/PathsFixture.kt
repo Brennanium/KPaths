@@ -6,6 +6,8 @@ import dev.kpaths.annotations.KPathsPathable
 import dev.kpaths.annotations.Pathable
 import dev.kpaths.annotations.CaseName
 import dev.kpaths.core.KeyPath
+import dev.kpaths.core.KeyPathBase
+import dev.kpaths.core.TypeId
 import dev.kpaths.core.CaseKeyPath
 import dev.kpaths.core.CasePathable
 import dev.kpaths.core.PartialCaseKeyPath
@@ -134,6 +136,56 @@ val importedDocumentTitlePath: KeyPath<ImportedDocument, LibraryCell<String>> = 
 
 @Target(AnnotationTarget.CLASS)
 annotation class ContributedCatalog
+
+/** A separately contributed recipe changes the generated path's focus and public type. */
+@ContributedCatalog
+data class AdaptedDocument(val title: LibraryCell<String>)
+
+class CellTextPath(private val storage: KeyPath<AdaptedDocument, LibraryCell<String>>) :
+  KeyPathBase<AdaptedDocument, String>() {
+  val hasWritableStorage: Boolean get() = storage is WritableKeyPath<*, *>
+  override val __kpaths_id get() = storage.__kpaths_id
+  override val __kpaths_valueType get() = TypeId.of<String>()
+  override fun get(root: AdaptedDocument): String = storage.get(root).value
+}
+
+fun makeCellTextPath(storage: KeyPath<AdaptedDocument, LibraryCell<String>>): CellTextPath =
+  CellTextPath(storage)
+
+val adaptedDocumentTitle: CellTextPath = AdaptedDocument.GeneratedPaths.title
+fun sampleAdaptedDocument(): AdaptedDocument = AdaptedDocument(LibraryCell("from dependency"))
+
+@ContributedCatalog
+data class AdaptedBox<T>(val title: LibraryCell<T>)
+
+class GenericCellPath<T>(private val storage: KeyPath<AdaptedBox<T>, LibraryCell<T>>) :
+  KeyPathBase<AdaptedBox<T>, T>() {
+  override val __kpaths_id get() = storage.__kpaths_id
+  override val __kpaths_valueType get() = requireNotNull(storage.__kpaths_valueType.arguments.single().type)
+  override fun get(root: AdaptedBox<T>): T = storage.get(root).value
+}
+
+fun <T> makeGenericCellPath(storage: KeyPath<AdaptedBox<T>, LibraryCell<T>>): GenericCellPath<T> =
+  GenericCellPath(storage)
+
+val adaptedBoxTitle: GenericCellPath<String?> = AdaptedBox.GeneratedPaths<String?>().title
+
+@ContributedCatalog
+sealed interface AdaptedEvent {
+  data class Item(val title: LibraryCell<String>) : AdaptedEvent
+}
+
+class EventCellPath(private val storage: KeyPath<AdaptedEvent.Item, LibraryCell<String>>) :
+  KeyPathBase<AdaptedEvent.Item, String>() {
+  override val __kpaths_id get() = storage.__kpaths_id
+  override val __kpaths_valueType get() = TypeId.of<String>()
+  override fun get(root: AdaptedEvent.Item): String = storage.get(root).value
+}
+
+fun makeEventCellPath(storage: KeyPath<AdaptedEvent.Item, LibraryCell<String>>): EventCellPath =
+  EventCellPath(storage)
+
+val adaptedEventTitle: EventCellPath = AdaptedEvent.GeneratedPaths.ItemPaths.title
 
 /** Its catalog is requested by a separate compiler plugin through `session.kpaths.pathable`. */
 @ContributedCatalog

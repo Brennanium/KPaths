@@ -203,6 +203,21 @@ the storage type comes from a compiled dependency. This lookup is experimental a
 when the annotation or its arguments are not available in the resolved form; callers must invoke
 it at a suitable compiler phase. It does not register an adapter or generate a specialized path.
 
+A cooperating plugin requesting a catalog may also provide an ordered `propertyPathAdapters` list
+in `KPathsGenerationOptions`. Each `KPathsCompilerPropertyAdapter` can inspect the property and
+its substituted root, storage, and ordinary path types, then return a recipe with a specialized
+public FIR type and an IR callback. The callback receives the ordinary generated path and can wrap
+it to implement the integration's semantics. KPaths uses the first non-null recipe. See the
+[contributor fixture](../kpaths-compiler-plugin-contributor/src/main/kotlin/dev/kpaths/compiler/contributor/ContributedPathsPlugin.kt)
+and [runtime fixture](../kpaths-compiler-plugin-fixture/src/main/kotlin/dev/kpaths/compiler/fixture/PathsFixture.kt)
+for an end-to-end example using a storage type from a compiled dependency.
+
+This compiler integration is experimental: adapters must generate type-correct IR and preserve
+the intended identity and value semantics. The callback is compiler-version-specific, and KPaths
+does not yet validate adapter types or provide dedicated diagnostics for malformed recipes.
+Adapters are currently supplied on explicit compiler-plugin catalog requests; the annotation
+alone does not register one for every `@Pathable` declaration.
+
 Useful verification commands:
 
 ```sh
@@ -236,10 +251,11 @@ backend portability.
 contributing compiler plugin's `KPathsGenerationOptions`. Generated `allCasePaths` catalogs use
 the canonical associated-value paths for object cases and cases with one to three properties.
 Cases without a supported canonical payload are omitted, so `case` can fail for those cases;
-the plugin warns when it generates an incomplete catalog. Adapter-backed property members, diagnostics, and broader
-conformance coverage remain future work.
-`@PathsAdapter` establishes the binary metadata contract and factory lookup; registering an
-adapter and producing its specialized path remain future FIR/IR work.
+the plugin warns when it generates an incomplete catalog. Broader diagnostics and conformance
+coverage remain future work.
+`@PathsAdapter` establishes the binary metadata contract and factory lookup. Explicit catalog
+requests can supply compiler-side adapters; automatic integration-wide registration and broader
+adapter validation remain future work.
 
 `kpaths-compiler-plugin-fixture/LanguageSyntaxExperiments.kt` separately demonstrates the Kotlin
 generic `invoke` syntax used by generated catalogs.

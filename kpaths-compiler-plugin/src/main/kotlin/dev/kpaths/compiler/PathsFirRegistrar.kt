@@ -4,9 +4,9 @@ import org.jetbrains.kotlin.fir.extensions.FirExtensionRegistrar
 
 /** Registers the declaration-generation extension used during source resolution. */
 @OptIn(ExperimentalKPathsCompilerApi::class)
-internal class PathsFirRegistrar : FirExtensionRegistrar() {
+internal class PathsFirRegistrar(private val adapterBridge: KPathsAdapterBridge) : FirExtensionRegistrar() {
   override fun ExtensionRegistrarContext.configurePlugin() {
-    +::KPathsGenerationRegistry
+    +{ session: org.jetbrains.kotlin.fir.FirSession -> KPathsGenerationRegistry(session, adapterBridge) }
     +::PathsDeclarationGenerator
     +::PathsRootCasePathableSupertypeGenerator
     +::PathsDiagnosticCheckers

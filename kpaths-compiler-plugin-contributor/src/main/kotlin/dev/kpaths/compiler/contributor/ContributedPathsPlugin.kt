@@ -2,6 +2,8 @@ package dev.kpaths.compiler.contributor
 
 import dev.kpaths.compiler.ExperimentalKPathsCompilerApi
 import dev.kpaths.compiler.KPathsGenerationOptions
+import dev.kpaths.compiler.KPathsCompilerPropertyAdapter
+import dev.kpaths.compiler.KPathsCompilerPropertyRecipe
 import dev.kpaths.compiler.kpaths
 import org.jetbrains.kotlin.compiler.plugin.CompilerPluginRegistrar
 import org.jetbrains.kotlin.config.CompilerConfiguration
@@ -19,6 +21,12 @@ import org.jetbrains.kotlin.fir.extensions.predicateBasedProvider
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassSymbol
 import org.jetbrains.kotlin.fir.symbols.SymbolInternals
 import org.jetbrains.kotlin.fir.resolve.providers.symbolProvider
+import org.jetbrains.kotlin.fir.plugin.createConeType
+import org.jetbrains.kotlin.fir.types.ConeClassLikeType
+import org.jetbrains.kotlin.ir.builders.irCall
+import org.jetbrains.kotlin.ir.types.IrSimpleType
+import org.jetbrains.kotlin.ir.types.IrTypeProjection
+import org.jetbrains.kotlin.name.CallableId
 import org.jetbrains.kotlin.fir.analysis.checkers.MppCheckerKind
 import org.jetbrains.kotlin.fir.analysis.checkers.context.CheckerContext
 import org.jetbrains.kotlin.fir.analysis.checkers.declaration.DeclarationCheckers
@@ -106,6 +114,7 @@ internal class ContributedPathsGenerator(session: FirSession) : FirDeclarationGe
           catalogName = "GeneratedPaths",
           copyWritableVals = true,
           copyWritableValExclusions = excludedProperties.map { it.symbol }.toSet(),
+          propertyPathAdapters = listOf(cellAdapter),
         ),
       )
     }
@@ -113,6 +122,51 @@ internal class ContributedPathsGenerator(session: FirSession) : FirDeclarationGe
   }
 
   private companion object {
+    private val cellAdapter = KPathsCompilerPropertyAdapter { context ->
+      val storage = (context.storageType as? ConeClassLikeType)?.lookupTag?.classId
+        ?.let(context.session.symbolProvider::getClassLikeSymbolByClassId) as? FirClassSymbol<*>
+        ?: return@KPathsCompilerPropertyAdapter null
+      if (context.session.kpaths.adapterFactoryFor(storage) !=
+        ClassId.topLevel(FqName("dev.kpaths.compiler.integration.CellPathFactory"))) return@KPathsCompilerPropertyAdapter null
+      val owner = context.property.callableId?.classId?.asSingleFqName()?.asString()
+      if (owner == "dev.kpaths.compiler.fixture.AdaptedEvent.Item") {
+        return@KPathsCompilerPropertyAdapter KPathsCompilerPropertyRecipe(
+          publicPathType = ClassId.topLevel(FqName("dev.kpaths.compiler.fixture.EventCellPath"))
+            .createConeType(context.session),
+          emit = { ir ->
+            val factory = ir.pluginContext.referenceFunctions(CallableId(
+              FqName("dev.kpaths.compiler.fixture"), Name.identifier("makeEventCellPath"),
+            )).single()
+            ir.builder.irCall(factory).apply { arguments[0] = ir.defaultPath }
+          },
+        )
+      }
+      if (owner == "dev.kpaths.compiler.fixture.AdaptedBox") {
+        val args = (context.rootType as? ConeClassLikeType)?.typeArguments ?: return@KPathsCompilerPropertyAdapter null
+        return@KPathsCompilerPropertyAdapter KPathsCompilerPropertyRecipe(
+          publicPathType = ClassId.topLevel(FqName("dev.kpaths.compiler.fixture.GenericCellPath"))
+            .createConeType(context.session, Array<org.jetbrains.kotlin.fir.types.ConeTypeProjection>(args.size) { args[it] }, false),
+          emit = { ir ->
+            val factory = ir.pluginContext.referenceFunctions(CallableId(
+              FqName("dev.kpaths.compiler.fixture"), Name.identifier("makeGenericCellPath"),
+            )).single()
+            val type = ((ir.generatedProperty.getter!!.returnType as IrSimpleType).arguments.single() as IrTypeProjection).type
+            ir.builder.irCall(factory).apply { typeArguments[0] = type; arguments[0] = ir.defaultPath }
+          },
+        )
+      }
+      if (owner != "dev.kpaths.compiler.fixture.AdaptedDocument") return@KPathsCompilerPropertyAdapter null
+      KPathsCompilerPropertyRecipe(
+        publicPathType = ClassId.topLevel(FqName("dev.kpaths.compiler.fixture.CellTextPath"))
+          .createConeType(context.session),
+        emit = { ir ->
+          val factory = ir.pluginContext.referenceFunctions(CallableId(
+            FqName("dev.kpaths.compiler.fixture"), Name.identifier("makeCellTextPath"),
+          )).single()
+          ir.builder.irCall(factory).apply { arguments[0] = ir.defaultPath }
+        },
+      )
+    }
     private val contributedPredicate = DeclarationPredicate.create {
       annotated(FqName("dev.kpaths.compiler.fixture.ContributedCatalog"))
     }

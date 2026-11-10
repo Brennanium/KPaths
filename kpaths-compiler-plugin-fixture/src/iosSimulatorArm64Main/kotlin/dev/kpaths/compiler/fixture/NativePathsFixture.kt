@@ -6,9 +6,27 @@ import dev.kpaths.annotations.CaseName
 import dev.kpaths.core.CaseKeyPath
 import dev.kpaths.core.CasePathable
 import dev.kpaths.core.KeyPath
+import dev.kpaths.core.KeyPathBase
+import dev.kpaths.compiler.integration.Cell
 import dev.kpaths.core.WritableKeyPath
 import dev.kpaths.core.TypeId
 import dev.kpaths.core.PartialCaseKeyPath
+
+@Target(AnnotationTarget.CLASS)
+annotation class ContributedCatalog
+
+@ContributedCatalog
+data class AdaptedDocument(val title: Cell<String>)
+
+class CellTextPath(private val storage: KeyPath<AdaptedDocument, Cell<String>>) :
+  KeyPathBase<AdaptedDocument, String>() {
+  override val __kpaths_id get() = storage.__kpaths_id
+  override val __kpaths_valueType get() = TypeId.of<String>()
+  override fun get(root: AdaptedDocument): String = storage.get(root).value
+}
+
+fun makeCellTextPath(storage: KeyPath<AdaptedDocument, Cell<String>>): CellTextPath = CellTextPath(storage)
+val nativeAdaptedTitle: CellTextPath = AdaptedDocument.GeneratedPaths.title
 
 /** Proves the same synthetic nested declaration reaches Kotlin/Native's backend. */
 @Pathable

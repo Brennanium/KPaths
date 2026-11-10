@@ -32,6 +32,8 @@ public data class KPathsGenerationOptions(
   public val catalogName: String = "Paths",
   public val copyWritableVals: Boolean = false,
   public val copyWritableValExclusions: Set<FirPropertySymbol> = emptySet(),
+  /** Ordered specialized property-path recipes. The first adapter returning a recipe wins. */
+  public val propertyPathAdapters: List<KPathsCompilerPropertyAdapter> = emptyList(),
 )
 
 /**
@@ -42,7 +44,7 @@ public data class KPathsGenerationOptions(
  * KPaths' nested-classifier callbacks to this registry in the same FIR extension.
  */
 @ExperimentalKPathsCompilerApi
-public class KPathsGenerationRegistry(session: FirSession) : FirExtensionSessionComponent(session) {
+public class KPathsGenerationRegistry internal constructor(session: FirSession, internal val adapterBridge: KPathsAdapterBridge) : FirExtensionSessionComponent(session) {
   private val requests = ConcurrentHashMap<ClassId, KPathsGenerationOptions>()
 
   public fun pathable(

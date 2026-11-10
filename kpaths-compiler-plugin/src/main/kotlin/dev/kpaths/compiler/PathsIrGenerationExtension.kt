@@ -67,6 +67,7 @@ import org.jetbrains.kotlin.ir.types.typeWith
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.primaryConstructor
 import org.jetbrains.kotlin.ir.util.getAnnotation
+import org.jetbrains.kotlin.ir.util.classId
 import org.jetbrains.kotlin.ir.visitors.IrVisitorVoid
 import org.jetbrains.kotlin.ir.visitors.acceptChildrenVoid
 import org.jetbrains.kotlin.name.CallableId
@@ -88,12 +89,13 @@ private fun IrClass.generatedCasePropertyCatalogName(): String {
 }
 
 /** Supplies the bodies for the FIR-generated `Paths` object and its cached path fields. */
-@OptIn(UnsafeDuringIrConstructionAPI::class)
+@OptIn(UnsafeDuringIrConstructionAPI::class, ExperimentalKPathsCompilerApi::class)
 internal class PathsIrGenerationExtension(
   private val irSnapshotPath: String?,
+  private val adapterBridge: KPathsAdapterBridge,
 ) : IrGenerationExtension {
   override fun generate(moduleFragment: IrModuleFragment, pluginContext: IrPluginContext) {
-    PathsConstructorBodyGenerator(pluginContext).also { generator ->
+    PathsConstructorBodyGenerator(pluginContext, adapterBridge).also { generator ->
       moduleFragment.acceptChildrenVoid(generator)
       generator.installDeferredDeclarations()
     }
@@ -101,9 +103,10 @@ internal class PathsIrGenerationExtension(
   }
 }
 
-@OptIn(UnsafeDuringIrConstructionAPI::class)
+@OptIn(UnsafeDuringIrConstructionAPI::class, ExperimentalKPathsCompilerApi::class)
 private class PathsConstructorBodyGenerator(
   private val pluginContext: IrPluginContext,
+  private val adapterBridge: KPathsAdapterBridge,
 ) : IrVisitorVoid() {
   private val deferredDeclarations = linkedMapOf<IrClass, MutableList<IrClass>>()
 
@@ -322,6 +325,7 @@ private class PathsConstructorBodyGenerator(
     val getter = declaration.getter ?: return
     val backingField = declaration.backingField ?: return
     val builder = DeclarationIrBuilder(pluginContext, getter.symbol)
+    val adapter = pathsClass.classId?.let { adapterBridge.find(CallableId(it, declaration.name)) }
     val generatedInitializer = if (origin.pluginKey == PathsGenericCatalogKey && sourceProperty == null) {
       val returnType = getter.returnType as? IrSimpleType ?: return
       val caseClass = (returnType.classifier as? IrClassSymbol)?.owner ?: return
@@ -343,7 +347,7 @@ private class PathsConstructorBodyGenerator(
         }
       }
     } else if (sourceProperty != null && !enumCase) {
-      val pathKind = declaration.generatedPathKind(rootClass, sourceProperty)
+      val pathKind = declaration.generatedPathKind(rootClass, sourceProperty, adapter?.defaultPathClass?.asSingleFqName()?.asString())
       builder.directKeyPathInitializer(
         pathsClass = pathsClass,
         rootClass = rootClass,
@@ -355,7 +359,18 @@ private class PathsConstructorBodyGenerator(
       builder.directCaseKeyPathInitializer(pathsClass, rootClass, declaration)
         ?: builder.generatedCasePathFactoryInitializer(declaration)
     }
-    val initializer: org.jetbrains.kotlin.ir.expressions.IrExpression = generatedInitializer ?: return
+    val defaultInitializer = generatedInitializer ?: run {
+      check(adapter == null) {
+        "KPaths could not construct the ordinary property path required by the adapter for ${pathsClass.name}.${declaration.name}."
+      }
+      return
+    }
+    val recipe = adapter?.recipe
+    val initializer = if (recipe != null && sourceProperty != null && !enumCase) {
+      recipe.emit(KPathsCompilerPropertyIrContext(
+        pluginContext, builder, pathsClass, rootClass, sourceProperty, declaration, defaultInitializer,
+      ))
+    } else defaultInitializer
     backingField.initializer = builder.irExprBody(initializer)
   }
 
@@ -719,9 +734,10 @@ private class PathsConstructorBodyGenerator(
   private fun IrProperty.generatedPathKind(
     rootClass: IrClass,
     sourceProperty: IrProperty,
+    defaultPathClass: String? = null,
   ): GeneratedPathKind {
     val classifier = (getter?.returnType as? IrSimpleType)?.classifier as? IrClassSymbol
-    return when (classifier?.owner?.stableQualifiedName()) {
+    return when (defaultPathClass ?: classifier?.owner?.stableQualifiedName()) {
       referenceWritableKeyPathQualifiedName -> GeneratedPathKind.REFERENCE_WRITABLE
       writableKeyPathQualifiedName -> {
         val isPrimaryConstructorProperty = rootClass.primaryConstructor

@@ -11,9 +11,10 @@ public class PathsPluginRegistrar : CompilerPluginRegistrar() {
   override val supportsK2: Boolean = true
 
   override fun ExtensionStorage.registerExtensions(configuration: CompilerConfiguration) {
-    FirExtensionRegistrarAdapter.registerExtension(PathsFirRegistrar())
+    val adapterBridge = KPathsAdapterBridge()
+    FirExtensionRegistrarAdapter.registerExtension(PathsFirRegistrar(adapterBridge))
     IrGenerationExtension.registerExtension(
-      PathsIrGenerationExtension(configuration.get(KPathsCompilerConfiguration.irSnapshotPath)),
+      PathsIrGenerationExtension(configuration.get(KPathsCompilerConfiguration.irSnapshotPath), adapterBridge),
     )
   }
 

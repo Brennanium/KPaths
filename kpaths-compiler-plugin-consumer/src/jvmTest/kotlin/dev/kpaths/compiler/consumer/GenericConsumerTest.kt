@@ -2,12 +2,19 @@ package dev.kpaths.compiler.consumer
 
 import dev.kpaths.compiler.fixture.FixtureBox
 import dev.kpaths.compiler.fixture.FixtureEvent
+import dev.kpaths.compiler.fixture.sampleAdaptedDocument
 import dev.kpaths.core.CaseMatch
 import dev.kpaths.core.TypeId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class GenericConsumerTest {
+  @Test
+  fun `specialized adapter path is visible without the compiler plugin`() {
+    assertEquals("from dependency", adaptedPathFromAnotherModule.get(sampleAdaptedDocument()))
+    assertEquals(TypeId.of<String>(), adaptedPathFromAnotherModule.__kpaths_valueType)
+  }
+
   @Test
   fun `generic generated path works without the compiler plugin`() {
     val original = FixtureBox<String?>(null)

@@ -26,11 +26,14 @@ import org.jetbrains.kotlin.fir.symbols.impl.FirPropertySymbol
 import org.jetbrains.kotlin.fir.types.toTypeProjection
 import org.jetbrains.kotlin.fir.types.ConeAttributes
 import org.jetbrains.kotlin.fir.types.ConeClassLikeType
+import org.jetbrains.kotlin.fir.types.ConeKotlinType
 import org.jetbrains.kotlin.fir.types.ConeKotlinTypeProjection
 import org.jetbrains.kotlin.fir.types.impl.ConeTypeParameterTypeImpl
 import org.jetbrains.kotlin.fir.resolve.substitution.ConeSubstitutorByMap
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.name.CallableId
+import org.jetbrains.kotlin.fir.symbols.impl.FirClassSymbol
 import org.jetbrains.kotlin.types.Variance
 
 /** Generates FIR property declarations for root, case, and case-property paths. */
@@ -73,8 +76,9 @@ internal class PathsFirPropertyGenerator(
       val pathType = pathClass.createConeType(session, arrayOf(
         caseType.toTypeProjection(Variance.INVARIANT), valueType.toTypeProjection(Variance.INVARIANT),
       ), false)
+      val adaptedType = adaptedPathType(pathsClass, root, property, caseType, valueType, pathType)
       return@with listOf(createMemberProperty(pathsClass, PathsGenericCasePropertyCatalogKey,
-        callableId.callableName, pathType, true, false).symbol)
+        callableId.callableName, adaptedType, true, false).symbol)
     }
     if (pathsClass.isGeneratedGenericCasePath()) {
       val root = pathsClass.genericCaseRoot()?.fir as? FirRegularClass ?: return@with emptyList()
@@ -170,8 +174,9 @@ internal class PathsFirPropertyGenerator(
       val resultType = pathClass.createConeType(session, arrayOf(
         rootType.toTypeProjection(Variance.INVARIANT), valueType.toTypeProjection(Variance.INVARIANT),
       ), false)
+      val adaptedType = adaptedPathType(pathsClass, root, property, rootType, valueType, resultType)
       return@with listOf(createMemberProperty(pathsClass, PathsGenericCatalogKey, callableId.callableName,
-        resultType, true, false).symbol)
+        adaptedType, true, false).symbol)
     }
     if (pathsClass.isGeneratedCasePropertyCatalog()) {
       val sourceCase = pathsClass.propertyCatalogCase() ?: return@with emptyList()
@@ -194,7 +199,10 @@ internal class PathsFirPropertyGenerator(
         sourceCase.classId.createConeType(session).toTypeProjection(Variance.INVARIANT),
         sourceProperty.resolvedReturnType.toTypeProjection(Variance.INVARIANT),
       ), false)
-      return@with listOf(createMemberProperty(pathsClass, PathsCasePropertyCatalogKey, callableId.callableName, pathType, true, false).symbol)
+      val owner = pathsClass.propertyCatalogRoot() ?: return@with emptyList()
+      val adaptedType = adaptedPathType(pathsClass, owner, sourceProperty,
+        sourceCase.classId.createConeType(session), sourceProperty.resolvedReturnType, pathType)
+      return@with listOf(createMemberProperty(pathsClass, PathsCasePropertyCatalogKey, callableId.callableName, adaptedType, true, false).symbol)
     }
     if (pathsClass.canGenerateCasePathableConformance()) {
       if (callableId.callableName.asString() != "case") return@with emptyList()
@@ -335,11 +343,23 @@ internal class PathsFirPropertyGenerator(
         pathsClass,
         PathsDeclarationKey,
         callableId.callableName,
-        returnType,
+        adaptedPathType(pathsClass, rootClass, sourceProperty, rootType, sourceProperty.resolvedReturnType, returnType),
         isVal = true,
         hasBackingField = false,
       ).symbol,
     )
+  }
+
+  private fun adaptedPathType(
+    catalog: FirClassSymbol<*>, owner: FirClassSymbol<*>, property: FirPropertySymbol,
+    rootType: ConeKotlinType, storageType: ConeKotlinType, defaultType: ConeKotlinType,
+  ): ConeKotlinType = with(analysis) {
+    val adapters = owner.generationOptions()?.propertyPathAdapters.orEmpty()
+    val context = KPathsCompilerPropertyContext(session, property, rootType, storageType, defaultType)
+    val recipe = adapters.firstNotNullOfOrNull { it.pathRecipe(context) } ?: return@with defaultType
+    val defaultPathClass = (defaultType as ConeClassLikeType).lookupTag.classId
+    session.kpaths.adapterBridge.record(CallableId(catalog.classId, property.fir.generatedKPathsName()), recipe, defaultPathClass)
+    recipe.publicPathType
   }
 
 }

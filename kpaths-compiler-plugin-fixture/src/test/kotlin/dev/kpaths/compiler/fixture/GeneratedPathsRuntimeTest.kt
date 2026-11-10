@@ -19,6 +19,24 @@ import org.objectweb.asm.Opcodes
 
 class GeneratedPathsRuntimeTest {
   @Test
+  fun contributedAdapterEmitsASpecializedPath() {
+    val path: CellTextPath = AdaptedDocument.GeneratedPaths.title
+    val document = AdaptedDocument(dev.kpaths.compiler.integration.Cell("hello"))
+    assertEquals("hello", path.get(document))
+    assertTrue(path.hasWritableStorage)
+    assertEquals(TypeId.of<String>(), path.__kpaths_valueType)
+    assertEquals(PathId.property(TypeId.of<AdaptedDocument>(), "title"), path.__kpaths_id)
+    assertSame(path, AdaptedDocument.GeneratedPaths.title)
+    val generic: GenericCellPath<String?> = AdaptedBox.GeneratedPaths<String?>().title
+    assertEquals(null, generic.get(AdaptedBox(dev.kpaths.compiler.integration.Cell(null))))
+    assertEquals(TypeId.of<String?>(), generic.__kpaths_valueType)
+    assertEquals(PathId.property(TypeId.of<AdaptedBox<String?>>(), "title"), generic.__kpaths_id)
+    val caseProperty: EventCellPath = AdaptedEvent.GeneratedPaths.ItemPaths.title
+    assertEquals("case", caseProperty.get(AdaptedEvent.Item(dev.kpaths.compiler.integration.Cell("case"))))
+    assertEquals(PathId.property(TypeId.of<AdaptedEvent.Item>(), "title"), caseProperty.__kpaths_id)
+  }
+
+  @Test
   fun generatedPropertyPathReadsAndIsCanonical() {
     val first = Person.Paths.name
     val second = Person.Paths.name
