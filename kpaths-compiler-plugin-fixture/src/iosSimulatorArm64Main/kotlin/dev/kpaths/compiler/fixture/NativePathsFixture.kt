@@ -8,6 +8,7 @@ import dev.kpaths.core.CasePathable
 import dev.kpaths.core.KeyPath
 import dev.kpaths.core.WritableKeyPath
 import dev.kpaths.core.TypeId
+import dev.kpaths.core.PartialCaseKeyPath
 
 /** Proves the same synthetic nested declaration reaches Kotlin/Native's backend. */
 @Pathable
@@ -25,10 +26,15 @@ val nativeBoxTokenPath: WritableKeyPath<NativeBox<String?>, String?> =
 sealed interface NativeEvent<out T> {
   data object Idle : NativeEvent<Nothing>
   data class Value<T>(val value: T) : NativeEvent<T>
+  data class Tagged<T>(val id: Int, val value: T) : NativeEvent<T>
 }
 
 val nativeValueCase: CaseKeyPath<NativeEvent<String>, NativeEvent.Value<String>> =
   NativeEvent.Paths<String>().Value
+val nativeValuePayload: CaseKeyPath<NativeEvent<String?>, String?> = NativeEvent.Paths<String?>().Value.value
+val nativeAllCases: List<PartialCaseKeyPath<NativeEvent<String?>>> = NativeEvent.Paths<String?>().allCasePaths
+val nativeBoundValue: CaseKeyPath<NativeEvent<String?>, String?> =
+  NativeEvent.Paths<String?>().Tagged.valueFor(id = 1)
 
 val nativePersonPaths: NativePerson.Paths = NativePerson.Paths
 val nativePersonNamePath: KeyPath<NativePerson, String> = NativePerson.Paths.name

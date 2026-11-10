@@ -249,7 +249,10 @@ internal class PathsDiagnosticCheckers(private val pluginSession: FirSession) : 
         .map { KPathsGeneratedMember(it.generatedKPathsName().asString(), "the key path for property '${it.name}'") } +
         cases.map { (_, sourceName, generatedName) -> KPathsGeneratedMember(generatedName, "the case path for '$sourceName'") } +
         casePropertyCatalogs +
-        if (cases.isNotEmpty() && declaration.typeParameters.isEmpty()) listOf(
+        (if (declaration.typeParameters.isNotEmpty()) cases.map { (_, sourceName, generatedName) ->
+          KPathsGeneratedMember(generatedName + "CasePath", "the generated case-path type for '$sourceName'")
+        } else emptyList()) +
+        if (cases.isNotEmpty()) listOf(
           KPathsGeneratedMember("allCasePaths", "the generated catalog of all case paths"),
           KPathsGeneratedMember("caseOf", "the generated case-path lookup function"),
         ) else emptyList()
@@ -257,7 +260,7 @@ internal class PathsDiagnosticCheckers(private val pluginSession: FirSession) : 
         reporter.reportOn(declaration.source, PathsDiagnostics.GENERATED_MEMBER_COLLISION,
           "[KPaths] ${KPathsDiagnostics.generatedMemberCollision(collision)}")
       }
-      if (declaration.status.modality != Modality.SEALED || declaration.typeParameters.isNotEmpty()) return
+      if (declaration.status.modality != Modality.SEALED) return
       val unavailable = declaration.declarations.filterIsInstance<FirRegularClass>().filter { case ->
         case.classKind == ClassKind.CLASS && case.symbol.resolvedSuperTypes.any {
           (it as? ConeClassLikeType)?.fullyExpandedType()?.lookupTag?.classId == declaration.symbol.classId

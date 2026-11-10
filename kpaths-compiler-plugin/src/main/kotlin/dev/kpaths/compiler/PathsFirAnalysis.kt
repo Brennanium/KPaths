@@ -151,6 +151,21 @@ internal class PathsFirAnalysis(private val session: FirSession) {
   fun FirClassSymbol<*>.isGeneratedGenericCatalog(): Boolean =
     (origin as? FirDeclarationOrigin.Plugin)?.key == PathsGenericCatalogKey
 
+  fun FirClassSymbol<*>.isGeneratedGenericCasePath(): Boolean =
+    (origin as? FirDeclarationOrigin.Plugin)?.key == PathsGenericCaseDeclarationKey
+
+  fun FirClassSymbol<*>.genericCaseRoot(): FirClassSymbol<*>? {
+    if (!isGeneratedGenericCasePath()) return null
+    val rootId = classId.outerClassId?.outerClassId?.outerClassId ?: return null
+    return session.symbolProvider.getClassLikeSymbolByClassId(rootId) as? FirClassSymbol<*>
+  }
+
+  fun FirClassSymbol<*>.genericSourceCase(): FirClassSymbol<*>? {
+    val root = genericCaseRoot() ?: return null
+    return root.caseSymbols().singleOrNull { it.name.asString() + "CasePath" == classId.shortClassName.asString() }
+      ?.sealedSymbol
+  }
+
   fun FirClassSymbol<*>.genericCatalogRoot(): FirClassSymbol<*>? {
     if (!isGeneratedGenericCatalog()) return null
     val rootId = classId.outerClassId?.outerClassId ?: return null
@@ -185,7 +200,7 @@ internal class PathsFirAnalysis(private val session: FirSession) {
   }
 
   fun FirClassSymbol<*>.sourceCasePayloadProperties(): List<FirPropertySymbol> {
-    val source = sourceCase() ?: return emptyList()
+    val source = (if (isGeneratedGenericCasePath()) genericSourceCase() else sourceCase()) ?: return emptyList()
     val sourceClass = source.fir as? FirRegularClass ?: return emptyList()
     val constructor = sourceClass.declarations
       .filterIsInstance<FirConstructor>().singleOrNull { it.isPrimary } ?: return emptyList()

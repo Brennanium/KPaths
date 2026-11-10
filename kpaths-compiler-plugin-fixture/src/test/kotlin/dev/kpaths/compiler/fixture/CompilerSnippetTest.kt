@@ -14,6 +14,94 @@ import org.objectweb.asm.Opcodes
 
 class CompilerSnippetTest {
   @Test
+  fun `generic case path implementation names diagnose collisions`() {
+    val result = compileSnippet("GenericCaseNameCollision.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      @Pathable sealed interface Event<out T> {
+        data class Value<T>(val value: T) : Event<T>
+        data object ValueCasePath : Event<Nothing>
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages, "Cannot generate paths because 'ValueCasePath' would name both")
+  }
+
+  @Test
+  fun `generic case catalogs warn when payloads cannot be represented`() {
+    val result = compileSnippet("IncompleteGenericCatalog.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      @Pathable sealed interface Event<out T> {
+        data object Idle : Event<Nothing>
+        data class Many<T>(val a: T, val b: Int, val c: Int, val d: Int) : Event<T>
+      }
+      fun run(): Boolean = Event.Paths<String>().allCasePaths == listOf(Event.Paths<String>().Idle.unit)
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertContains(result.messages, "The generated case catalog omits 'Many'")
+    assertEquals(true, result.classLoader.loadClass("example.IncompleteGenericCatalogKt").getMethod("run").invoke(null))
+  }
+
+  @Test
+  fun `generic sealed cases expose directly embeddable nullable payload paths`() {
+    val result = compileSnippet("GenericCasePayload.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      import dev.kpaths.core.CaseKeyPath
+      import dev.kpaths.core.CaseMatch
+      import dev.kpaths.core.TypeId
+      import dev.kpaths.core.PartialCaseKeyPath
+      import dev.kpaths.core.caseKeyPath
+      import dev.kpaths.core.PathId
+      import dev.kpaths.core.PathSegment
+      @Pathable sealed interface Event<out T> {
+        data object Idle : Event<Nothing>
+        data class Value<T>(val value: T) : Event<T>
+        data class PairValue<T>(val id: Int, val value: T) : Event<T>
+        data class TripleValue<T>(val id: Int, val value: T, val active: Boolean) : Event<T>
+      }
+      fun run(): Boolean {
+        val path: CaseKeyPath<Event<String?>, String?> = Event.Paths<String?>().Value.value
+        val idle: CaseKeyPath<Event<String?>, Unit> = Event.Paths<String?>().Idle.unit
+        val pair: CaseKeyPath<Event<String?>, Pair<Int, String?>> = Event.Paths<String?>().PairValue.payload
+        val triple: CaseKeyPath<Event<String?>, Triple<Int, String?, Boolean>> = Event.Paths<String?>().TripleValue.payload
+        val bound = Event.Paths<String?>().PairValue.valueFor(id = 1)
+        val boundTriple = Event.Paths<String?>().TripleValue.valueFor(id = 1, active = true)
+        val catalog = Event.Paths<String?>()
+        val all: List<PartialCaseKeyPath<Event<String?>>> = catalog.allCasePaths
+        val manual = caseKeyPath<Event<String?>, Event.Value<String?>, String?>(
+          extract = Event.Value<String?>::value,
+          embed = { Event.Value(it) },
+        )
+        val boundId = PathId.case(TypeId.of<Event<String?>>(), "PairValue")
+          .appending(PathId.property(TypeId.of<Event.PairValue<String?>>(), "value"))
+          .appending(PathSegment.Key(1))
+        return all == listOf(idle, path, pair, triple) && catalog.caseOf(Event.Value(null)) == path && path == manual &&
+          path.match(Event.Value(null)) == CaseMatch.Matched(null) &&
+          path.match(Event.Idle) == CaseMatch.NoMatch && path.embed("hello") == Event.Value("hello") &&
+          path.__kpaths_valueType == TypeId.of<String?>() &&
+          idle.match(Event.Idle) == CaseMatch.Matched(Unit) && idle.embed(Unit) == Event.Idle &&
+          pair.match(Event.PairValue(1, null)) == CaseMatch.Matched(1 to null) &&
+          pair.__kpaths_valueType == TypeId.of<Pair<Int, String?>>() &&
+          pair.embed(2 to "hi") == Event.PairValue(2, "hi") &&
+          bound.match(Event.PairValue(1, null)) == CaseMatch.Matched(null) &&
+          bound.__kpaths_id == boundId && bound.__kpaths_valueType == TypeId.of<String?>() &&
+          bound.match(Event.PairValue(2, "no")) == CaseMatch.NoMatch &&
+          bound.embed("bound") == Event.PairValue(1, "bound") &&
+          triple.match(Event.TripleValue(1, null, true)) == CaseMatch.Matched(Triple(1, null, true)) &&
+          triple.__kpaths_valueType == TypeId.of<Triple<Int, String?, Boolean>>() &&
+          boundTriple.match(Event.TripleValue(1, null, true)) == CaseMatch.Matched(null) &&
+          boundTriple.match(Event.TripleValue(1, null, false)) == CaseMatch.NoMatch &&
+          boundTriple.embed("bound") == Event.TripleValue(1, "bound", true) &&
+          triple.embed(Triple(2, "hi", false)) == Event.TripleValue(2, "hi", false)
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.GenericCasePayloadKt").getMethod("run").invoke(null))
+  }
+
+  @Test
   fun `generic whole case paths map reordered parameters and nullable arguments`() {
     val result = compileSnippet("ReorderedGenericCase.kt" to """
       package example
@@ -29,9 +117,14 @@ class CompilerSnippetTest {
         val path: CaseKeyPath<Result<String?, Int>, Result.Flipped<Int, String?>> =
           Result.Paths<String?, Int>().Flipped
         val value = Result.Flipped<Int, String?>(1, null)
+        val payload: CaseKeyPath<Result<String?, Int>, Pair<Int, String?>> =
+          Result.Paths<String?, Int>().Flipped.payload
         return path.match(value) == CaseMatch.Matched(value) && path.embed(value) == value &&
           path.__kpaths_valueType == TypeId.of<Result.Flipped<Int, String?>>() &&
-          path == caseKeyPath<Result<String?, Int>, Result.Flipped<Int, String?>>()
+          path == caseKeyPath<Result<String?, Int>, Result.Flipped<Int, String?>>() &&
+          payload.match(value) == CaseMatch.Matched(1 to null) &&
+          payload.__kpaths_valueType == TypeId.of<Pair<Int, String?>>() &&
+          payload.embed(2 to "hello") == Result.Flipped(2, "hello")
       }
     """)
     assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
@@ -97,6 +190,7 @@ class CompilerSnippetTest {
         data class Nested(val value: String) : Event<List<String>>
         data class Extra<T, U>(val value: U) : Event<T>
       }
+      val attempted = Event.Paths<String>().Fixed
     """)
     assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
     assertContains(result.messages, "where the generic root requires 'T'")

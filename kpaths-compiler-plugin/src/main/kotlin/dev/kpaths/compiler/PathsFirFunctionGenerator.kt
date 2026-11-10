@@ -7,6 +7,8 @@ import dev.kpaths.compiler.PathsFirSymbols.listClassId
 import dev.kpaths.compiler.PathsFirSymbols.partialCaseKeyPathClassId
 import org.jetbrains.kotlin.fir.FirSession
 import org.jetbrains.kotlin.fir.declarations.DirectDeclarationsAccess
+import org.jetbrains.kotlin.fir.declarations.FirRegularClass
+import org.jetbrains.kotlin.fir.resolve.substitution.ConeSubstitutorByMap
 import org.jetbrains.kotlin.fir.extensions.DeclarationGenerationContext
 import org.jetbrains.kotlin.fir.extensions.FirExtension
 import org.jetbrains.kotlin.fir.plugin.createConeType
@@ -15,6 +17,8 @@ import org.jetbrains.kotlin.fir.symbols.SymbolInternals
 import org.jetbrains.kotlin.fir.symbols.impl.FirNamedFunctionSymbol
 import org.jetbrains.kotlin.fir.types.toTypeProjection
 import org.jetbrains.kotlin.fir.types.ConeAttributes
+import org.jetbrains.kotlin.fir.types.ConeClassLikeType
+import org.jetbrains.kotlin.fir.types.ConeKotlinTypeProjection
 import org.jetbrains.kotlin.fir.types.impl.ConeTypeParameterTypeImpl
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.types.Variance
@@ -76,10 +80,15 @@ internal class PathsFirFunctionGenerator(
       }.symbol
       return@with listOf(reifiedFactory, classFactory, typeIdFactory)
     }
-    if (pathsClass.isGeneratedPaths() && callableId.callableName.asString() == "__kpaths_buildAllCasePaths") {
-      val root = pathsClass.rootClass() ?: return@with emptyList()
-      if (!root.canGenerateCaseCatalog()) return@with emptyList()
-      val rootType = root.classId.createConeType(session)
+    if ((pathsClass.isGeneratedPaths() || pathsClass.isGeneratedGenericCatalog()) &&
+      callableId.callableName.asString() == "__kpaths_buildAllCasePaths") {
+      val generic = pathsClass.isGeneratedGenericCatalog()
+      val root = (if (generic) pathsClass.genericCatalogRoot() else pathsClass.rootClass()) ?: return@with emptyList()
+      if (root.caseSymbols().isEmpty()) return@with emptyList()
+      val rootType = if (generic) root.classId.createConeType(session, pathsClass.fir.typeParameters.map {
+        ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty)
+          .toTypeProjection(Variance.INVARIANT)
+      }.toTypedArray(), false) else root.classId.createConeType(session)
       val partialCasePathType = partialCaseKeyPathClassId.createConeType(
         session,
         arrayOf(rootType.toTypeProjection(Variance.INVARIANT)),
@@ -93,7 +102,7 @@ internal class PathsFirFunctionGenerator(
       return@with listOf(
         createMemberFunction(
           pathsClass,
-          PathsDeclarationKey,
+          if (generic) PathsGenericCatalogKey else PathsDeclarationKey,
           callableId.callableName,
           returnType,
         ) {
@@ -101,22 +110,34 @@ internal class PathsFirFunctionGenerator(
         }.symbol,
       )
     }
-    if (!pathsClass.isGeneratedCasePath()) return@with emptyList()
-    val root = pathsClass.casePathRootClass() ?: return@with emptyList()
-    val sourceCase = pathsClass.sourceCase() ?: return@with emptyList()
-    val rootType = root.classId.createConeType(session)
-    val caseType = sourceCase.classId.createConeType(session)
+    val isGeneric = pathsClass.isGeneratedGenericCasePath()
+    if (!pathsClass.isGeneratedCasePath() && !isGeneric) return@with emptyList()
+    val root = (if (isGeneric) pathsClass.genericCaseRoot() else pathsClass.casePathRootClass()) ?: return@with emptyList()
+    val sourceCase = (if (isGeneric) pathsClass.genericSourceCase() else pathsClass.sourceCase()) ?: return@with emptyList()
+    val (rootType, caseType) = if (isGeneric) {
+      kPathsGenericCaseTypes(root.fir as? FirRegularClass ?: return@with emptyList(),
+        sourceCase.fir as? FirRegularClass ?: return@with emptyList(), pathsClass.fir.typeParameters, session)
+        ?: return@with emptyList()
+    } else root.classId.createConeType(session) to sourceCase.classId.createConeType(session)
+    val key = if (isGeneric) PathsGenericCaseDeclarationKey else PathsCaseDeclarationKey
+    val substitutor = if (isGeneric) {
+      val arguments = (caseType as ConeClassLikeType).typeArguments.map {
+        (it as? ConeKotlinTypeProjection)?.type ?: return@with emptyList()
+      }
+      ConeSubstitutorByMap.create(sourceCase.fir.typeParameters.map { it.symbol }.zip(arguments).toMap(), session, false)
+    } else null
     val payloadProperties = pathsClass.sourceCasePayloadProperties()
     val boundMember = planKPathsBoundPayloadMembers(payloadProperties.map { it.name.asString() })
       .singleOrNull { it.generatedName == callableId.callableName.asString() }
     if (boundMember != null) {
-      val targetType = payloadProperties[boundMember.targetIndex].resolvedReturnType
+      val originalTargetType = payloadProperties[boundMember.targetIndex].resolvedReturnType
+      val targetType = substitutor?.substituteOrSelf(originalTargetType) ?: originalTargetType
       val returnType = caseKeyPathClassId.createConeType(session, arrayOf(
         rootType.toTypeProjection(Variance.INVARIANT), targetType.toTypeProjection(Variance.INVARIANT),
       ), false)
-      return@with listOf(createMemberFunction(pathsClass, PathsCaseDeclarationKey, callableId.callableName, returnType) {
+      return@with listOf(createMemberFunction(pathsClass, key, callableId.callableName, returnType) {
         payloadProperties.filterIndexed { index, _ -> index != boundMember.targetIndex }.forEach { property ->
-          valueParameter(property.name, property.resolvedReturnType)
+          valueParameter(property.name, substitutor?.substituteOrSelf(property.resolvedReturnType) ?: property.resolvedReturnType)
         }
         withGeneratedDefaultBody()
       }.symbol)
@@ -124,7 +145,7 @@ internal class PathsFirFunctionGenerator(
     val function = when (callableId.callableName.asString()) {
       "match" -> createMemberFunction(
         pathsClass,
-        PathsCaseDeclarationKey,
+        key,
         callableId.callableName,
         caseMatchClassId.createConeType(
           session,
@@ -137,7 +158,7 @@ internal class PathsFirFunctionGenerator(
       }
       "embed" -> createMemberFunction(
         pathsClass,
-        PathsCaseDeclarationKey,
+        key,
         callableId.callableName,
         rootType,
       ) {

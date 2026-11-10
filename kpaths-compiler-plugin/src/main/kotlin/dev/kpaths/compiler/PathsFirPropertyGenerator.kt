@@ -1,7 +1,6 @@
 package dev.kpaths.compiler
 
 import dev.kpaths.codegen.model.KPathsCaseKind
-import dev.kpaths.codegen.model.KPathsGenericCasePlan
 import dev.kpaths.codegen.model.KPathsPropertyPathKind
 import dev.kpaths.codegen.model.KPathsPropertyPolicyResult
 import dev.kpaths.codegen.model.KPathsPropertyShape
@@ -26,9 +25,12 @@ import org.jetbrains.kotlin.fir.symbols.SymbolInternals
 import org.jetbrains.kotlin.fir.symbols.impl.FirPropertySymbol
 import org.jetbrains.kotlin.fir.types.toTypeProjection
 import org.jetbrains.kotlin.fir.types.ConeAttributes
+import org.jetbrains.kotlin.fir.types.ConeClassLikeType
+import org.jetbrains.kotlin.fir.types.ConeKotlinTypeProjection
 import org.jetbrains.kotlin.fir.types.impl.ConeTypeParameterTypeImpl
 import org.jetbrains.kotlin.fir.resolve.substitution.ConeSubstitutorByMap
 import org.jetbrains.kotlin.name.FqName
+import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.types.Variance
 
 /** Generates FIR property declarations for root, case, and case-property paths. */
@@ -42,6 +44,43 @@ internal class PathsFirPropertyGenerator(
     context: DeclarationGenerationContext.Member?,
   ): List<FirPropertySymbol> = with(analysis) {
     val pathsClass = context?.owner ?: return@with emptyList()
+    if (pathsClass.isGeneratedGenericCasePath()) {
+      val root = pathsClass.genericCaseRoot()?.fir as? FirRegularClass ?: return@with emptyList()
+      val sourceCase = pathsClass.genericSourceCase()?.fir as? FirRegularClass ?: return@with emptyList()
+      val (rootType, caseType) = kPathsGenericCaseTypes(root, sourceCase, pathsClass.fir.typeParameters, session)
+        ?: return@with emptyList()
+      val metadataType = when (callableId.callableName.asString()) {
+        "__kpaths_id" -> pathIdClassId.createConeType(session)
+        "__kpaths_valueType" -> typeIdClassId.createConeType(session)
+        else -> null
+      }
+      if (metadataType != null) return@with listOf(createMemberProperty(pathsClass, PathsGenericCaseDeclarationKey,
+        callableId.callableName, metadataType, true, false).symbol)
+      val properties = pathsClass.sourceCasePayloadProperties()
+      val caseArguments = (caseType as ConeClassLikeType).typeArguments.map {
+        (it as? ConeKotlinTypeProjection)?.type ?: return@with emptyList()
+      }
+      val substitution = sourceCase.typeParameters.map { it.symbol }.zip(caseArguments).toMap()
+      val substitutor = ConeSubstitutorByMap.create(substitution, session, false)
+      val payloadType = when {
+        callableId.callableName.asString() == "unit" && sourceCase.classKind == ClassKind.OBJECT ->
+          unitClassId.createConeType(session)
+        callableId.callableName.asString() == "payload" && properties.size in 2..3 -> {
+          val tuple = org.jetbrains.kotlin.name.ClassId.topLevel(
+            FqName(if (properties.size == 2) "kotlin.Pair" else "kotlin.Triple"))
+          tuple.createConeType(session, properties.map {
+            substitutor.substituteOrSelf(it.resolvedReturnType).toTypeProjection(Variance.INVARIANT)
+          }.toTypedArray(), false)
+        }
+        else -> properties.singleOrNull { it.name == callableId.callableName }
+          ?.let { substitutor.substituteOrSelf(it.resolvedReturnType) }
+      } ?: return@with emptyList()
+      val pathType = caseKeyPathClassId.createConeType(session, arrayOf(
+        rootType.toTypeProjection(Variance.INVARIANT), payloadType.toTypeProjection(Variance.INVARIANT),
+      ), false)
+      return@with listOf(createMemberProperty(pathsClass, PathsGenericCaseDeclarationKey,
+        callableId.callableName, pathType, true, false).symbol)
+    }
     if (pathsClass.isGeneratedGenericCatalog()) {
       val root = pathsClass.genericCatalogRoot() ?: return@with emptyList()
       val arguments = pathsClass.fir.typeParameters.map {
@@ -57,20 +96,10 @@ internal class PathsFirPropertyGenerator(
         val caseSymbol = requireNotNull(concreteCase.sealedSymbol)
         val caseClass = caseSymbol.fir as? FirRegularClass ?: return@with emptyList()
         val rootClass = root.fir as? FirRegularClass ?: return@with emptyList()
-        val plan = rootClass.kPathsGenericCasePlan(caseClass, session) as? KPathsGenericCasePlan.Supported
+        kPathsGenericCaseTypes(rootClass, caseClass, pathsClass.fir.typeParameters, session)
           ?: return@with emptyList()
-        val rootArguments = root.fir.typeParameters.mapIndexed { index, parameter ->
-          parameter.symbol.name.asString() to arguments[index]
-        }.toMap()
-        val caseArguments = caseClass.typeParameters.map { parameter ->
-          val rootName = plan.substitutions[parameter.symbol.name.asString()] ?: return@with emptyList()
-          val argument = rootArguments[rootName] ?: return@with emptyList()
-          argument.toTypeProjection(Variance.INVARIANT)
-        }.toTypedArray()
-        val valueType = caseSymbol.classId.createConeType(session, caseArguments, false)
-        val pathType = caseKeyPathClassId.createConeType(session, arrayOf(
-          rootType.toTypeProjection(Variance.INVARIANT), valueType.toTypeProjection(Variance.INVARIANT),
-        ), false)
+        val pathType = pathsClass.classId.createNestedClassId(Name.identifier(concreteCase.name.asString() + "CasePath"))
+          .createConeType(session, arguments.map { it.toTypeProjection(Variance.INVARIANT) }.toTypedArray(), false)
         return@with listOf(createMemberProperty(pathsClass, PathsGenericCatalogKey,
           callableId.callableName, pathType, true, false).symbol)
       }

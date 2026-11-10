@@ -25,5 +25,9 @@ class GenericConsumerTest {
     assertEquals(CaseMatch.Matched(value), path.match(value))
     assertEquals(value, path.embed(value))
     assertEquals(TypeId.of<FixtureEvent.Value<String?>>(), path.__kpaths_valueType)
+    val payload = FixtureEvent.Paths<String?>().Value.value
+    assertEquals(CaseMatch.Matched(null), payload.match(value))
+    assertEquals(FixtureEvent.Value("updated"), payload.embed("updated"))
+    assertEquals(listOf(FixtureEvent.Paths<String?>().Idle.unit, payload), FixtureEvent.Paths<String?>().allCasePaths)
   }
 }
