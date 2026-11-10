@@ -13,6 +13,7 @@ import dev.kpaths.codegen.model.classifyForKPaths
 import dev.kpaths.codegen.model.findKPathsGeneratedMemberCollisions
 import dev.kpaths.codegen.model.hasAmbiguousKPathsCompanion
 import dev.kpaths.codegen.model.isKPathsGenericVariantOfConcreteRoot
+import dev.kpaths.codegen.model.kPathsGenericCaseDiagnostic
 import dev.kpaths.codegen.model.isKPathsReservedName
 import dev.kpaths.codegen.model.validateKPathsConfiguredName
 import dev.kpaths.codegen.model.kPathsConfiguredNameDiagnostic
@@ -154,6 +155,14 @@ internal class PathsDiagnosticCheckers(private val pluginSession: FirSession) : 
       }.forEach { candidate ->
         reporter.reportOn(candidate.source, PathsDiagnostics.UNSUPPORTED_SEALED_VARIANT,
           "[KPaths] ${KPathsDiagnostics.genericVariantOfConcreteRoot(candidate.name.asString())}")
+      }
+      if (declaration.typeParameters.isNotEmpty()) {
+        supportedSealedCases.forEach { candidate ->
+          val plan = declaration.kPathsGenericCasePlan(candidate) ?: return@forEach
+          val message = kPathsGenericCaseDiagnostic(candidate.name.asString(),
+            declaration.symbol.classId.asSingleFqName().asString(), plan) ?: return@forEach
+          reporter.reportOn(candidate.source, PathsDiagnostics.UNSUPPORTED_SEALED_VARIANT, "[KPaths] $message")
+        }
       }
       val cases = when {
         declaration.status.modality == Modality.SEALED -> supportedSealedCases

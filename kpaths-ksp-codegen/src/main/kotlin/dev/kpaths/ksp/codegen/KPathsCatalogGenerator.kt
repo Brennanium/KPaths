@@ -46,6 +46,7 @@ import dev.kpaths.codegen.model.KPathsGenericRootParameter
 import dev.kpaths.codegen.model.KPathsGenericCaseArgument
 import dev.kpaths.codegen.model.KPathsGenericCasePlan
 import dev.kpaths.codegen.model.planKPathsGenericCase
+import dev.kpaths.codegen.model.kPathsGenericCaseDiagnostic
 import dev.kpaths.codegen.model.hasAmbiguousKPathsCompanion
 import dev.kpaths.codegen.model.isKPathsGenericVariantOfConcreteRoot
 import dev.kpaths.codegen.model.findKPathsGeneratedMemberCollisions
@@ -1950,27 +1951,9 @@ public class KPathsCatalogGenerator(
         )
       },
     )
-    val kotlinSubstitutions = when (plan) {
-      is KPathsGenericCasePlan.Supported -> plan.substitutions
-      is KPathsGenericCasePlan.ConflictingParameter -> {
-        reportGenerationError(rootDeclaration,
-          "Cannot generate '${casePath.sourceName}' because its type parameter '${plan.caseParameter}' " +
-            "would need to represent both '${plan.firstRootParameter}' and '${plan.secondRootParameter}'.")
-        return null
-      }
-      is KPathsGenericCasePlan.UnsupportedArgument -> {
-        reportGenerationError(rootDeclaration,
-          "Cannot generate '${casePath.sourceName}' because it implements $rootQualifiedName<${plan.argument}> " +
-            "where the generic root requires '${plan.rootParameter}'. " +
-            "The variant must forward that type parameter, or refine it to Nothing through an `out` parameter.")
-        return null
-      }
-      is KPathsGenericCasePlan.UnmappedParameters -> {
-        reportGenerationError(rootDeclaration,
-          "Cannot generate '${casePath.sourceName}' because its type parameter(s) " +
-            "${plan.names.joinToString()} cannot be determined from the sealed root.")
-        return null
-      }
+    val kotlinSubstitutions = (plan as? KPathsGenericCasePlan.Supported)?.substitutions ?: run {
+      reportGenerationError(rootDeclaration, requireNotNull(kPathsGenericCaseDiagnostic(casePath.sourceName, rootQualifiedName, plan)))
+      return null
     }
     val tokenSubstitutions = kotlinSubstitutions.mapValues { (_, rootName) -> rootTypeTokenNames.getValue(rootName) }
 

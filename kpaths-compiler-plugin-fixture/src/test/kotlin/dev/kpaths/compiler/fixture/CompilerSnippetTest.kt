@@ -14,6 +14,36 @@ import org.objectweb.asm.Opcodes
 
 class CompilerSnippetTest {
   @Test
+  fun `generic sealed case policy accepts forwarded and covariant Nothing cases`() {
+    val result = compileSnippet("ValidGenericCases.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      @Pathable sealed interface Event<out T> {
+        data object Idle : Event<Nothing>
+        data class Value<T>(val value: T) : Event<T>
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+  }
+
+  @Test
+  fun `generic sealed variants diagnose unforwarded and specialized parameters`() {
+    val result = compileSnippet("InvalidGenericCases.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      @Pathable sealed interface Event<T> {
+        data class Fixed(val value: String) : Event<String>
+        data class Nested(val value: String) : Event<List<String>>
+        data class Extra<T, U>(val value: U) : Event<T>
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages, "where the generic root requires 'T'")
+    assertContains(result.messages, "example.Event<kotlin.collections.List<kotlin.String>>")
+    assertContains(result.messages, "type parameter(s) U cannot be determined from the sealed root")
+  }
+
+  @Test
   fun `named annotation arguments generate renamed property and case paths`() {
     val result = compileSnippet("NamedPathAnnotations.kt" to """
       package example

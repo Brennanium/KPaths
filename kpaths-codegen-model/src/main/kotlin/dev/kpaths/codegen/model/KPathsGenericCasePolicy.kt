@@ -57,3 +57,22 @@ public fun planKPathsGenericCase(
   return if (missing.isEmpty()) KPathsGenericCasePlan.Supported(substitutions)
   else KPathsGenericCasePlan.UnmappedParameters(missing)
 }
+
+/** Shared wording for a generic sealed-case shape that cannot be generated. */
+public fun kPathsGenericCaseDiagnostic(
+  caseName: String,
+  rootQualifiedName: String,
+  plan: KPathsGenericCasePlan,
+): String? = when (plan) {
+  is KPathsGenericCasePlan.Supported -> null
+  is KPathsGenericCasePlan.ConflictingParameter ->
+    "Cannot generate '$caseName' because its type parameter '${plan.caseParameter}' " +
+      "would need to represent both '${plan.firstRootParameter}' and '${plan.secondRootParameter}'."
+  is KPathsGenericCasePlan.UnsupportedArgument ->
+    "Cannot generate '$caseName' because it implements $rootQualifiedName<${plan.argument}> " +
+      "where the generic root requires '${plan.rootParameter}'. " +
+      "The variant must forward that type parameter, or refine it to Nothing through an `out` parameter."
+  is KPathsGenericCasePlan.UnmappedParameters ->
+    "Cannot generate '$caseName' because its type parameter(s) " +
+      "${plan.names.joinToString()} cannot be determined from the sealed root."
+}
