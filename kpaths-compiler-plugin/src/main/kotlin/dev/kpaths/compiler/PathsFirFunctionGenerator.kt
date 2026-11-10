@@ -61,7 +61,20 @@ internal class PathsFirFunctionGenerator(
         }
         withGeneratedDefaultBody()
       }.symbol
-      return@with listOf(reifiedFactory, classFactory)
+      val typeIdFactory = createMemberFunction(pathsClass, PathsDeclarationKey, callableId.callableName, { parameters ->
+        catalogId.createConeType(session, parameters.map {
+          ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty)
+            .toTypeProjection(Variance.INVARIANT)
+        }.toTypedArray(), false)
+      }) {
+        copyKPathsTypeParameters(root.fir.typeParameters, session)
+        root.fir.typeParameters.forEach { parameter ->
+          valueParameter(Name.identifier("${parameter.symbol.name}TypeId"),
+            PathsFirSymbols.typeIdClassId.createConeType(session))
+        }
+        withGeneratedDefaultBody()
+      }.symbol
+      return@with listOf(reifiedFactory, classFactory, typeIdFactory)
     }
     if (pathsClass.isGeneratedPaths() && callableId.callableName.asString() == "__kpaths_buildAllCasePaths") {
       val root = pathsClass.rootClass() ?: return@with emptyList()

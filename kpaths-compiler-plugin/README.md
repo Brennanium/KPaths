@@ -27,6 +27,7 @@ data class Box<Value>(var value: Value)
 val value: WritableKeyPath<Box<String?>, String?> = Box.Paths<String?>().value
 val sameValue = Box.Paths.of<String?>().value
 val stringValue = Box.Paths.of(String::class).value
+val explicitValue = Box.Paths.of<String?>(TypeId.of<String?>()).value
 ```
 
 The factory captures each reified type argument as a `TypeId`, so path identity preserves generic
@@ -34,6 +35,8 @@ arguments and nullability. The catalog caches direct path implementations; the `
 uses Kotlin type metadata at the factory call site. A `KClass` can be passed when a non-null class
 token is already available; it does not retain nested generic arguments or nullability. Generic
 sealed-case catalogs are not implemented by the compiler plugin yet.
+The explicit `TypeId` overload is useful in non-reified generic code; callers are responsible for
+passing a token that matches each type argument.
 
 On supported non-generic roots, `@PathName` changes the generated property-path spelling while
 preserving its identity:

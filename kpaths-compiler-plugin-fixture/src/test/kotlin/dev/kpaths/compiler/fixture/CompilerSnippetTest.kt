@@ -25,7 +25,7 @@ class CompilerSnippetTest {
     """)
     assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
     assertContains(result.messages, "Argument type mismatch")
-    assertContains(result.messages, "must be subtype of 'Any'")
+    assertContains(result.messages, "T : Any")
   }
 
   @Test
@@ -63,6 +63,7 @@ class CompilerSnippetTest {
         value.setInPlace(holder, "updated")
         val ordered = Ordered.Paths<Int>().value
         return entries == Record.Paths.of(Int::class, String::class).entries &&
+          entries == Record.Paths.of<Int, String>(KTypeId = TypeId.of<Int>(), VTypeId = TypeId.of<String>()).entries &&
           holderPath(String::class) == Holder.Paths<String>().value &&
           ordered == Ordered.Paths.of(Int::class).value &&
           old.entries == mapOf(1 to "a") && next.entries == mapOf(2 to null) &&
@@ -85,13 +86,17 @@ class CompilerSnippetTest {
       import dev.kpaths.core.WritableKeyPath
       import dev.kpaths.core.keyPath
       @Pathable data class Box<T>(var value: T)
+      fun <T> explicit(token: TypeId): WritableKeyPath<Box<T>, T> = Box.Paths.of<T>(token).value
       fun run(): Boolean {
         val catalog = Box.Paths<String>()
         val text: WritableKeyPath<Box<String>, String> = catalog.value
         val nullable = Box.Paths<String?>().value
         val number = Box.Paths<Int>().value
         val original = Box("before")
-        return text === catalog.value && text == Box.Paths.of<String>().value &&
+        val nested = explicit<List<String?>>(TypeId.of<List<String?>>())
+        return nested == Box.Paths<List<String?>>().value &&
+          nested.__kpaths_valueType == TypeId.of<List<String?>>() &&
+          text === catalog.value && text == Box.Paths.of<String>().value &&
           text == Box.Paths.of(String::class).value &&
           text == keyPath(Box<String>::value) &&
           text(original) == "before" && text.set(original, "after") == Box("after") &&

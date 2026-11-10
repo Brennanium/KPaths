@@ -315,9 +315,14 @@ private class PathsConstructorBodyGenerator(
       val companion = typeId.owner.companionObject() ?: return
       val builder = DeclarationIrBuilder(pluginContext, declaration.symbol)
       val classParameters = declaration.parameters.filter { it.kind == IrParameterKind.Regular }
+      val explicitTypeIds = classParameters.firstOrNull()?.type.let {
+        (it as? IrSimpleType)?.classifier == typeId
+      }
       val typeFactory = if (classParameters.isEmpty()) {
         companion.declarations.filterIsInstance<IrSimpleFunction>()
           .singleOrNull { it.name.asString() == "of" && it.typeParameters.size == 1 }
+      } else if (explicitTypeIds) {
+        null
       } else {
         val kClass = pluginContext.referenceClass(org.jetbrains.kotlin.name.ClassId.topLevel(FqName("kotlin.reflect.KClass")))
           ?: return
@@ -327,17 +332,19 @@ private class PathsConstructorBodyGenerator(
               (it.type as? IrSimpleType)?.classifier == kClass
             }
           }
-      } ?: return
+      }
+      if (!explicitTypeIds && typeFactory == null) return
       val parameters = declaration.typeParameters.map {
         org.jetbrains.kotlin.ir.types.impl.IrSimpleTypeImpl(it.symbol, false, emptyList(), emptyList())
       }
       val instance = builder.irCallConstructor(constructor.symbol, parameters).apply {
         parameters.forEachIndexed { index, type ->
           arguments[index] = if (classParameters.isEmpty()) {
-            builder.irCallWithSubstitutedType(typeFactory.symbol, listOf(type)).apply {
+            builder.irCallWithSubstitutedType(checkNotNull(typeFactory).symbol, listOf(type)).apply {
               dispatchReceiver = builder.irGetObject(companion.symbol)
             }
-          } else builder.irCall(typeFactory.symbol).apply {
+          } else if (explicitTypeIds) builder.irGet(classParameters[index])
+          else builder.irCall(checkNotNull(typeFactory).symbol).apply {
             dispatchReceiver = builder.irGetObject(companion.symbol)
             arguments[1] = builder.irGet(classParameters[index])
           }

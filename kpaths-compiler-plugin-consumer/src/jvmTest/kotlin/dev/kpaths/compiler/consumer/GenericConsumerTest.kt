@@ -13,5 +13,6 @@ class GenericConsumerTest {
     assertEquals(FixtureBox<String?>("updated"), genericPathFromAnotherModule.set(original, "updated"))
     assertEquals(FixtureBox<String?>(null), original)
     assertEquals(FixtureBox("updated"), FixtureBox.Paths.of(String::class).value.set(FixtureBox("old"), "updated"))
+    assertEquals(genericPathFromAnotherModule, FixtureBox.Paths.of<String?>(TypeId.of<String?>()).value)
   }
 }

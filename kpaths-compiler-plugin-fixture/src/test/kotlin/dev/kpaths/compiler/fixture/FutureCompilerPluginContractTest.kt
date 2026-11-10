@@ -259,6 +259,7 @@ class FutureCompilerPluginContractTest {
     """, irSnapshot = snapshot)
     val ir = Files.readString(snapshot)
     assertContains(ir, "class fixture.Box.Paths.__kpaths_Catalog")
+    assertContains(ir, "fun of(TTypeId: dev.kpaths.core.TypeId): fixture.Box.Paths.__kpaths_Catalog<T>")
     assertContains(ir, "val value: dev.kpaths.core.WritableKeyPath<fixture.Box<T>, T>")
     assertContains(ir, "extends dev.kpaths.core.WritableKeyPathBase<fixture.Box<T>, T>")
     assertContains(ir, "fun set(root: fixture.Box<T>, value: T): fixture.Box<T>")
