@@ -14,6 +14,28 @@ import org.objectweb.asm.Opcodes
 
 class CompilerSnippetTest {
   @Test
+  fun `named annotation arguments generate renamed property and case paths`() {
+    val result = compileSnippet("NamedPathAnnotations.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      import dev.kpaths.annotations.PathName as FieldName
+      import dev.kpaths.annotations.CaseName
+      import dev.kpaths.annotations.PathsName
+      @Pathable data class Person(@FieldName(value = "display") val name: String)
+      @Pathable sealed interface Event {
+        @CaseName(value = "MessageCase")
+        @PathsName(value = "MessageFields")
+        data class Message(@FieldName(value = "body") val text: String) : Event
+      }
+      fun run(): Boolean = Person.Paths.display(Person("hello")) == "hello" &&
+        Event.Paths.MessageCase.text.embed("world") == Event.Message("world") &&
+        Event.Paths.MessageFields.body(Event.Message("world")) == "world"
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.NamedPathAnnotationsKt").getMethod("run").invoke(null))
+  }
+
+  @Test
   fun `KClass catalog factories reject nullable and out of bounds arguments`() {
     val result = compileSnippet("InvalidClassTokens.kt" to """
       package example
