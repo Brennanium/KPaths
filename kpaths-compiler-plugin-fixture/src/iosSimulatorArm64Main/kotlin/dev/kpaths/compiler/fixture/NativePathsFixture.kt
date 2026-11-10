@@ -30,6 +30,7 @@ fun readDraftName(draft: Any): String = state(draft).name
 fun writeDraftName(draft: Any, value: String) { state(draft).name = value; state(draft).writes++ }
 fun readDraftAddress(draft: Any): DraftAddress = state(draft).address
 fun writeDraftAddress(draft: Any, value: DraftAddress) { state(draft).address = value; state(draft).writes++ }
+fun draftWriteCount(draft: Any): Int = state(draft).writes
 val nativeOriginalNamePath: WritableKeyPath<TrackedRecord, String> = TrackedRecord.GeneratedPaths.name
 val nativeDraftNamePath: ReferenceWritableKeyPath<TrackedRecord.Draft, String> = TrackedRecord.Draft.Paths.name
 val nativeDraftAddressPath: ReferenceWritableKeyPath<TrackedRecord.Draft, DraftAddress> = TrackedRecord.Draft.Paths.address

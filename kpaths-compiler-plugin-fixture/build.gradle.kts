@@ -28,6 +28,12 @@ kotlin {
       }
     }
 
+    iosSimulatorArm64Test {
+      dependencies {
+        implementation(kotlin("test"))
+      }
+    }
+
     jvmTest {
       kotlin.srcDir("src/test/kotlin")
       dependencies {

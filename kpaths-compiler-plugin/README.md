@@ -191,8 +191,9 @@ The companion modules demonstrate two important boundaries:
   resulting catalog for a source-declared class. It also synthesizes `SyntheticOwner.Snapshot`
   and `SyntheticOwner.GenericSnapshot<T>`, delegates their catalog declarations to KPaths, and
   generates a property whose compiled dependency type supplies a declarative adapter. JVM tests
-  check reads and identity; a separate module with neither plugin consumes both catalogs. Native
-  compilation checks the same synthetic declarations, without running them on a Native device.
+  check reads and identity; a separate module with neither plugin consumes both catalogs. The
+  `iosSimulatorArm64Test` task also runs focused tests for the synthetic declarations on an iOS
+  simulator.
   The contributor also requests copy-writable paths for `TrackedRecord` and synthesizes a
   `TrackedRecord.Draft` with tracked `var` setters and a projected `DraftAddress` property. JVM
   tests and the plugin-free consumer verify that the draft's reference-writable paths call the
@@ -257,6 +258,9 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew verifyCompilerPlugin
 
 # Downstream compile contracts. Planned API contracts stay disabled until their feature begins.
 JAVA_HOME=/opt/homebrew/opt/openjdk@17 ./gradlew verifyCompilerPluginContracts
+
+# Run generated paths, tracked setters, adapters, and case matching on an iOS simulator.
+./gradlew :kpaths-compiler-plugin-fixture:iosSimulatorArm64Test
 
 # Individual backend checks remain available when narrowing down a failure.
 JAVA_HOME=/opt/homebrew/opt/openjdk@17 \
