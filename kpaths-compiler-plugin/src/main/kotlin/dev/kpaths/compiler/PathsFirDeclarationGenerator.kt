@@ -24,8 +24,6 @@ import org.jetbrains.kotlin.fir.symbols.impl.FirConstructorSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirNamedFunctionSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirPropertySymbol
 import org.jetbrains.kotlin.fir.types.toTypeProjection
-import org.jetbrains.kotlin.fir.types.ConeAttributes
-import org.jetbrains.kotlin.fir.types.impl.ConeTypeParameterTypeImpl
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.name.SpecialNames
 import org.jetbrains.kotlin.types.Variance
@@ -101,7 +99,7 @@ internal class PathsDeclarationGenerator(session: FirSession) : FirDeclarationGe
           if (root.caseSymbols().isNotEmpty()) {
             superType { parameters ->
               val rootType = root.classId.createConeType(session, parameters.map {
-                ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty)
+                it.symbol.kPathsTypeParameterType()
                   .toTypeProjection(Variance.INVARIANT)
               }.toTypedArray(), false)
               casePathCatalogBaseClassId.createConeType(session,

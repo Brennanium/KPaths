@@ -24,11 +24,9 @@ import org.jetbrains.kotlin.fir.plugin.createMemberProperty
 import org.jetbrains.kotlin.fir.symbols.SymbolInternals
 import org.jetbrains.kotlin.fir.symbols.impl.FirPropertySymbol
 import org.jetbrains.kotlin.fir.types.toTypeProjection
-import org.jetbrains.kotlin.fir.types.ConeAttributes
 import org.jetbrains.kotlin.fir.types.ConeClassLikeType
 import org.jetbrains.kotlin.fir.types.ConeKotlinType
 import org.jetbrains.kotlin.fir.types.ConeKotlinTypeProjection
-import org.jetbrains.kotlin.fir.types.impl.ConeTypeParameterTypeImpl
 import org.jetbrains.kotlin.fir.resolve.substitution.ConeSubstitutorByMap
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
@@ -53,7 +51,7 @@ internal class PathsFirPropertyGenerator(
       val property = sourceCase.sourceDeclaredProperties()
         .singleOrNull { it.fir.generatedKPathsName() == callableId.callableName } ?: return@with emptyList()
       val arguments = pathsClass.fir.typeParameters.map {
-        ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty)
+        it.symbol.kPathsTypeParameterType()
       }
       val substitution = sourceCase.fir.typeParameters.map { it.symbol }.zip(arguments).toMap()
       val valueType = ConeSubstitutorByMap.create(substitution, session, false).substituteOrSelf(property.resolvedReturnType)
@@ -120,7 +118,7 @@ internal class PathsFirPropertyGenerator(
     if (pathsClass.isGeneratedGenericCatalog()) {
       val root = pathsClass.genericCatalogRoot() ?: return@with emptyList()
       val arguments = pathsClass.fir.typeParameters.map {
-        ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty)
+        it.symbol.kPathsTypeParameterType()
       }
       val rootType = root.classId.createConeType(session, arguments.map {
         it.toTypeProjection(Variance.INVARIANT)

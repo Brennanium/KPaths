@@ -1,6 +1,5 @@
 package dev.kpaths.gradle
 
-import org.gradle.api.GradleException
 import org.gradle.api.Project
 import org.gradle.api.provider.Provider
 import org.jetbrains.kotlin.gradle.plugin.KotlinCompilation
@@ -16,20 +15,9 @@ public class KPathsGradlePlugin : KotlinCompilerPluginSupportPlugin {
   }
 
   override fun isApplicable(kotlinCompilation: KotlinCompilation<*>): Boolean {
-    val supported = kotlinCompilation.platformType in setOf(
+    return kotlinCompilation.platformType in setOf(
       KotlinPlatformType.common, KotlinPlatformType.jvm, KotlinPlatformType.androidJvm, KotlinPlatformType.native,
     )
-    if (!supported) return false
-    val project = kotlinCompilation.target.project
-    val version = try {
-      Class.forName("org.jetbrains.kotlin.gradle.plugin.KotlinPluginWrapperKt", true, kotlinCompilation.javaClass.classLoader)
-        .getMethod("getKotlinPluginVersion", Project::class.java)
-        .invoke(null, project) as String
-    } catch (error: ReflectiveOperationException) {
-      throw GradleException("KPaths could not determine the Kotlin Gradle plugin version for ${project.path}.", error)
-    }
-    checkKPathsKotlinVersion(version)
-    return true
   }
 
   override fun getCompilerPluginId(): String = "dev.kpaths.compiler"
@@ -39,10 +27,4 @@ public class KPathsGradlePlugin : KotlinCompilerPluginSupportPlugin {
 
   override fun applyToCompilation(kotlinCompilation: KotlinCompilation<*>): Provider<List<SubpluginOption>> =
     kotlinCompilation.target.project.provider { emptyList() }
-}
-
-internal fun checkKPathsKotlinVersion(version: String) {
-  if (version !in KPATHS_SUPPORTED_KOTLIN_VERSIONS) {
-    throw GradleException("KPaths compiler plugin $KPATHS_VERSION supports Kotlin ${KPATHS_SUPPORTED_KOTLIN_VERSIONS.joinToString()}; this project uses $version.")
-  }
 }

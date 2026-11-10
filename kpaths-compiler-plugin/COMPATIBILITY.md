@@ -1,9 +1,9 @@
 # Compiler compatibility
 
-The experimental KPaths compiler plugin currently accepts Kotlin **2.4.20 and 2.4.21**. The
-supported versions live in `gradle/kpaths-supported-kotlin-versions.txt`; the Gradle plugin embeds
-that list, and CI reads it to create its compiler test matrix. Other versions are rejected with a
-message listing the supported versions. The plain KPaths APIs and KSP processor have their own
+The experimental KPaths compiler plugin is tested with Kotlin **2.4.20 and 2.4.21**. The
+tested versions live in `gradle/kpaths-supported-kotlin-versions.txt`; CI reads that list to create
+its compiler test matrix. Other versions are not blocked, but their compatibility has not been
+established. The plain KPaths APIs and KSP processor have their own
 compatibility requirements.
 
 KPaths is built using the Kotlin version in `gradle/libs.versions.toml`. Each matrix entry tests
@@ -39,3 +39,11 @@ compiler plugin. The test harness accepts `-Pkpaths.testKotlinVersion=<version>`
 how KPaths itself was built. Add version-specific compatibility code when the tests expose an API
 change; a version number alone does not establish compatibility. Pre-release compiler tests should
 remain experimental until they pass and should not automatically expand the supported list.
+
+The separate `gradle/kpaths-preview-kotlin-versions.txt` tracks development builds for early
+warning. Run `python3 scripts/verify-compiler-compatibility.py --preview` to exercise the JVM
+consumer and compiler contracts against them; the corresponding CI job is non-blocking. A passing
+preview probe does not imply Native or IDE support. Kotlin 2.5.0-dev-10106 exposed changes to FIR
+type-parameter construction and lookup; KPaths uses a shared classifier factory to avoid depending
+on the old implementation class. Development artifacts are resolved from JetBrains' test
+repositories and may disappear or change availability.

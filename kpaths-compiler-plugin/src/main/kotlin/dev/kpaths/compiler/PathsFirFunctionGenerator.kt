@@ -16,10 +16,8 @@ import org.jetbrains.kotlin.fir.plugin.createMemberFunction
 import org.jetbrains.kotlin.fir.symbols.SymbolInternals
 import org.jetbrains.kotlin.fir.symbols.impl.FirNamedFunctionSymbol
 import org.jetbrains.kotlin.fir.types.toTypeProjection
-import org.jetbrains.kotlin.fir.types.ConeAttributes
 import org.jetbrains.kotlin.fir.types.ConeClassLikeType
 import org.jetbrains.kotlin.fir.types.ConeKotlinTypeProjection
-import org.jetbrains.kotlin.fir.types.impl.ConeTypeParameterTypeImpl
 import org.jetbrains.kotlin.name.Name
 import org.jetbrains.kotlin.types.Variance
 
@@ -40,7 +38,7 @@ internal class PathsFirFunctionGenerator(
       val catalogId = pathsClass.classId.createNestedClassId(Name.identifier("__kpaths_Catalog"))
       val reifiedFactory = createMemberFunction(pathsClass, PathsDeclarationKey, callableId.callableName, { parameters ->
         catalogId.createConeType(session, parameters.map {
-          ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty)
+          it.symbol.kPathsTypeParameterType()
             .toTypeProjection(Variance.INVARIANT)
         }.toTypedArray(), false)
       }) {
@@ -51,7 +49,7 @@ internal class PathsFirFunctionGenerator(
       if (callableId.callableName.asString() != "of") return@with listOf(reifiedFactory)
       val classFactory = createMemberFunction(pathsClass, PathsDeclarationKey, callableId.callableName, { parameters ->
         catalogId.createConeType(session, parameters.map {
-          ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty)
+          it.symbol.kPathsTypeParameterType()
             .toTypeProjection(Variance.INVARIANT)
         }.toTypedArray(), false)
       }) {
@@ -59,7 +57,7 @@ internal class PathsFirFunctionGenerator(
         val kClass = org.jetbrains.kotlin.name.ClassId.topLevel(org.jetbrains.kotlin.name.FqName("kotlin.reflect.KClass"))
         root.fir.typeParameters.forEachIndexed { index, parameter ->
           valueParameter(Name.identifier("${parameter.symbol.name}Type"), { generated ->
-            val argument = ConeTypeParameterTypeImpl(generated[index].symbol.toLookupTag(), false, ConeAttributes.Empty)
+            val argument = generated[index].symbol.kPathsTypeParameterType()
             kClass.createConeType(session, arrayOf(argument.toTypeProjection(Variance.INVARIANT)), false)
           })
         }
@@ -67,7 +65,7 @@ internal class PathsFirFunctionGenerator(
       }.symbol
       val typeIdFactory = createMemberFunction(pathsClass, PathsDeclarationKey, callableId.callableName, { parameters ->
         catalogId.createConeType(session, parameters.map {
-          ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty)
+          it.symbol.kPathsTypeParameterType()
             .toTypeProjection(Variance.INVARIANT)
         }.toTypedArray(), false)
       }) {
@@ -86,7 +84,7 @@ internal class PathsFirFunctionGenerator(
       val root = (if (generic) pathsClass.genericCatalogRoot() else pathsClass.rootClass()) ?: return@with emptyList()
       if (root.caseSymbols().isEmpty()) return@with emptyList()
       val rootType = if (generic) root.classId.createConeType(session, pathsClass.fir.typeParameters.map {
-        ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty)
+        it.symbol.kPathsTypeParameterType()
           .toTypeProjection(Variance.INVARIANT)
       }.toTypedArray(), false) else root.classId.createConeType(session)
       val partialCasePathType = partialCaseKeyPathClassId.createConeType(

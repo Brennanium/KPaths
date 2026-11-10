@@ -59,8 +59,6 @@ import org.jetbrains.kotlin.fir.resolve.fullyExpandedType
 import org.jetbrains.kotlin.fir.symbols.SymbolInternals
 import org.jetbrains.kotlin.fir.types.ConeClassLikeType
 import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
-import org.jetbrains.kotlin.fir.types.ConeAttributes
-import org.jetbrains.kotlin.fir.types.impl.ConeTypeParameterTypeImpl
 import org.jetbrains.kotlin.fir.types.toTypeProjection
 import org.jetbrains.kotlin.fir.plugin.createConeType
 import org.jetbrains.kotlin.fir.resolve.providers.symbolProvider
@@ -139,7 +137,7 @@ internal class PathsDiagnosticCheckers(private val pluginSession: FirSession) : 
         val property = root.sourceDeclaredProperties().singleOrNull { it.fir.generatedKPathsName() == generated.name } ?: return
         val storage = property.resolvedReturnType
         val rootType = root.classId.createConeType(pluginSession, root.fir.typeParameters.map {
-          ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty).toTypeProjection(Variance.INVARIANT)
+          it.symbol.kPathsTypeParameterType().toTypeProjection(Variance.INVARIANT)
         }.toTypedArray(), false)
         val selection = selectCompilerPropertyAdapter(
           KPathsCompilerPropertyContext(pluginSession, property, rootType, storage, generated.resolvedReturnType),
@@ -254,7 +252,7 @@ internal class PathsDiagnosticCheckers(private val pluginSession: FirSession) : 
         val owner = pluginSession.symbolProvider.getClassLikeSymbolByClassId(ownerId) as? FirClassSymbol<*> ?: return@forEach
         val ownerClass = owner.fir as? FirRegularClass ?: return@forEach
         val rootType = owner.classId.createConeType(pluginSession, owner.fir.typeParameters.map {
-          ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty).toTypeProjection(Variance.INVARIANT)
+          it.symbol.kPathsTypeParameterType().toTypeProjection(Variance.INVARIANT)
         }.toTypedArray(), false)
         val options = pluginSession.kpaths.optionsFor(declaration.symbol)
         val constructorNames = ownerClass.declarations.filterIsInstance<FirConstructor>()

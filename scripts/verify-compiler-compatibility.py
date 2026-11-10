@@ -5,15 +5,19 @@ import subprocess
 from pathlib import Path
 
 root = Path(__file__).resolve().parent.parent
-matrix = root / "gradle/kpaths-supported-kotlin-versions.txt"
+parser = argparse.ArgumentParser(description=__doc__)
+parser.add_argument("versions", nargs="*", help="Subset of supported Kotlin versions to test (default: all)")
+parser.add_argument("--native", action="store_true", help="Also publish local artifacts and run iOS simulator tests (macOS arm64)")
+parser.add_argument("--preview", action="store_true", help="Run experimental development-build JVM checks instead of the stable matrix")
+args = parser.parse_args()
+matrix = root / ("gradle/kpaths-preview-kotlin-versions.txt" if args.preview
+                 else "gradle/kpaths-supported-kotlin-versions.txt")
 versions = [line.strip() for line in matrix.read_text().splitlines()
             if line.strip() and not line.lstrip().startswith("#")]
 if not versions or len(versions) != len(set(versions)):
     raise SystemExit("The compiler compatibility matrix must contain distinct versions")
-parser = argparse.ArgumentParser(description=__doc__)
-parser.add_argument("versions", nargs="*", help="Subset of supported Kotlin versions to test (default: all)")
-parser.add_argument("--native", action="store_true", help="Also publish local artifacts and run iOS simulator tests (macOS arm64)")
-args = parser.parse_args()
+if args.preview and args.native:
+    parser.error("Preview testing currently covers JVM only")
 selected = args.versions or versions
 unknown = set(selected) - set(versions)
 if unknown:

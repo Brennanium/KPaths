@@ -20,6 +20,7 @@ import org.jetbrains.kotlin.fir.types.ConeClassLikeType
 import org.jetbrains.kotlin.fir.types.ConeKotlinType
 import org.jetbrains.kotlin.fir.types.ConeKotlinTypeProjection
 import org.jetbrains.kotlin.fir.types.ConeTypeParameterType
+import org.jetbrains.kotlin.fir.types.ConeLookupTagBasedType
 import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
 import org.jetbrains.kotlin.fir.types.ProjectionKind
 import org.jetbrains.kotlin.ir.builders.irCall
@@ -135,7 +136,7 @@ private fun ConeKotlinType.toAdapterModel(
   val model = when (this) {
     is ConeTypeParameterType -> {
       if (isMarkedNullable) return null
-      KPathsAdapterType.Parameter(lookupTag.name.asString())
+      KPathsAdapterType.Parameter((this as ConeLookupTagBasedType).lookupTag.name.asString())
     }
     is ConeClassLikeType -> {
       val expanded = fullyExpandedType(session)

@@ -5,9 +5,7 @@ import org.jetbrains.kotlin.fir.declarations.FirTypeParameterRef
 import org.jetbrains.kotlin.fir.plugin.DeclarationBuildingContext
 import org.jetbrains.kotlin.fir.plugin.createConeType
 import org.jetbrains.kotlin.fir.resolve.substitution.ConeSubstitutorByMap
-import org.jetbrains.kotlin.fir.types.ConeAttributes
 import org.jetbrains.kotlin.fir.types.ConeClassLikeType
-import org.jetbrains.kotlin.fir.types.impl.ConeTypeParameterTypeImpl
 import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 
@@ -24,7 +22,7 @@ internal fun DeclarationBuildingContext<*>.copyKPathsTypeParameters(
       bounds.forEach { sourceBound ->
         bound { generated ->
           val replacements = source.map { it.symbol }.zip(generated.map {
-            ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty)
+            it.symbol.kPathsTypeParameterType()
           }).toMap()
           ConeSubstitutorByMap.create(replacements, session, false).substituteOrSelf(sourceBound.coneType)
         }

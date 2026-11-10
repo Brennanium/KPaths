@@ -1,28 +1,27 @@
 package dev.kpaths.gradle
 
 import org.gradle.testkit.runner.GradleRunner
-import org.gradle.api.GradleException
 import org.junit.jupiter.api.io.TempDir
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
 
 class KPathsGradlePluginTest {
-  @Test
-  fun `unsupported compiler versions report the tested versions`() {
-    val error = assertFailsWith<GradleException> { checkKPathsKotlinVersion("2.4.10") }
-    assertContains(error.message.orEmpty(), "2.4.10")
-    KPATHS_SUPPORTED_KOTLIN_VERSIONS.forEach { assertContains(error.message.orEmpty(), it) }
-  }
-
   @Test
   fun `plugin supplies compiler artifact to a downstream JVM build`(@TempDir directory: Path) {
     val project = Path.of(checkNotNull(System.getProperty("kpaths.projectDir")))
     val version = checkNotNull(System.getProperty("kpaths.version"))
     val testKotlinVersion = checkNotNull(System.getProperty("kpaths.testKotlinVersion"))
+    require(Regex("[0-9]+\\.[0-9]+\\.[0-9]+(?:-dev-[0-9]+)?").matches(testKotlinVersion))
+    val devRepositories = if ("-dev-" in testKotlinVersion) {
+      """
+        maven("https://packages.jetbrains.team/maven/p/kt/dev/")
+        maven("https://packages.jetbrains.team/maven/p/kt/experimental/")
+        maven("https://packages.jetbrains.team/maven/p/kt/bootstrap/")
+      """.trimIndent()
+    } else ""
     val repo = directory.resolve("repo")
     val module = repo.resolve("io/github/brennanium/kpaths-compiler-plugin-jvm/$version")
     Files.createDirectories(module)
@@ -49,8 +48,28 @@ class KPathsGradlePluginTest {
       <version>$version</version></dependency></dependencies></project>
     """.trimIndent())
     Files.writeString(directory.resolve("settings.gradle.kts"), """
-      pluginManagement { repositories { maven { url = uri("${repo.toGradlePath()}") }; gradlePluginPortal(); mavenCentral() } }
-      dependencyResolutionManagement { repositories { maven { url = uri("${repo.toGradlePath()}") }; mavenCentral() } }
+      pluginManagement {
+        repositories {
+          maven { url = uri("${repo.toGradlePath()}") }
+          $devRepositories
+          gradlePluginPortal()
+          mavenCentral()
+        }
+        ${if (devRepositories.isNotEmpty()) """
+          resolutionStrategy.eachPlugin {
+            if (requested.id.id == "org.jetbrains.kotlin.jvm") {
+              useModule("org.jetbrains.kotlin:kotlin-gradle-plugin:${'$'}{requested.version}")
+            }
+          }
+        """.trimIndent() else ""}
+      }
+      dependencyResolutionManagement {
+        repositories {
+          maven { url = uri("${repo.toGradlePath()}") }
+          $devRepositories
+          mavenCentral()
+        }
+      }
       rootProject.name = "kpaths-gradle-consumer"
     """.trimIndent())
     val core = project.resolve("kpaths-core/build/libs/kpaths-core-jvm-$version.jar")

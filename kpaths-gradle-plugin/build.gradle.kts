@@ -41,12 +41,8 @@ val generateCoordinates = tasks.register("generateCoordinates") {
   val output = layout.buildDirectory.dir("generated/kpaths-coordinates")
   val artifactGroup = project.group.toString()
   val artifactVersion = project.version.toString()
-  val supportedVersions = rootProject.file("gradle/kpaths-supported-kotlin-versions.txt")
-    .readLines().map(String::trim).filter { it.isNotEmpty() && !it.startsWith("#") }
-  require(supportedVersions.isNotEmpty() && supportedVersions.distinct().size == supportedVersions.size)
   inputs.property("artifactGroup", artifactGroup)
   inputs.property("artifactVersion", artifactVersion)
-  inputs.property("supportedKotlinVersions", supportedVersions)
   outputs.dir(output)
   doLast {
     val file = output.get().file("dev/kpaths/gradle/KPathsCoordinates.kt").asFile
@@ -55,7 +51,6 @@ val generateCoordinates = tasks.register("generateCoordinates") {
       package dev.kpaths.gradle
       internal const val KPATHS_GROUP = "$artifactGroup"
       internal const val KPATHS_VERSION = "$artifactVersion"
-      internal val KPATHS_SUPPORTED_KOTLIN_VERSIONS = setOf(${supportedVersions.joinToString { "\"$it\"" }})
     """.trimIndent() + "\n")
   }
 }

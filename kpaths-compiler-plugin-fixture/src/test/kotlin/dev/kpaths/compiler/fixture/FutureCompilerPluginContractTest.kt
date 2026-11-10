@@ -306,6 +306,32 @@ class FutureCompilerPluginContractTest {
     )
   }
 
+  @Test
+  fun `generic adapter factories preserve their specialized path type`(@TempDir directory: Path) {
+    compileSuccessfully(
+      directory,
+      """
+        package fixture
+
+        import dev.kpaths.annotations.*
+        import dev.kpaths.core.*
+
+        @PathsAdapter(factory = CellFactory::class)
+        class Cell<T>(val value: T)
+        object CellFactory : KPathsAdapterFactory {
+          fun <Root, Value> make(storage: KeyPath<Root, Cell<Value>>): CellPath<Root, Value> = CellPath(storage)
+        }
+        class CellPath<Root, Value>(private val storage: KeyPath<Root, Cell<Value>>) : KeyPathBase<Root, Value>() {
+          override val __kpaths_id get() = storage.__kpaths_id
+          override val __kpaths_valueType get() = storage.__kpaths_valueType.requireTypeArgument(0)
+          override fun get(root: Root): Value = storage.get(root).value
+        }
+        @Pathable data class Box<T>(val value: Cell<T>)
+        val value: CellPath<Box<String>, String> = Box.Paths<String>().value
+      """,
+    )
+  }
+
   @Disabled("Acceptance contract: catalogs discover same-package sealed inheritors.")
   @Test
   fun `package level sealed inheritor is included in its root catalog`(@TempDir directory: Path) {
@@ -364,6 +390,17 @@ class FutureCompilerPluginContractTest {
     val annotations = artifact("kpaths-annotations")
     val core = artifact("kpaths-core")
     val plugin = artifact("kpaths-compiler-plugin")
+    val testKotlinVersion = checkNotNull(System.getProperty("kpaths.testKotlinVersion"))
+    require(Regex("[0-9]+\\.[0-9]+\\.[0-9]+(?:-dev-[0-9]+)?").matches(testKotlinVersion)) {
+      "Unsupported test compiler version format: $testKotlinVersion"
+    }
+    val devRepositories = if ("-dev-" in testKotlinVersion) {
+      """
+        maven("https://packages.jetbrains.team/maven/p/kt/dev/")
+        maven("https://packages.jetbrains.team/maven/p/kt/experimental/")
+        maven("https://packages.jetbrains.team/maven/p/kt/bootstrap/")
+      """.trimIndent()
+    } else ""
     check(Files.isRegularFile(annotations) && Files.isRegularFile(core) && Files.isRegularFile(plugin)) {
       "Build KPaths JVM artifacts before running compiler-plugin acceptance contracts."
     }
@@ -372,12 +409,23 @@ class FutureCompilerPluginContractTest {
       """
         pluginManagement {
           repositories {
+            $devRepositories
             gradlePluginPortal()
             mavenCentral()
           }
+          ${if (devRepositories.isNotEmpty()) """
+            resolutionStrategy.eachPlugin {
+              if (requested.id.id == "org.jetbrains.kotlin.jvm") {
+                useModule("org.jetbrains.kotlin:kotlin-gradle-plugin:${'$'}{requested.version}")
+              }
+            }
+          """.trimIndent() else ""}
         }
         dependencyResolutionManagement {
-          repositories { mavenCentral() }
+          repositories {
+            $devRepositories
+            mavenCentral()
+          }
         }
         rootProject.name = "kpaths-contract"
       """.trimIndent(),
@@ -385,7 +433,7 @@ class FutureCompilerPluginContractTest {
     Files.writeString(
       directory.resolve("build.gradle.kts"),
       """
-        plugins { kotlin("jvm") version "${checkNotNull(System.getProperty("kpaths.testKotlinVersion"))}" }
+        plugins { kotlin("jvm") version "$testKotlinVersion" }
 
         dependencies {
           implementation(files("${annotations.toGradlePath()}"))

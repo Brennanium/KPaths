@@ -34,7 +34,8 @@ internal fun FirRegularClass.kPathsGenericCasePlan(case: FirRegularClass, sessio
       val lookup = type as? ConeLookupTagBasedType
       val classType = type as? ConeClassLikeType
       KPathsGenericCaseArgument(
-        forwardedParameter = (type as? ConeTypeParameterType)?.lookupTag?.name?.asString(),
+        forwardedParameter = (type as? ConeTypeParameterType)
+          ?.let { (it as ConeLookupTagBasedType).lookupTag.name.asString() },
         isNullable = lookup?.isMarkedNullable == true,
         isNothing = classType?.lookupTag?.classId?.asSingleFqName()?.asString() == "kotlin.Nothing" &&
           !classType.isMarkedNullable,
@@ -46,7 +47,7 @@ internal fun FirRegularClass.kPathsGenericCasePlan(case: FirRegularClass, sessio
 
 private fun ConeKotlinType.kPathsDiagnosticType(): String {
   val base = when (this) {
-    is ConeTypeParameterType -> lookupTag.name.asString()
+    is ConeTypeParameterType -> (this as ConeLookupTagBasedType).lookupTag.name.asString()
     is ConeClassLikeType -> lookupTag.classId.asSingleFqName().asString()
     else -> toString()
   }
