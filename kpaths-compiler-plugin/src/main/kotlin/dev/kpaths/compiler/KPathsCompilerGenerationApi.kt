@@ -6,6 +6,11 @@ import org.jetbrains.kotlin.fir.extensions.extensionService
 import org.jetbrains.kotlin.fir.extensions.extensionSessionComponents
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassSymbol
 import org.jetbrains.kotlin.fir.symbols.impl.FirPropertySymbol
+import org.jetbrains.kotlin.fir.expressions.FirGetClassCall
+import org.jetbrains.kotlin.fir.expressions.FirClassReferenceExpression
+import org.jetbrains.kotlin.fir.expressions.FirResolvedQualifier
+import org.jetbrains.kotlin.fir.types.ConeClassLikeType
+import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
 import org.jetbrains.kotlin.name.ClassId
 import java.util.concurrent.ConcurrentHashMap
 
@@ -55,6 +60,33 @@ public class KPathsGenerationRegistry(session: FirSession) : FirExtensionSession
 
   internal fun optionsFor(classSymbol: FirClassSymbol<*>): KPathsGenerationOptions? =
     requests[classSymbol.classId]
+
+  /**
+   * Returns the factory named by a resolved storage type's `@KPathsAdapter`, if present.
+   *
+   * Call this after the type's annotations and annotation arguments are resolved. The returned
+   * class ID identifies an integration-owned factory; it does not register an adapter or cause
+   * the compiler plugin to emit specialized paths.
+   */
+  @OptIn(org.jetbrains.kotlin.fir.symbols.SymbolInternals::class)
+  public fun adapterFactoryFor(storageClass: FirClassSymbol<*>): ClassId? {
+    val annotation = storageClass.fir.annotations.firstOrNull {
+      ((it.annotationTypeRef as? FirResolvedTypeRef)?.coneType as? ConeClassLikeType)
+        ?.lookupTag?.classId == adapterAnnotationId
+    } ?: return null
+    val factory = annotation.argumentMapping.mapping[org.jetbrains.kotlin.name.Name.identifier("factory")]
+      as? FirGetClassCall ?: return null
+    return when (val argument = factory.argument) {
+      is FirResolvedQualifier -> argument.qualifierSymbol?.classId
+      is FirClassReferenceExpression ->
+        ((argument.classTypeRef as? FirResolvedTypeRef)?.coneType as? ConeClassLikeType)?.lookupTag?.classId
+      else -> null
+    }
+  }
+
+  private companion object {
+    val adapterAnnotationId: ClassId = ClassId.topLevel(org.jetbrains.kotlin.name.FqName("dev.kpaths.annotations.KPathsAdapter"))
+  }
 }
 
 /** Returns the KPaths request registry installed by the KPaths compiler plugin for this session. */

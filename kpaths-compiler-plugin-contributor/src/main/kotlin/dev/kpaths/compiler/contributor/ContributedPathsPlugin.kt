@@ -18,6 +18,14 @@ import org.jetbrains.kotlin.fir.extensions.predicate.DeclarationPredicate
 import org.jetbrains.kotlin.fir.extensions.predicateBasedProvider
 import org.jetbrains.kotlin.fir.symbols.impl.FirClassSymbol
 import org.jetbrains.kotlin.fir.symbols.SymbolInternals
+import org.jetbrains.kotlin.fir.resolve.providers.symbolProvider
+import org.jetbrains.kotlin.fir.analysis.checkers.MppCheckerKind
+import org.jetbrains.kotlin.fir.analysis.checkers.context.CheckerContext
+import org.jetbrains.kotlin.fir.analysis.checkers.declaration.DeclarationCheckers
+import org.jetbrains.kotlin.fir.analysis.checkers.declaration.FirDeclarationChecker
+import org.jetbrains.kotlin.fir.analysis.extensions.FirAdditionalCheckersExtension
+import org.jetbrains.kotlin.diagnostics.DiagnosticReporter
+import org.jetbrains.kotlin.name.ClassId
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
 
@@ -34,6 +42,25 @@ public class ContributedPathsPluginRegistrar : CompilerPluginRegistrar() {
 internal class ContributedPathsFirRegistrar : FirExtensionRegistrar() {
   override fun ExtensionRegistrarContext.configurePlugin() {
     +::ContributedPathsGenerator
+    +::ContributedAdapterChecks
+  }
+}
+
+/** Verifies the integration lookup after source annotations have been resolved. */
+@OptIn(ExperimentalKPathsCompilerApi::class, SymbolInternals::class)
+internal class ContributedAdapterChecks(private val pluginSession: FirSession) : FirAdditionalCheckersExtension(pluginSession) {
+  override val declarationCheckers: DeclarationCheckers = object : DeclarationCheckers() {
+    override val regularClassCheckers: Set<FirDeclarationChecker<FirRegularClass>> = setOf(object :
+      FirDeclarationChecker<FirRegularClass>(MppCheckerKind.Common) {
+      context(context: CheckerContext, reporter: DiagnosticReporter)
+      override fun check(declaration: FirRegularClass) {
+        if (declaration.symbol.classId.asSingleFqName().asString() != "dev.kpaths.compiler.fixture.Cell") return
+        check(pluginSession.kpaths.adapterFactoryFor(declaration.symbol) ==
+          ClassId.topLevel(FqName("dev.kpaths.compiler.fixture.CellPaths"))) {
+          "KPaths must read a resolved source adapter annotation"
+        }
+      }
+    })
   }
 }
 
@@ -55,6 +82,17 @@ internal class ContributedPathsGenerator(session: FirSession) : FirDeclarationGe
     context: DeclarationGenerationContext.Nested,
   ): Set<Name> {
     if (session.predicateBasedProvider.matches(contributedPredicate, classSymbol)) {
+      if (classSymbol.classId.asSingleFqName().asString() == "dev.kpaths.compiler.fixture.RequestedDocument") {
+        fun storage(name: String): FirClassSymbol<*> = session.symbolProvider.getClassLikeSymbolByClassId(
+          ClassId.topLevel(FqName("dev.kpaths.compiler.integration.$name")),
+        ) as FirClassSymbol<*>
+        val packageName = FqName("dev.kpaths.compiler.integration")
+        check(session.kpaths.adapterFactoryFor(storage("Cell")) ==
+          ClassId.topLevel(FqName("dev.kpaths.compiler.integration.CellPathFactory")))
+        check(session.kpaths.adapterFactoryFor(storage("Scalar")) ==
+          ClassId(packageName, FqName("Adapters.ScalarFactory"), false))
+        check(session.kpaths.adapterFactoryFor(storage("PlainStorage")) == null)
+      }
       val declaration = classSymbol.fir as? FirRegularClass
       val excludedProperties = declaration?.declarations.orEmpty().filterIsInstance<FirProperty>()
         .filter { it.name.asString() == "identifier" || it.name.asString() == "revision" } +

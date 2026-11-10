@@ -197,6 +197,12 @@ ordinary read-only path; excluding a `var` does not remove its ordinary write ac
 option applies to properties of supported sealed cases. Properties are identified by their owners
 as well as their names, so excluding one case's property does not exclude a namesake in another.
 
+A cooperating compiler plugin can call `session.kpaths.adapterFactoryFor(storageClass)` on a
+resolved storage class symbol to discover its `@KPathsAdapter` factory's class ID, including when
+the storage type comes from a compiled dependency. This lookup is experimental and returns `null`
+when the annotation or its arguments are not available in the resolved form; callers must invoke
+it at a suitable compiler phase. It does not register an adapter or generate a specialized path.
+
 Useful verification commands:
 
 ```sh
@@ -232,8 +238,8 @@ the canonical associated-value paths for object cases and cases with one to thre
 Cases without a supported canonical payload are omitted, so `case` can fail for those cases;
 the plugin warns when it generates an incomplete catalog. Adapter-backed property members, diagnostics, and broader
 conformance coverage remain future work.
-`@KPathsAdapter` currently establishes the binary metadata contract; producing an adapter's
-specialized path remains the next FIR/IR layer.
+`@KPathsAdapter` establishes the binary metadata contract and factory lookup; registering an
+adapter and producing its specialized path remain future FIR/IR work.
 
 `kpaths-compiler-plugin-fixture/LanguageSyntaxExperiments.kt` separately demonstrates the Kotlin
 generic `invoke` syntax used by generated catalogs.

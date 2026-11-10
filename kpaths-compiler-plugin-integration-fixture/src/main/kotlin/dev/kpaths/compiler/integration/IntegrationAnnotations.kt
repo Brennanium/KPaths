@@ -15,3 +15,13 @@ class Cell<Value>(var value: Value)
 
 /** Placeholder for the future registered compiler/KSP adapter implementation. */
 object CellPathFactory : KPathsAdapterFactory
+
+/** Also exercise a non-generic storage type and a nested adapter factory. */
+@KPathsAdapter(factory = Adapters.ScalarFactory::class)
+class Scalar(val value: Int)
+
+object Adapters {
+  object ScalarFactory : KPathsAdapterFactory
+}
+
+class PlainStorage
