@@ -44,6 +44,38 @@ internal class PathsFirPropertyGenerator(
     context: DeclarationGenerationContext.Member?,
   ): List<FirPropertySymbol> = with(analysis) {
     val pathsClass = context?.owner ?: return@with emptyList()
+    if (pathsClass.isGeneratedGenericCasePropertyCatalog()) {
+      val sourceCase = pathsClass.genericCasePropertySource() ?: return@with emptyList()
+      val root = pathsClass.genericCasePropertyRoot() ?: return@with emptyList()
+      val property = sourceCase.sourceDeclaredProperties()
+        .singleOrNull { it.fir.generatedKPathsName() == callableId.callableName } ?: return@with emptyList()
+      val arguments = pathsClass.fir.typeParameters.map {
+        ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty)
+      }
+      val substitution = sourceCase.fir.typeParameters.map { it.symbol }.zip(arguments).toMap()
+      val valueType = ConeSubstitutorByMap.create(substitution, session, false).substituteOrSelf(property.resolvedReturnType)
+      val caseType = sourceCase.classId.createConeType(session,
+        arguments.map { it.toTypeProjection(Variance.INVARIANT) }.toTypedArray(), false)
+      val shape = KPathsPropertyShape(
+        ownerIsDataClass = (sourceCase.fir as? FirRegularClass)?.status?.isData == true,
+        isMutable = property.fir.isVar,
+        isPrimaryConstructorProperty = property.name in sourceCase.primaryConstructorPropertyNames(),
+        hasAccessibleSetter = property.fir.hasKPathsAccessibleSetter(),
+        copyWritableVals = root.generationOptions()?.copyWritableVals ?: false,
+        isExcludedFromCopyWritableVals = root.generationOptions()?.copyWritableValExclusions
+          ?.any { it.callableId == property.callableId } == true,
+      ).classifyForKPaths()
+      val pathClass = when ((shape as? KPathsPropertyPolicyResult.Supported)?.kind) {
+        KPathsPropertyPathKind.REFERENCE_WRITABLE -> referenceWritableKeyPathClassId
+        KPathsPropertyPathKind.COPY_WRITABLE, KPathsPropertyPathKind.COPY_THEN_MUTATE -> writableKeyPathClassId
+        else -> keyPathClassId
+      }
+      val pathType = pathClass.createConeType(session, arrayOf(
+        caseType.toTypeProjection(Variance.INVARIANT), valueType.toTypeProjection(Variance.INVARIANT),
+      ), false)
+      return@with listOf(createMemberProperty(pathsClass, PathsGenericCasePropertyCatalogKey,
+        callableId.callableName, pathType, true, false).symbol)
+    }
     if (pathsClass.isGeneratedGenericCasePath()) {
       val root = pathsClass.genericCaseRoot()?.fir as? FirRegularClass ?: return@with emptyList()
       val sourceCase = pathsClass.genericSourceCase()?.fir as? FirRegularClass ?: return@with emptyList()
@@ -89,6 +121,20 @@ internal class PathsFirPropertyGenerator(
       val rootType = root.classId.createConeType(session, arguments.map {
         it.toTypeProjection(Variance.INVARIANT)
       }.toTypedArray(), false)
+      val propertyCatalog = root.caseSymbols().singleOrNull {
+        it.propertyCatalogName(allowGeneric = true) == callableId.callableName
+      }
+      if (propertyCatalog != null) {
+        val caseClass = propertyCatalog.sealedSymbol?.fir as? FirRegularClass ?: return@with emptyList()
+        val rootClass = root.fir as? FirRegularClass ?: return@with emptyList()
+        val (_, caseType) = kPathsGenericCaseTypes(rootClass, caseClass, pathsClass.fir.typeParameters, session)
+          ?: return@with emptyList()
+        val caseArguments = (caseType as ConeClassLikeType).typeArguments
+        val pathType = pathsClass.classId.createNestedClassId(requireNotNull(propertyCatalog.genericPropertyCatalogClassName()))
+          .createConeType(session, Array<org.jetbrains.kotlin.fir.types.ConeTypeProjection>(caseArguments.size) { caseArguments[it] }, false)
+        return@with listOf(createMemberProperty(pathsClass, PathsGenericCatalogKey,
+          callableId.callableName, pathType, true, false).symbol)
+      }
       val concreteCase = root.caseSymbols().singleOrNull {
         it.name == callableId.callableName && it.sealedSymbol != null
       }

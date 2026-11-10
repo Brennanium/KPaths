@@ -218,7 +218,7 @@ internal class PathsDiagnosticCheckers(private val pluginSession: FirSession) : 
               "[KPaths] @PathsName requires a sealed case with at least one accessible property path.")
           }
         }
-        if (!hasProperties || case.typeParameters.isNotEmpty()) null else {
+        if (!hasProperties || (case.typeParameters.isNotEmpty() && declaration.typeParameters.isEmpty())) null else {
           val name = configured?.takeIf { validateKPathsConfiguredName(it) == null }
             ?: kPathsCasePropertyCatalogName(case.name.asString())
           KPathsGeneratedMember(name, "the property-path namespace for case '${case.name}'")
@@ -251,6 +251,12 @@ internal class PathsDiagnosticCheckers(private val pluginSession: FirSession) : 
         casePropertyCatalogs +
         (if (declaration.typeParameters.isNotEmpty()) cases.map { (_, sourceName, generatedName) ->
           KPathsGeneratedMember(generatedName + "CasePath", "the generated case-path type for '$sourceName'")
+        } + caseClasses.filter { case ->
+          case.declarations.filterIsInstance<FirProperty>().any {
+            it.origin == FirDeclarationOrigin.Source && it.isKPathsAccessible()
+          }
+        }.map { case ->
+          KPathsGeneratedMember(case.name.asString() + "PropertyPaths", "the generated property-path type for case '${case.name}'")
         } else emptyList()) +
         if (cases.isNotEmpty()) listOf(
           KPathsGeneratedMember("allCasePaths", "the generated catalog of all case paths"),

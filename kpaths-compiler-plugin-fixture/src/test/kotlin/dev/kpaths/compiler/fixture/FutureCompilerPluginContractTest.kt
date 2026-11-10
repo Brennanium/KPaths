@@ -267,6 +267,8 @@ class FutureCompilerPluginContractTest {
     assertContains(ir, "fun embed(value: fixture.Event.Value<T>): fixture.Event<T>")
     assertContains(ir, "class fixture.Event.Paths.__kpaths_Catalog.ValueCasePath.__KPaths_value_CasePath")
     assertContains(ir, "extends dev.kpaths.core.CaseKeyPathBase<fixture.Event<T>, T>")
+    assertContains(ir, "class fixture.Event.Paths.__kpaths_Catalog.ValuePropertyPaths")
+    assertContains(ir, "val value: dev.kpaths.core.KeyPath<fixture.Event.Value<T>, T>")
   }
 
   @Test

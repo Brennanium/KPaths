@@ -124,14 +124,19 @@ internal class PathsFirAnalysis(private val session: FirSession) {
     val hasTypeParameters: Boolean = false,
   )
 
-  fun GeneratedCase.propertyCatalogName(): Name? {
+  fun GeneratedCase.propertyCatalogName(allowGeneric: Boolean = false): Name? {
     val case = sealedSymbol ?: return null
-    if (hasTypeParameters || case.sourceDeclaredProperties().isEmpty()) return null
+    if ((!allowGeneric && hasTypeParameters) || case.sourceDeclaredProperties().isEmpty()) return null
     val configured = case.fir.configuredKPathsCatalogName()
     val name = configured?.takeIf { validateKPathsConfiguredName(it) == null }
       ?: kPathsCasePropertyCatalogName(case.classId.shortClassName.asString())
     return Name.identifier(name)
   }
+
+  fun GeneratedCase.genericPropertyCatalogClassName(): Name? =
+    propertyCatalogName(allowGeneric = true)?.let {
+      Name.identifier(requireNotNull(sealedSymbol).classId.shortClassName.asString() + "PropertyPaths")
+    }
 
   private fun FirAnnotation.classIdOrNull() =
     ((annotationTypeRef as? FirResolvedTypeRef)?.coneType as? ConeClassLikeType)?.lookupTag?.classId
@@ -153,6 +158,19 @@ internal class PathsFirAnalysis(private val session: FirSession) {
 
   fun FirClassSymbol<*>.isGeneratedGenericCasePath(): Boolean =
     (origin as? FirDeclarationOrigin.Plugin)?.key == PathsGenericCaseDeclarationKey
+
+  fun FirClassSymbol<*>.isGeneratedGenericCasePropertyCatalog(): Boolean =
+    (origin as? FirDeclarationOrigin.Plugin)?.key == PathsGenericCasePropertyCatalogKey
+
+  fun FirClassSymbol<*>.genericCasePropertyRoot(): FirClassSymbol<*>? {
+    if (!isGeneratedGenericCasePropertyCatalog()) return null
+    val rootId = classId.outerClassId?.outerClassId?.outerClassId ?: return null
+    return session.symbolProvider.getClassLikeSymbolByClassId(rootId) as? FirClassSymbol<*>
+  }
+
+  fun FirClassSymbol<*>.genericCasePropertySource(): FirClassSymbol<*>? =
+    genericCasePropertyRoot()?.caseSymbols()
+      ?.singleOrNull { it.genericPropertyCatalogClassName() == classId.shortClassName }?.sealedSymbol
 
   fun FirClassSymbol<*>.genericCaseRoot(): FirClassSymbol<*>? {
     if (!isGeneratedGenericCasePath()) return null

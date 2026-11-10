@@ -32,6 +32,7 @@ sealed interface NativeEvent<out T> {
 val nativeValueCase: CaseKeyPath<NativeEvent<String>, NativeEvent.Value<String>> =
   NativeEvent.Paths<String>().Value
 val nativeValuePayload: CaseKeyPath<NativeEvent<String?>, String?> = NativeEvent.Paths<String?>().Value.value
+val nativeValueProperty: KeyPath<NativeEvent.Value<String?>, String?> = NativeEvent.Paths<String?>().ValuePaths.value
 val nativeAllCases: List<PartialCaseKeyPath<NativeEvent<String?>>> = NativeEvent.Paths<String?>().allCasePaths
 val nativeBoundValue: CaseKeyPath<NativeEvent<String?>, String?> =
   NativeEvent.Paths<String?>().Tagged.valueFor(id = 1)

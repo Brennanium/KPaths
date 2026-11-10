@@ -14,6 +14,75 @@ import org.objectweb.asm.Opcodes
 
 class CompilerSnippetTest {
   @Test
+  fun `generic case property catalog names diagnose collisions`() {
+    val result = compileSnippet("GenericPropertyCatalogCollision.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      import dev.kpaths.annotations.PathsName
+      @Pathable sealed interface Event<out T> {
+        @PathsName("Fields") data class First<T>(val value: T) : Event<T>
+        @PathsName("Fields") data class Second<T>(val value: T) : Event<T>
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages, "Cannot generate paths because 'Fields' would name both")
+  }
+
+  @Test
+  fun `generic case property catalogs support concrete cases and reference classes`() {
+    val result = compileSnippet("GenericCasePropertyKinds.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      import dev.kpaths.core.ReferenceWritableKeyPath
+      import dev.kpaths.core.WritableKeyPath
+      @Pathable(copyWritableVals = true) sealed interface Result<out T> {
+        data class Failure(val message: String) : Result<Nothing>
+        class Reference<T>(var value: T) : Result<T>
+        data class Wrapped<T>(val value: T) : Result<T>
+      }
+      fun run(): Boolean {
+        val failure: WritableKeyPath<Result.Failure, String> = Result.Paths<String>().FailurePaths.message
+        val reference: ReferenceWritableKeyPath<Result.Reference<String?>, String?> =
+          Result.Paths<String?>().ReferencePaths.value
+        val original = Result.Failure("old")
+        val holder = Result.Reference<String?>(null)
+        val wrapped: WritableKeyPath<Result.Wrapped<String>, String> = Result.Paths<String>().WrappedPaths.value
+        reference.setInPlace(holder, "updated")
+        return failure.set(original, "new") == Result.Failure("new") && original.message == "old" &&
+          holder.value == "updated" && wrapped.set(Result.Wrapped("old"), "new") == Result.Wrapped("new")
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.GenericCasePropertyKindsKt").getMethod("run").invoke(null))
+  }
+
+  @Test
+  fun `generic sealed case property catalogs preserve case types and copy semantics`() {
+    val result = compileSnippet("GenericCaseProperties.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      import dev.kpaths.annotations.CaseName
+      import dev.kpaths.annotations.PathName
+      import dev.kpaths.annotations.PathsName
+      import dev.kpaths.core.WritableKeyPath
+      import dev.kpaths.core.keyPath
+      @Pathable sealed interface Result<out A, out B> {
+        @CaseName("Entry") @PathsName("Fields")
+        data class Flipped<X, Y>(@PathName("content") var first: X, val second: Y) : Result<Y, X>
+      }
+      fun run(): Boolean {
+        val path: WritableKeyPath<Result.Flipped<Int, String?>, Int> =
+          Result.Paths<String?, Int>().Fields.content
+        val original = Result.Flipped<Int, String?>(1, null)
+        return path(original) == 1 && path == keyPath(Result.Flipped<Int, String?>::first) &&
+          path.set(original, 2) == Result.Flipped<Int, String?>(2, null) && original.first == 1
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.GenericCasePropertiesKt").getMethod("run").invoke(null))
+  }
+
+  @Test
   fun `generic case path implementation names diagnose collisions`() {
     val result = compileSnippet("GenericCaseNameCollision.kt" to """
       package example

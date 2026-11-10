@@ -68,7 +68,8 @@ internal class PathsDeclarationGenerator(session: FirSession) : FirDeclarationGe
         ?: emptySet()
       classSymbol.isGeneratedGenericCatalog() -> classSymbol.genericCatalogRoot()?.caseSymbols()
         ?.filter { it.sealedSymbol != null }
-        ?.mapTo(mutableSetOf()) { Name.identifier(it.name.asString() + "CasePath") } ?: emptySet()
+        ?.flatMap { listOfNotNull(Name.identifier(it.name.asString() + "CasePath"), it.genericPropertyCatalogClassName()) }
+        ?.toMutableSet() ?: emptySet()
       else -> emptySet()
     }
   }
@@ -132,6 +133,13 @@ internal class PathsDeclarationGenerator(session: FirSession) : FirDeclarationGe
     }
     if (owner.isGeneratedGenericCatalog()) {
       val root = owner.genericCatalogRoot()?.fir as? FirRegularClass ?: return@with null
+      val propertyCase = root.symbol.caseSymbols().singleOrNull { it.genericPropertyCatalogClassName() == name }
+      if (propertyCase != null) {
+        val case = propertyCase.sealedSymbol?.fir as? FirRegularClass ?: return@with null
+        return@with createNestedClass(owner, name, PathsGenericCasePropertyCatalogKey, ClassKind.CLASS) {
+          copyKPathsTypeParameters(case.typeParameters, session)
+        }.symbol
+      }
       val sourceCase = root.symbol.caseSymbols().singleOrNull { it.name.asString() + "CasePath" == name.asString() }
         ?.sealedSymbol?.fir as? FirRegularClass ?: return@with null
       return@with createNestedClass(owner, name, PathsGenericCaseDeclarationKey, ClassKind.CLASS) {
@@ -158,9 +166,15 @@ internal class PathsDeclarationGenerator(session: FirSession) : FirDeclarationGe
         addAll(classSymbol.genericCatalogRoot()?.sourceDeclaredProperties()?.map { it.fir.generatedKPathsName() }.orEmpty())
         addAll(classSymbol.genericCatalogRoot()?.caseSymbols()?.filter { it.sealedSymbol != null }
           ?.map { it.name }.orEmpty())
+        addAll(classSymbol.genericCatalogRoot()?.caseSymbols()
+          ?.mapNotNull { it.propertyCatalogName(allowGeneric = true) }.orEmpty())
         if (classSymbol.genericCatalogRoot()?.caseSymbols().orEmpty().isNotEmpty()) {
           add(Name.identifier("__kpaths_buildAllCasePaths"))
         }
+      }
+      classSymbol.isGeneratedGenericCasePropertyCatalog() -> buildSet {
+        add(SpecialNames.INIT)
+        addAll(classSymbol.genericCasePropertySource()?.sourceDeclaredProperties()?.map { it.fir.generatedKPathsName() }.orEmpty())
       }
       classSymbol.isGeneratedCasePropertyCatalog() -> buildSet {
         add(SpecialNames.INIT)
@@ -208,11 +222,16 @@ internal class PathsDeclarationGenerator(session: FirSession) : FirDeclarationGe
       context.owner.isGeneratedCasePropertyCatalog() -> PathsCasePropertyCatalogKey
       context.owner.isGeneratedGenericCatalog() -> PathsGenericCatalogKey
       context.owner.isGeneratedGenericCasePath() -> PathsGenericCaseDeclarationKey
+      context.owner.isGeneratedGenericCasePropertyCatalog() -> PathsGenericCasePropertyCatalogKey
       else -> return@with emptyList()
     }
     return@with listOf(createConstructor(context.owner, key, true) {
-      if (key == PathsGenericCatalogKey || key == PathsGenericCaseDeclarationKey) {
-        val root = if (key == PathsGenericCatalogKey) context.owner.genericCatalogRoot() else context.owner.genericCaseRoot()
+      if (key == PathsGenericCatalogKey || key == PathsGenericCaseDeclarationKey || key == PathsGenericCasePropertyCatalogKey) {
+        val root = when (key) {
+          PathsGenericCatalogKey -> context.owner.genericCatalogRoot()
+          PathsGenericCaseDeclarationKey -> context.owner.genericCaseRoot()
+          else -> context.owner.genericCasePropertySource()
+        }
         root?.fir?.typeParameters.orEmpty().forEach { parameter ->
           valueParameter(Name.identifier("__kpaths_type_${parameter.symbol.name}"),
             PathsFirSymbols.typeIdClassId.createConeType(session))

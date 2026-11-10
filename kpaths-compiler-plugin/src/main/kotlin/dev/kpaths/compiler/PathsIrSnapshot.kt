@@ -78,7 +78,7 @@ internal object PathsIrSnapshot {
   private fun IrClass.isKPathsGeneratedSnapshotClass(): Boolean {
     val pluginOrigin = origin as? IrDeclarationOrigin.GeneratedByPlugin
     return pluginOrigin?.pluginKey in setOf(PathsDeclarationKey, PathsCaseDeclarationKey, PathsCasePropertyCatalogKey,
-      PathsGenericCatalogKey, PathsGenericCaseDeclarationKey) ||
+      PathsGenericCatalogKey, PathsGenericCaseDeclarationKey, PathsGenericCasePropertyCatalogKey) ||
       name.asString().startsWith("__KPaths_")
   }
 

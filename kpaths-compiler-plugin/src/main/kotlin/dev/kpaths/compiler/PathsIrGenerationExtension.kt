@@ -128,7 +128,7 @@ private class PathsConstructorBodyGenerator(
     if (
       (origin.pluginKey != PathsDeclarationKey && origin.pluginKey != PathsCaseDeclarationKey &&
         origin.pluginKey != PathsCasePropertyCatalogKey && origin.pluginKey != PathsGenericCatalogKey &&
-        origin.pluginKey != PathsGenericCaseDeclarationKey) ||
+        origin.pluginKey != PathsGenericCaseDeclarationKey && origin.pluginKey != PathsGenericCasePropertyCatalogKey) ||
         declaration.body != null
     ) {
       return
@@ -137,7 +137,8 @@ private class PathsConstructorBodyGenerator(
     val objectType = declaration.returnType as? IrSimpleType ?: return
     val objectClass = declaration.parent as? IrClass ?: return
     when (origin.pluginKey) {
-      PathsDeclarationKey, PathsCasePropertyCatalogKey, PathsGenericCatalogKey, PathsGenericCaseDeclarationKey -> {
+      PathsDeclarationKey, PathsCasePropertyCatalogKey, PathsGenericCatalogKey, PathsGenericCaseDeclarationKey,
+      PathsGenericCasePropertyCatalogKey -> {
         val catalogBase = pluginContext.referenceClass(
           if (origin.pluginKey == PathsGenericCaseDeclarationKey) caseKeyPathBaseClassId else casePathCatalogBaseClassId,
         )
@@ -165,7 +166,7 @@ private class PathsConstructorBodyGenerator(
             type = objectType,
           )
         }
-        if (origin.pluginKey == PathsGenericCatalogKey || origin.pluginKey == PathsGenericCaseDeclarationKey) {
+        if (origin.pluginKey in setOf(PathsGenericCatalogKey, PathsGenericCaseDeclarationKey, PathsGenericCasePropertyCatalogKey)) {
           val builder = DeclarationIrBuilder(pluginContext, declaration.symbol)
           val tokenParameters = declaration.parameters.filter { it.kind == IrParameterKind.Regular }
           val fields = tokenParameters.map { parameter ->
@@ -294,10 +295,14 @@ private class PathsConstructorBodyGenerator(
       return
     }
     if (origin.pluginKey != PathsDeclarationKey && origin.pluginKey != PathsCasePropertyCatalogKey &&
-      origin.pluginKey != PathsGenericCatalogKey) return
+      origin.pluginKey != PathsGenericCatalogKey && origin.pluginKey != PathsGenericCasePropertyCatalogKey) return
 
     val pathsClass = declaration.parent as? IrClass ?: return
-    val rootClass = if (origin.pluginKey == PathsGenericCatalogKey) {
+    val rootClass = if (origin.pluginKey == PathsGenericCasePropertyCatalogKey) {
+      val root = ((pathsClass.parent as? IrClass)?.parent as? IrClass)?.parent as? IrClass ?: return
+      root.declarations.filterIsInstance<IrClass>()
+        .singleOrNull { it.name.asString() + "PropertyPaths" == pathsClass.name.asString() } ?: return
+    } else if (origin.pluginKey == PathsGenericCatalogKey) {
       (pathsClass.parent as? IrClass)?.parent as? IrClass ?: return
     } else if (origin.pluginKey == PathsCasePropertyCatalogKey) {
       val root = (pathsClass.parent as? IrClass)?.parent as? IrClass ?: return
@@ -318,15 +323,17 @@ private class PathsConstructorBodyGenerator(
     val backingField = declaration.backingField ?: return
     val builder = DeclarationIrBuilder(pluginContext, getter.symbol)
     val generatedInitializer = if (origin.pluginKey == PathsGenericCatalogKey && sourceProperty == null) {
-      val caseClass = pathsClass.declarations.filterIsInstance<IrClass>().singleOrNull {
-        (it.origin as? IrDeclarationOrigin.GeneratedByPlugin)?.pluginKey == PathsGenericCaseDeclarationKey &&
-          it.name.asString() == declaration.name.asString() + "CasePath"
-      } ?: return
+      val returnType = getter.returnType as? IrSimpleType ?: return
+      val caseClass = (returnType.classifier as? IrClassSymbol)?.owner ?: return
+      if ((caseClass.origin as? IrDeclarationOrigin.GeneratedByPlugin)?.pluginKey !in
+        setOf(PathsGenericCaseDeclarationKey, PathsGenericCasePropertyCatalogKey)) return
       val constructor = caseClass.primaryConstructor ?: return
-      val typeArguments = pathsClass.typeParameters.map {
-        org.jetbrains.kotlin.ir.types.impl.IrSimpleTypeImpl(it.symbol, false, emptyList(), emptyList())
+      val typeArguments = returnType.arguments.map {
+        (it as? IrTypeProjection)?.type ?: return
       }
-      val tokenFields = rootClass.typeParameters.map { parameter ->
+      val tokenFields = typeArguments.map { argument ->
+        val parameter = ((argument as? IrSimpleType)?.classifier as? org.jetbrains.kotlin.ir.symbols.IrTypeParameterSymbol)
+          ?.owner ?: return
         pathsClass.declarations.filterIsInstance<org.jetbrains.kotlin.ir.declarations.IrField>()
           .singleOrNull { it.name.asString() == "__kpaths_type_${parameter.name}" } ?: return
       }

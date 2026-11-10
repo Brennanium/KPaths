@@ -80,12 +80,13 @@ sealed interface Loadable<out Value> {
 val loaded: CaseKeyPath<Loadable<String>, Loadable.Loaded<String>> =
   Loadable.Paths<String>().Loaded
 val value: CaseKeyPath<Loadable<String>, String> = Loadable.Paths<String>().Loaded.value
+val property: KeyPath<Loadable.Loaded<String>, String> = Loadable.Paths<String>().LoadedPaths.value
 val cases = Loadable.Paths<String>().allCasePaths
 ```
 
 Generic catalogs expose whole-case paths, direct payload paths for object cases and data cases with
-one to three constructor properties, bound payload factories, and `allCasePaths`. Generic case
-property catalogs and automatic `CasePathable` conformance for generic roots remain future work.
+one to three constructor properties, case property KeyPath catalogs, bound payload factories, and
+`allCasePaths`. Automatic `CasePathable` conformance for generic roots remains future work.
 
 Use `@CaseName` on a sealed case or enum entry to choose its generated member name. Its identity
 continues to use the original case name, and invalid or colliding names are diagnosed:
@@ -227,8 +228,7 @@ backend portability.
 contributing compiler plugin's `KPathsGenerationOptions`. Generated `allCasePaths` catalogs use
 the canonical associated-value paths for object cases and cases with one to three properties.
 Cases without a supported canonical payload are omitted, so `case` can fail for those cases;
-the plugin warns when it generates an incomplete catalog. Generic case property catalogs,
-adapter-backed property members, diagnostics, and broader
+the plugin warns when it generates an incomplete catalog. Adapter-backed property members, diagnostics, and broader
 conformance coverage remain future work.
 `@KPathsAdapter` currently establishes the binary metadata contract; producing an adapter's
 specialized path remains the next FIR/IR layer.
