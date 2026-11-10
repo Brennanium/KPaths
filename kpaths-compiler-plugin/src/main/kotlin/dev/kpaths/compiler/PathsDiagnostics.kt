@@ -158,7 +158,7 @@ internal class PathsDiagnosticCheckers(private val pluginSession: FirSession) : 
       }
       if (declaration.typeParameters.isNotEmpty()) {
         supportedSealedCases.forEach { candidate ->
-          val plan = declaration.kPathsGenericCasePlan(candidate) ?: return@forEach
+          val plan = declaration.kPathsGenericCasePlan(candidate, pluginSession) ?: return@forEach
           val message = kPathsGenericCaseDiagnostic(candidate.name.asString(),
             declaration.symbol.classId.asSingleFqName().asString(), plan) ?: return@forEach
           reporter.reportOn(candidate.source, PathsDiagnostics.UNSUPPORTED_SEALED_VARIANT, "[KPaths] $message")

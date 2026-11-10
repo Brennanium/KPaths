@@ -127,6 +127,8 @@ internal class PathsDeclarationGenerator(session: FirSession) : FirDeclarationGe
       classSymbol.isGeneratedGenericCatalog() -> buildSet {
         add(SpecialNames.INIT)
         addAll(classSymbol.genericCatalogRoot()?.sourceDeclaredProperties()?.map { it.fir.generatedKPathsName() }.orEmpty())
+        addAll(classSymbol.genericCatalogRoot()?.caseSymbols()?.filter { it.sealedSymbol != null }
+          ?.map { it.name }.orEmpty())
       }
       classSymbol.isGeneratedCasePropertyCatalog() -> buildSet {
         add(SpecialNames.INIT)

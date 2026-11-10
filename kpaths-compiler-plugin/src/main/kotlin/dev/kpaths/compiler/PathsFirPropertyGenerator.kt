@@ -1,6 +1,7 @@
 package dev.kpaths.compiler
 
 import dev.kpaths.codegen.model.KPathsCaseKind
+import dev.kpaths.codegen.model.KPathsGenericCasePlan
 import dev.kpaths.codegen.model.KPathsPropertyPathKind
 import dev.kpaths.codegen.model.KPathsPropertyPolicyResult
 import dev.kpaths.codegen.model.KPathsPropertyShape
@@ -43,16 +44,40 @@ internal class PathsFirPropertyGenerator(
     val pathsClass = context?.owner ?: return@with emptyList()
     if (pathsClass.isGeneratedGenericCatalog()) {
       val root = pathsClass.genericCatalogRoot() ?: return@with emptyList()
-      val property = root.sourceDeclaredProperties()
-        .singleOrNull { it.fir.generatedKPathsName() == callableId.callableName } ?: return@with emptyList()
       val arguments = pathsClass.fir.typeParameters.map {
         ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty)
       }
-      val substitution = root.fir.typeParameters.map { it.symbol }.zip(arguments).toMap()
-      val valueType = ConeSubstitutorByMap.create(substitution, session, false).substituteOrSelf(property.resolvedReturnType)
       val rootType = root.classId.createConeType(session, arguments.map {
         it.toTypeProjection(Variance.INVARIANT)
       }.toTypedArray(), false)
+      val concreteCase = root.caseSymbols().singleOrNull {
+        it.name == callableId.callableName && it.sealedSymbol != null
+      }
+      if (concreteCase != null) {
+        val caseSymbol = requireNotNull(concreteCase.sealedSymbol)
+        val caseClass = caseSymbol.fir as? FirRegularClass ?: return@with emptyList()
+        val rootClass = root.fir as? FirRegularClass ?: return@with emptyList()
+        val plan = rootClass.kPathsGenericCasePlan(caseClass, session) as? KPathsGenericCasePlan.Supported
+          ?: return@with emptyList()
+        val rootArguments = root.fir.typeParameters.mapIndexed { index, parameter ->
+          parameter.symbol.name.asString() to arguments[index]
+        }.toMap()
+        val caseArguments = caseClass.typeParameters.map { parameter ->
+          val rootName = plan.substitutions[parameter.symbol.name.asString()] ?: return@with emptyList()
+          val argument = rootArguments[rootName] ?: return@with emptyList()
+          argument.toTypeProjection(Variance.INVARIANT)
+        }.toTypedArray()
+        val valueType = caseSymbol.classId.createConeType(session, caseArguments, false)
+        val pathType = caseKeyPathClassId.createConeType(session, arrayOf(
+          rootType.toTypeProjection(Variance.INVARIANT), valueType.toTypeProjection(Variance.INVARIANT),
+        ), false)
+        return@with listOf(createMemberProperty(pathsClass, PathsGenericCatalogKey,
+          callableId.callableName, pathType, true, false).symbol)
+      }
+      val property = root.sourceDeclaredProperties()
+        .singleOrNull { it.fir.generatedKPathsName() == callableId.callableName } ?: return@with emptyList()
+      val substitution = root.fir.typeParameters.map { it.symbol }.zip(arguments).toMap()
+      val valueType = ConeSubstitutorByMap.create(substitution, session, false).substituteOrSelf(property.resolvedReturnType)
       val kind = KPathsPropertyShape(
         ownerIsDataClass = (root.fir as? FirRegularClass)?.status?.isData == true,
         isMutable = property.fir.isVar,

@@ -14,6 +14,67 @@ import org.objectweb.asm.Opcodes
 
 class CompilerSnippetTest {
   @Test
+  fun `generic whole case paths map reordered parameters and nullable arguments`() {
+    val result = compileSnippet("ReorderedGenericCase.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      import dev.kpaths.core.CaseKeyPath
+      import dev.kpaths.core.CaseMatch
+      import dev.kpaths.core.TypeId
+      import dev.kpaths.core.caseKeyPath
+      @Pathable sealed interface Result<out A, out B> {
+        data class Flipped<X, Y>(val first: X, val second: Y) : Result<Y, X>
+      }
+      fun run(): Boolean {
+        val path: CaseKeyPath<Result<String?, Int>, Result.Flipped<Int, String?>> =
+          Result.Paths<String?, Int>().Flipped
+        val value = Result.Flipped<Int, String?>(1, null)
+        return path.match(value) == CaseMatch.Matched(value) && path.embed(value) == value &&
+          path.__kpaths_valueType == TypeId.of<Result.Flipped<Int, String?>>() &&
+          path == caseKeyPath<Result<String?, Int>, Result.Flipped<Int, String?>>()
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.ReorderedGenericCaseKt").getMethod("run").invoke(null))
+  }
+
+  @Test
+  fun `generic sealed object cases expose whole case paths`() {
+    val result = compileSnippet("GenericObjectCase.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      import dev.kpaths.annotations.CaseName
+      import dev.kpaths.core.CaseKeyPath
+      import dev.kpaths.core.CaseMatch
+      import dev.kpaths.core.TypeId
+      import dev.kpaths.core.caseKeyPath
+      typealias EventAlias<T> = Event<T>
+      @Pathable sealed interface Event<out T> {
+        @CaseName("Waiting") data object Idle : Event<Nothing>
+        data class Failure(val message: String) : Event<Nothing>
+        data class Value<T>(val value: T) : EventAlias<T>
+      }
+      fun run(): Boolean {
+        val path: CaseKeyPath<Event<String>, Event.Idle> = Event.Paths<String>().Waiting
+        val failure: CaseKeyPath<Event<String>, Event.Failure> = Event.Paths<String>().Failure
+        val value: CaseKeyPath<Event<String>, Event.Value<String>> = Event.Paths<String>().Value
+        return path.match(Event.Idle) == CaseMatch.Matched(Event.Idle) &&
+          path.match(Event.Value("a")) == CaseMatch.NoMatch && path.embed(Event.Idle) == Event.Idle &&
+          path == caseKeyPath<Event<String>, Event.Idle>() &&
+          failure.embed(Event.Failure("oops")) == Event.Failure("oops") &&
+          failure == caseKeyPath<Event<String>, Event.Failure>() &&
+          value.match(Event.Value("a")) == CaseMatch.Matched(Event.Value("a")) &&
+          value.embed(Event.Value("b")) == Event.Value("b") &&
+          value == caseKeyPath<Event<String>, Event.Value<String>>() &&
+          path.__kpaths_valueType == TypeId.of<Event.Idle>() &&
+          path.__kpaths_id != Event.Paths<Int>().Waiting.__kpaths_id
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.GenericObjectCaseKt").getMethod("run").invoke(null))
+  }
+
+  @Test
   fun `generic sealed case policy accepts forwarded and covariant Nothing cases`() {
     val result = compileSnippet("ValidGenericCases.kt" to """
       package example

@@ -142,6 +142,12 @@ data class RequestedDocument(val title: String, val identifier: String = "id", v
 @Pathable
 data class FixtureBox<T>(var value: T)
 
+@Pathable
+sealed interface FixtureEvent<out T> {
+  data object Idle : FixtureEvent<Nothing>
+  data class Value<T>(val value: T) : FixtureEvent<T>
+}
+
 val requestedDocumentPaths: RequestedDocument.GeneratedPaths = RequestedDocument.GeneratedPaths
 val requestedDocumentTitlePath: WritableKeyPath<RequestedDocument, String> =
   RequestedDocument.GeneratedPaths.title

@@ -21,6 +21,15 @@ val nativeBoxClassPath: WritableKeyPath<NativeBox<String>, String> = NativeBox.P
 val nativeBoxTokenPath: WritableKeyPath<NativeBox<String?>, String?> =
   NativeBox.Paths.of<String?>(TypeId.of<String?>()).value
 
+@Pathable
+sealed interface NativeEvent<out T> {
+  data object Idle : NativeEvent<Nothing>
+  data class Value<T>(val value: T) : NativeEvent<T>
+}
+
+val nativeValueCase: CaseKeyPath<NativeEvent<String>, NativeEvent.Value<String>> =
+  NativeEvent.Paths<String>().Value
+
 val nativePersonPaths: NativePerson.Paths = NativePerson.Paths
 val nativePersonNamePath: KeyPath<NativePerson, String> = NativePerson.Paths.name
 

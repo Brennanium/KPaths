@@ -1,6 +1,8 @@
 package dev.kpaths.compiler.consumer
 
 import dev.kpaths.compiler.fixture.FixtureBox
+import dev.kpaths.compiler.fixture.FixtureEvent
+import dev.kpaths.core.CaseMatch
 import dev.kpaths.core.TypeId
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -14,5 +16,14 @@ class GenericConsumerTest {
     assertEquals(FixtureBox<String?>(null), original)
     assertEquals(FixtureBox("updated"), FixtureBox.Paths.of(String::class).value.set(FixtureBox("old"), "updated"))
     assertEquals(genericPathFromAnotherModule, FixtureBox.Paths.of<String?>(TypeId.of<String?>()).value)
+  }
+
+  @Test
+  fun `generic sealed case works without the compiler plugin`() {
+    val path = FixtureEvent.Paths<String?>().Value
+    val value = FixtureEvent.Value<String?>(null)
+    assertEquals(CaseMatch.Matched(value), path.match(value))
+    assertEquals(value, path.embed(value))
+    assertEquals(TypeId.of<FixtureEvent.Value<String?>>(), path.__kpaths_valueType)
   }
 }

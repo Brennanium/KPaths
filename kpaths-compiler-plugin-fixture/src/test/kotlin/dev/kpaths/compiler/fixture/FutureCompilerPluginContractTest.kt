@@ -249,6 +249,25 @@ class FutureCompilerPluginContractTest {
   }
 
   @Test
+  fun `IR snapshot records generic sealed whole-case paths`(@TempDir directory: Path) {
+    val snapshot = directory.resolve("generic-cases.ir.txt")
+    compileSuccessfully(directory, """
+      package fixture
+      import dev.kpaths.annotations.Pathable
+      @Pathable sealed interface Event<out T> {
+        data object Idle : Event<Nothing>
+        data class Value<T>(val value: T) : Event<T>
+      }
+      val path = Event.Paths<String>().Value
+    """, irSnapshot = snapshot)
+    val ir = Files.readString(snapshot)
+    assertContains(ir, "val Value: dev.kpaths.core.CaseKeyPath<fixture.Event<T>, fixture.Event.Value<T>>")
+    assertContains(ir, "class fixture.Event.Paths.__kpaths_Catalog.__KPaths_Value_CasePath")
+    assertContains(ir, "extends dev.kpaths.core.CaseKeyPathBase<fixture.Event<T>, fixture.Event.Value<T>>")
+    assertContains(ir, "fun embed(value: fixture.Event.Value<T>): fixture.Event<T>")
+  }
+
+  @Test
   fun `IR snapshot records generic catalog and writable path implementation`(@TempDir directory: Path) {
     val snapshot = directory.resolve("generic.ir.txt")
     compileSuccessfully(directory, """

@@ -5,7 +5,7 @@ import dev.kpaths.codegen.model.KPathsGenericCasePlan
 import dev.kpaths.codegen.model.KPathsGenericRootParameter
 import dev.kpaths.codegen.model.planKPathsGenericCase
 import org.jetbrains.kotlin.fir.declarations.FirRegularClass
-import org.jetbrains.kotlin.fir.analysis.checkers.context.CheckerContext
+import org.jetbrains.kotlin.fir.FirSession
 import org.jetbrains.kotlin.fir.resolve.fullyExpandedType
 import org.jetbrains.kotlin.fir.symbols.SymbolInternals
 import org.jetbrains.kotlin.fir.types.ConeClassLikeType
@@ -18,12 +18,11 @@ import org.jetbrains.kotlin.types.Variance
 
 /** Translates resolved FIR case supertypes into the frontend-neutral substitution policy. */
 @OptIn(SymbolInternals::class)
-context(context: CheckerContext)
-internal fun FirRegularClass.kPathsGenericCasePlan(case: FirRegularClass): KPathsGenericCasePlan? {
+internal fun FirRegularClass.kPathsGenericCasePlan(case: FirRegularClass, session: FirSession): KPathsGenericCasePlan? {
   val rootId = symbol.classId
   val supertype = case.symbol.resolvedSuperTypes
     .filterIsInstance<ConeClassLikeType>()
-    .map { it.fullyExpandedType() }
+    .map { it.fullyExpandedType(session) }
     .firstOrNull { it.lookupTag.classId == rootId } ?: return null
   return planKPathsGenericCase(
     rootParameters = typeParameters.map {

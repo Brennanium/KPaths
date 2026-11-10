@@ -33,8 +33,7 @@ val explicitValue = Box.Paths.of<String?>(TypeId.of<String?>()).value
 The factory captures each reified type argument as a `TypeId`, so path identity preserves generic
 arguments and nullability. The catalog caches direct path implementations; the `TypeId.of` call
 uses Kotlin type metadata at the factory call site. A `KClass` can be passed when a non-null class
-token is already available; it does not retain nested generic arguments or nullability. Generic
-sealed-case catalogs are not implemented by the compiler plugin yet.
+token is already available; it does not retain nested generic arguments or nullability.
 The explicit `TypeId` overload is useful in non-reified generic code; callers are responsible for
 passing a token that matches each type argument.
 
@@ -66,8 +65,24 @@ val message: CaseKeyPath<Delivery, Delivery.Message> = Delivery.Paths.Message
 Those whole-case members are direct `CaseKeyPathBase` implementations: matching is an `is` check,
 embedding returns the supplied case, and their `PathId`/`TypeId` metadata is emitted without
 reflection. This slice covers variants declared directly inside the sealed root, including direct
-payload paths for object cases and cases with one to three constructor properties. Generic sealed
-roots remain future work.
+payload paths for object cases and cases with one to three constructor properties.
+
+Generic sealed roots also generate whole-case paths, including cases that forward or reorder root
+type parameters and covariant `Nothing` cases:
+
+```kotlin
+@Pathable
+sealed interface Loadable<out Value> {
+  data object Idle : Loadable<Nothing>
+  data class Loaded<Value>(val value: Value) : Loadable<Value>
+}
+
+val loaded: CaseKeyPath<Loadable<String>, Loadable.Loaded<String>> =
+  Loadable.Paths<String>().Loaded
+```
+
+These generic case members currently expose the whole case. Direct payload conveniences,
+`allCasePaths`, and `CasePathable` conformance for generic roots remain future work.
 
 Use `@CaseName` on a sealed case or enum entry to choose its generated member name. Its identity
 continues to use the original case name, and invalid or colliding names are diagnosed:
@@ -209,7 +224,7 @@ backend portability.
 contributing compiler plugin's `KPathsGenerationOptions`. Generated `allCasePaths` catalogs use
 the canonical associated-value paths for object cases and cases with one to three properties.
 Cases without a supported canonical payload are omitted, so `case` can fail for those cases;
-the plugin warns when it generates an incomplete catalog. Generic sealed-case catalogs,
+the plugin warns when it generates an incomplete catalog. Generic sealed-case payload conveniences,
 adapter-backed property members, diagnostics, and broader
 conformance coverage remain future work.
 `@KPathsAdapter` currently establishes the binary metadata contract; producing an adapter's

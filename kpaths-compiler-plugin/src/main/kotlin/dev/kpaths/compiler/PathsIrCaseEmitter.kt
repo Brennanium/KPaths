@@ -19,6 +19,8 @@ import org.jetbrains.kotlin.descriptors.Modality
 import org.jetbrains.kotlin.ir.builders.declarations.addBackingField
 import org.jetbrains.kotlin.ir.builders.declarations.addConstructor
 import org.jetbrains.kotlin.ir.builders.declarations.addDefaultGetter
+import org.jetbrains.kotlin.ir.builders.declarations.addGetter
+import org.jetbrains.kotlin.ir.builders.declarations.addTypeParameter
 import org.jetbrains.kotlin.ir.builders.declarations.addFunction
 import org.jetbrains.kotlin.ir.builders.declarations.addProperty
 import org.jetbrains.kotlin.ir.builders.declarations.addValueParameter
@@ -33,6 +35,7 @@ import org.jetbrains.kotlin.ir.builders.irEquals
 import org.jetbrains.kotlin.ir.builders.irExprBody
 import org.jetbrains.kotlin.ir.builders.irGet
 import org.jetbrains.kotlin.ir.builders.irGetObject
+import org.jetbrains.kotlin.ir.builders.irGetField
 import org.jetbrains.kotlin.ir.builders.irIfThenElse
 import org.jetbrains.kotlin.ir.builders.irIs
 import org.jetbrains.kotlin.ir.builders.irReturn
@@ -41,6 +44,7 @@ import org.jetbrains.kotlin.ir.declarations.IrClass
 import org.jetbrains.kotlin.ir.declarations.IrDeclarationOrigin
 import org.jetbrains.kotlin.ir.declarations.IrEnumEntry
 import org.jetbrains.kotlin.ir.declarations.IrProperty
+import org.jetbrains.kotlin.ir.declarations.IrField
 import org.jetbrains.kotlin.ir.declarations.IrSimpleFunction
 import org.jetbrains.kotlin.ir.expressions.impl.IrGetEnumValueImpl
 import org.jetbrains.kotlin.ir.expressions.impl.IrInstanceInitializerCallImpl
@@ -50,6 +54,7 @@ import org.jetbrains.kotlin.ir.types.IrSimpleType
 import org.jetbrains.kotlin.ir.types.IrType
 import org.jetbrains.kotlin.ir.types.IrTypeProjection
 import org.jetbrains.kotlin.ir.types.typeWith
+import org.jetbrains.kotlin.ir.types.IrTypeSubstitutor
 import org.jetbrains.kotlin.ir.types.impl.IrSimpleTypeImpl
 import org.jetbrains.kotlin.ir.util.defaultType
 import org.jetbrains.kotlin.ir.util.primaryConstructor
@@ -77,7 +82,7 @@ internal class PathsIrCaseEmitter(
     rootClass: IrClass,
     declaration: IrProperty,
   ) = run {
-    if (rootClass.typeParameters.isNotEmpty()) return@run null
+    val isGeneric = rootClass.typeParameters.isNotEmpty()
     val pathReturnType = declaration.getter?.returnType as? IrSimpleType ?: return@run null
     val returnClassifier = pathReturnType.classifier as? IrClassSymbol ?: return@run null
     if (returnClassifier.owner.stableQualifiedName() != caseKeyPathQualifiedName) return@run null
@@ -95,11 +100,11 @@ internal class PathsIrCaseEmitter(
       ?.getter
     val sealedObjectCase = rootClass.declarations.filterIsInstance<IrClass>()
       .singleOrNull {
-        it.generatedCaseName(it.name) == pathsClass.name &&
+        !isGeneric && it.generatedCaseName(it.name) == pathsClass.name &&
           it.kind == ClassKind.OBJECT &&
           (it.origin as? IrDeclarationOrigin.GeneratedByPlugin)?.pluginKey != PathsDeclarationKey
       }
-    if (caseClass.owner.typeParameters.isNotEmpty()) return@run null
+    if (!isGeneric && caseClass.owner.typeParameters.isNotEmpty()) return@run null
     val rootTypeSpec = rootType.toKPathsTypeIdSpec() ?: return@run null
     val valueTypeSpec = caseType.toKPathsTypeIdSpec() ?: return@run null
 
@@ -133,9 +138,11 @@ internal class PathsIrCaseEmitter(
       .singleOrNull { it.name.asString() == "case" }
       ?: return@run null
     val baseConstructor = caseKeyPathBase.owner.primaryConstructor ?: return@run null
-    val rootTypeIdExpression = typeIdExpression(rootTypeSpec) ?: return@run null
-    val valueTypeIdExpression = typeIdExpression(valueTypeSpec) ?: return@run null
-    val caseMatchType = caseMatch.typeWith(caseType)
+    fun resolveParameter(name: String) = pathsClass.declarations.filterIsInstance<IrField>()
+      .singleOrNull { it.name.asString() == "__kpaths_type_$name" }
+      ?.let { field -> irGetField(irGet(checkNotNull(pathsClass.thisReceiver)), field) }
+    val rootTypeIdExpression = emitKPathsTypeId(pluginContext, rootTypeSpec, ::resolveParameter) ?: return@run null
+    val valueTypeIdExpression = emitKPathsTypeId(pluginContext, valueTypeSpec, ::resolveParameter) ?: return@run null
 
     val implementation = pluginContext.irFactory.buildClass {
       name = Name.identifier("__KPaths_${declaration.name.asString()}_CasePath")
@@ -145,13 +152,26 @@ internal class PathsIrCaseEmitter(
       origin = IrDeclarationOrigin.DEFINED
     }.apply {
       parent = pathsClass
-      superTypes = listOf(caseKeyPathBase.typeWith(rootType, caseType))
     }
+    val implementationParameters = pathsClass.typeParameters.map { parameter ->
+      implementation.addTypeParameter(parameter.name.asString(), pluginContext.irBuiltIns.anyNType)
+    }
+    val implementationArguments = implementationParameters.map {
+      IrSimpleTypeImpl(it.symbol, false, emptyList(), emptyList())
+    }
+    val substitutor = IrTypeSubstitutor(pathsClass.typeParameters.map { it.symbol }, implementationArguments)
+    implementationParameters.zip(pathsClass.typeParameters).forEach { (generated, original) ->
+      generated.superTypes = original.superTypes.map(substitutor::substitute)
+    }
+    val generatedRootType = substitutor.substitute(rootType)
+    val generatedCaseType = substitutor.substitute(caseType)
+    val caseMatchType = caseMatch.typeWith(generatedCaseType)
+    implementation.superTypes = listOf(caseKeyPathBase.typeWith(generatedRootType, generatedCaseType))
     deferredDeclarations.getOrPut(pathsClass, ::mutableListOf) += implementation
     val implementationType = IrSimpleTypeImpl(
       implementation.symbol,
       false,
-      emptyList(),
+      implementationArguments,
       emptyList(),
     )
     implementation.thisReceiver = implementation.buildReceiverParameter {
@@ -166,6 +186,8 @@ internal class PathsIrCaseEmitter(
       returnType = implementationType
       origin = IrDeclarationOrigin.DEFINED
     }
+    val idParameter = if (isGeneric) constructor.addValueParameter("__kpaths_id", pathId.owner.defaultType) else null
+    val typeParameter = if (isGeneric) constructor.addValueParameter("__kpaths_valueType", typeId.owner.defaultType) else null
     constructor.body = irBlockBody {
       +irDelegatingConstructorCall(baseConstructor)
       +IrInstanceInitializerCallImpl(
@@ -201,30 +223,44 @@ internal class PathsIrCaseEmitter(
       }.apply {
         overriddenSymbols = listOf(override.symbol)
       }
-      property.addBackingField {
+      val field = property.addBackingField {
         this.name = Name.identifier(name)
         this.type = type
         visibility = DescriptorVisibilities.PRIVATE
         isFinal = true
-      }.initializer = irExprBody(initializer)
-      property.addDefaultGetter(implementation, pluginContext.irBuiltIns)
+      }
+      field.initializer = irExprBody(initializer)
+      if (isGeneric) {
+        val getter = property.addGetter {
+          returnType = type
+          visibility = DescriptorVisibilities.PUBLIC
+        }
+        getter.overriddenSymbols = listOf(checkNotNull(override.getter).symbol)
+        getter.parameters += getter.buildReceiverParameter { this.type = implementationType }
+        val builder = DeclarationIrBuilder(pluginContext, getter.symbol)
+        getter.body = builder.irBlockBody {
+          +irReturn(irGetField(irGet(checkNotNull(getter.dispatchReceiverParameter)), field))
+        }
+      } else property.addDefaultGetter(implementation, pluginContext.irBuiltIns)
     }
 
+    val sourceCaseName = if (isGeneric) caseClass.owner.name else sealedObjectCase?.name ?: enumEntry?.name ?: declaration.name
+    val idExpression = irCall(pathIdCase.symbol).apply {
+      dispatchReceiver = irGetObject(pathIdCompanion.symbol)
+      arguments[1] = rootTypeIdExpression
+      arguments[2] = irString(sourceCaseName.asString())
+    }
     addMetadataProperty(
       name = "__kpaths_id",
       type = pathId.owner.defaultType,
       override = idProperty,
-      initializer = irCall(pathIdCase.symbol).apply {
-        dispatchReceiver = irGetObject(pathIdCompanion.symbol)
-        arguments[1] = rootTypeIdExpression
-        arguments[2] = irString((sealedObjectCase?.name ?: enumEntry?.name ?: declaration.name).asString())
-      },
+      initializer = idParameter?.let(::irGet) ?: idExpression,
     )
     addMetadataProperty(
       name = "__kpaths_valueType",
       type = typeId.owner.defaultType,
       override = valueTypeProperty,
-      initializer = valueTypeIdExpression,
+      initializer = typeParameter?.let(::irGet) ?: valueTypeIdExpression,
     )
 
     val generatedMatch = implementation.addFunction {
@@ -242,15 +278,15 @@ internal class PathsIrCaseEmitter(
     }
     val matchRoot = generatedMatch.addValueParameter(
       name = Name.identifier("root"),
-      type = rootType,
+      type = generatedRootType,
       origin = IrDeclarationOrigin.DEFINED,
     )
     val matchBuilder = DeclarationIrBuilder(pluginContext, generatedMatch.symbol)
-    val matchedValue = matchBuilder.irCallConstructor(matchedConstructor.symbol, listOf(caseType)).apply {
+    val matchedValue = matchBuilder.irCallConstructor(matchedConstructor.symbol, listOf(generatedCaseType)).apply {
       arguments[0] = if (sealedObjectCase != null) {
         matchBuilder.irGetObject(pluginContext.irBuiltIns.unitClass)
       } else if (enumEntry == null && enumEntryGetter == null) {
-        matchBuilder.irAs(matchBuilder.irGet(matchRoot), caseType)
+        matchBuilder.irAs(matchBuilder.irGet(matchRoot), generatedCaseType)
       } else {
         matchBuilder.irGetObject(pluginContext.irBuiltIns.unitClass)
       }
@@ -262,7 +298,7 @@ internal class PathsIrCaseEmitter(
           condition = if (sealedObjectCase != null) {
             matchBuilder.irIs(matchBuilder.irGet(matchRoot), sealedObjectCase.defaultType)
           } else if (enumEntry == null && enumEntryGetter == null) {
-            matchBuilder.irIs(matchBuilder.irGet(matchRoot), caseType)
+            matchBuilder.irIs(matchBuilder.irGet(matchRoot), generatedCaseType)
           } else {
             matchBuilder.irEquals(
               matchBuilder.irGet(matchRoot),
@@ -279,7 +315,7 @@ internal class PathsIrCaseEmitter(
       name = Name.identifier("embed")
       visibility = DescriptorVisibilities.PUBLIC
       modality = Modality.FINAL
-      returnType = rootType
+      returnType = generatedRootType
       origin = IrDeclarationOrigin.DEFINED
     }.apply {
       overriddenSymbols = listOf(caseEmbedFunction.symbol)
@@ -290,7 +326,7 @@ internal class PathsIrCaseEmitter(
     }
     val embedValue = generatedEmbed.addValueParameter(
       name = Name.identifier("value"),
-      type = caseType,
+      type = generatedCaseType,
       origin = IrDeclarationOrigin.DEFINED,
     )
     val embedBuilder = DeclarationIrBuilder(pluginContext, generatedEmbed.symbol)
@@ -306,7 +342,15 @@ internal class PathsIrCaseEmitter(
       )
     }
 
-    irCallConstructor(constructor.symbol, emptyList())
+    val callerTypeArguments = pathsClass.typeParameters.map {
+      IrSimpleTypeImpl(it.symbol, false, emptyList(), emptyList())
+    }
+    irCallConstructor(constructor.symbol, callerTypeArguments).apply {
+      if (isGeneric) {
+        arguments[0] = idExpression
+        arguments[1] = valueTypeIdExpression
+      }
+    }
   }
 
   private fun DeclarationIrBuilder.irGetEnumValue(
