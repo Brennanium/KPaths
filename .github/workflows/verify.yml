@@ -119,6 +119,7 @@ jobs:
           :kpaths-reflection-jvm:jvmTest
           :kpaths-ksp:jvmTest
           :kpaths-sample:jvmTest
+          :kpaths-compiler-plugin-fixture:jvmTest
           verifyMavenPublications
           docsBuild
 

@@ -12,7 +12,8 @@ public class PathsPluginRegistrar : CompilerPluginRegistrar() {
 
   override fun ExtensionStorage.registerExtensions(configuration: CompilerConfiguration) {
     val adapterBridge = KPathsAdapterBridge()
-    FirExtensionRegistrarAdapter.registerExtension(PathsFirRegistrar(adapterBridge))
+    val firSnapshot = configuration.get(KPathsCompilerConfiguration.firSnapshotPath)?.let(::PathsFirSnapshot)
+    FirExtensionRegistrarAdapter.registerExtension(PathsFirRegistrar(adapterBridge, firSnapshot))
     IrGenerationExtension.registerExtension(
       PathsIrGenerationExtension(configuration.get(KPathsCompilerConfiguration.irSnapshotPath), adapterBridge),
     )
