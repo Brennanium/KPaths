@@ -10,6 +10,8 @@ import dev.kpaths.core.KeyPathBase
 import dev.kpaths.compiler.integration.Cell
 import dev.kpaths.compiler.integration.BinaryCell
 import dev.kpaths.compiler.integration.BinaryPath
+import dev.kpaths.compiler.integration.BinaryReader
+import dev.kpaths.compiler.integration.BinaryReaderPath
 import dev.kpaths.core.WritableKeyPath
 import dev.kpaths.core.TypeId
 import dev.kpaths.core.PartialCaseKeyPath
@@ -33,6 +35,11 @@ val nativeAdaptedTitle: CellTextPath = AdaptedDocument.GeneratedPaths.title
 @Pathable
 data class NativeBinaryDocument(val text: BinaryCell<String?>)
 val nativeDeclarativePath: BinaryPath<NativeBinaryDocument, String?> = NativeBinaryDocument.Paths.text
+
+@Pathable
+data class NativeReaderDocument<T>(val reader: BinaryReader<T>)
+val nativeReaderPath: BinaryReaderPath<NativeReaderDocument<String?>, String?> =
+  NativeReaderDocument.Paths<String?>().reader
 
 /** Proves the same synthetic nested declaration reaches Kotlin/Native's backend. */
 @Pathable

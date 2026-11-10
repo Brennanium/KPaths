@@ -79,6 +79,24 @@ public class TypeId(
   public fun withNullability(nullable: Boolean): TypeId =
     TypeId(classifier, arguments, nullable)
 
+  /**
+   * Returns the type at [index], retaining its nested arguments and nullability.
+   *
+   * Use this when a factory knows which generic argument its storage type focuses. The caller
+   * remains responsible for checking the storage classifier and selecting the correct index.
+   * An `in` or `out` projection returns its projected type; a star has no concrete type to return.
+   *
+   * @throws IllegalArgumentException if [index] is out of range or identifies a star projection.
+   */
+  public fun requireTypeArgument(index: Int): TypeId {
+    require(index in arguments.indices) {
+      "Type $this has ${arguments.size} type argument(s); index $index is out of range."
+    }
+    return requireNotNull(arguments[index].type) {
+      "Type argument $index of $this is a star projection and has no type."
+    }
+  }
+
   override fun equals(other: Any?): Boolean =
     other is TypeId &&
       classifier == other.classifier &&

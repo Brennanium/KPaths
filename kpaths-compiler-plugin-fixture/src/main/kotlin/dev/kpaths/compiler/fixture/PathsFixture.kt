@@ -17,6 +17,8 @@ import dev.kpaths.compiler.integration.Cell as LibraryCell
 import dev.kpaths.compiler.integration.LibraryPathable
 import dev.kpaths.compiler.integration.BinaryCell
 import dev.kpaths.compiler.integration.BinaryPath
+import dev.kpaths.compiler.integration.BinaryReader
+import dev.kpaths.compiler.integration.BinaryReaderPath
 
 @Pathable
 data class Person(val name: String)
@@ -28,6 +30,11 @@ val personNamePath: KeyPath<Person, String> = Person.Paths.name
 @Pathable
 data class BinaryDocument(val text: BinaryCell<String?>)
 val binaryDocumentText: BinaryPath<BinaryDocument, String?> = BinaryDocument.Paths.text
+
+@Pathable
+data class BinaryReaderDocument<T>(val reader: BinaryReader<T>)
+val binaryReaderPath: BinaryReaderPath<BinaryReaderDocument<List<String?>>, List<String?>> =
+  BinaryReaderDocument.Paths<List<String?>>().reader
 
 @Pathable
 sealed interface Delivery {

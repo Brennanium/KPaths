@@ -274,6 +274,15 @@ object ObservablePathFactory : KPathsAdapterFactory {
     storage: KeyPath<Root, ObservableValue<Value>>,
   ): ObservableValueKeyPath<Root, Value> = ObservableValueKeyPath(storage)
 }
+
+class ObservableValueKeyPath<Root, Value>(
+  val storage: KeyPath<Root, ObservableValue<Value>>,
+) : KeyPathBase<Root, Value>() {
+  override val __kpaths_id = storage.__kpaths_id
+  override val __kpaths_valueType = storage.__kpaths_valueType.requireTypeArgument(0)
+
+  override fun get(root: Root): Value = storage.get(root).value
+}
 ```
 
 Here `ObservableValueKeyPath` is an integration-owned `KeyPath` subtype. For a property of type
@@ -285,6 +294,44 @@ a `KeyPath` return type. All its type parameters must be inferred from that para
 declarative matcher accepts invariant arguments, non-nullable type parameters, and factory type
 parameters without explicit bounds; unsupported
 shapes receive a diagnostic.
+
+For example, an application can use the specialized path without calling the factory itself:
+
+```kotlin
+@Pathable
+data class Profile(val name: ObservableValue<String>) {
+  companion object
+}
+
+val name: ObservableValueKeyPath<Profile, String> = Profile.Paths.name
+val profile = Profile(ObservableValue("Ada"))
+name.get(profile) // "Ada"
+```
+
+The factory receives a `KeyPath<Profile, ObservableValue<String>>`. Its return type tells KPaths
+to expose `ObservableValueKeyPath<Profile, String>` from the generated catalog. The companion
+facade above is provided by KSP when a companion is declared; the compiler plugin generates the
+nested `Paths` catalog directly.
+
+In the factory, `storage.__kpaths_valueType` describes the entire storage type, such as
+`ObservableValue<String>`. `requireTypeArgument(0)` selects its first generic type argument,
+`String`. It preserves nested arguments and nullability and reports a missing argument or star
+projection. The factory must know which argument it needs. Declaration-site covariance,
+such as `Readable<out Value>` used as `Readable<String>`, is supported; explicit use-site
+projections remain unsupported. A nullable value, such as `ObservableValue<String?>`, is
+supported, while a nullable wrapper, `ObservableValue<String>?`, does not match this factory and
+is diagnosed.
+
+KSP currently diagnoses a type alias of an adapted storage type as unsupported. When an external
+generator supplies its own `propertyPathAdapters`, the first matching lower-level recipe takes
+precedence over the declarative factory. Remove or change that recipe when migrating an existing
+integration to `@PathsAdapter`.
+
+An integration can expose the original storage path, as `storage` does above. The factory's
+parameter type is `KeyPath`, so callers can read the wrapper through it. An original writable
+storage path may be passed to the factory, but its writable capability is not guaranteed by that
+parameter type; exposing replacement safely requires an integration API that preserves or checks
+the appropriate capability. The specialized path itself focuses the wrapped value.
 
 Processor integrations can instead use the lower-level recipe API for custom generation.
 

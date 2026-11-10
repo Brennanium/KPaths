@@ -9,6 +9,17 @@ import kotlin.test.assertTrue
 
 class PathIdTest {
   @Test
+  fun `required type arguments retain nested nullability and reject missing types`() {
+    val nested = TypeId.of<Map<String, List<Int?>>>()
+    assertEquals(TypeId.of<List<Int?>>(), nested.requireTypeArgument(1))
+    assertEquals(TypeId.of<Int?>(), nested.requireTypeArgument(1).requireTypeArgument(0))
+    kotlin.test.assertFailsWith<IllegalArgumentException> { nested.requireTypeArgument(-1) }
+    kotlin.test.assertFailsWith<IllegalArgumentException> { nested.requireTypeArgument(2) }
+    kotlin.test.assertFailsWith<IllegalArgumentException> { TypeId.of<List<*>>().requireTypeArgument(0) }
+    assertEquals(TypeId.of<String?>(), TypeId("example.Box", listOf(TypeArgument.out(TypeId.of<String?>()))).requireTypeArgument(0))
+  }
+
+  @Test
   fun `paths with the same structural route compare equal`() {
     assertEquals(
       PathId.property(TypeId("dev.kpaths.CounterState"), "count"),

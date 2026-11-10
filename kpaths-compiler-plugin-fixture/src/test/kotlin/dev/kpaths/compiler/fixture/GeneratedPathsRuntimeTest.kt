@@ -24,6 +24,11 @@ class GeneratedPathsRuntimeTest {
     assertEquals(null, path.get(BinaryDocument(dev.kpaths.compiler.integration.BinaryCell(null))))
     assertEquals(TypeId.of<String?>(), path.__kpaths_valueType)
     assertEquals(PathId.property(TypeId.of<BinaryDocument>(), "text"), path.__kpaths_id)
+    val reader = BinaryReaderDocument.Paths<List<String?>>().reader
+    val document = BinaryReaderDocument(dev.kpaths.compiler.integration.BinaryReadable(listOf("value", null)))
+    assertEquals(listOf("value", null), reader.get(document))
+    assertEquals(TypeId.of<List<String?>>(), reader.__kpaths_valueType)
+    assertEquals(reader.__kpaths_id, reader.storage.__kpaths_id)
   }
 
   @Test

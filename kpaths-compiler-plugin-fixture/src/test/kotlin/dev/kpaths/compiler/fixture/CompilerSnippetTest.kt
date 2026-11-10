@@ -14,6 +14,22 @@ import org.objectweb.asm.Opcodes
 
 class CompilerSnippetTest {
   @Test
+  fun `declarative adapter diagnoses a nullable wrapper`() {
+    val result = compileSnippet("NullableAdapterWrapper.kt" to """
+      package example
+      import dev.kpaths.annotations.*
+      import dev.kpaths.core.*
+      @PathsAdapter(factory = Factory::class) class Cell<T>(val value: T)
+      object Factory : KPathsAdapterFactory {
+        fun <R, V> make(path: KeyPath<R, Cell<V>>): KeyPath<R, Cell<V>> = path
+      }
+      @Pathable data class Document(val title: Cell<String>?)
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages, "[KPaths] Invalid @PathsAdapter on 'title'")
+  }
+
+  @Test
   fun `declarative adapter diagnoses missing factory method`() {
     val result = compileSnippet("InvalidDeclarativeFactory.kt" to """
       package example
@@ -61,7 +77,17 @@ class CompilerSnippetTest {
       }
       class CellPath<Root, Value>(private val storage: KeyPath<Root, Cell<Value>>) : KeyPathBase<Root, Value>() {
         override val __kpaths_id get() = storage.__kpaths_id
-        override val __kpaths_valueType get() = requireNotNull(storage.__kpaths_valueType.arguments.single().type)
+        override val __kpaths_valueType get() = storage.__kpaths_valueType.requireTypeArgument(0)
+        override fun get(root: Root): Value = storage.get(root).value
+      }
+      @PathsAdapter(factory = ReaderFactory::class) interface Reader<out T> { val value: T }
+      class Readable<T>(override val value: T) : Reader<T>
+      object ReaderFactory : KPathsAdapterFactory {
+        fun <Root, Value> make(storage: KeyPath<Root, Reader<Value>>): ReaderPath<Root, Value> = ReaderPath(storage)
+      }
+      class ReaderPath<Root, Value>(val storage: KeyPath<Root, Reader<Value>>) : KeyPathBase<Root, Value>() {
+        override val __kpaths_id get() = storage.__kpaths_id
+        override val __kpaths_valueType get() = storage.__kpaths_valueType.requireTypeArgument(0)
         override fun get(root: Root): Value = storage.get(root).value
       }
       @PathsAdapter(factory = FlagFactory::class) class Flag(val enabled: Boolean)
@@ -76,20 +102,31 @@ class CompilerSnippetTest {
       @Pathable data class Document(val title: Cell<List<String?>>)
       @Pathable data class Flags(val flag: Flag)
       @Pathable data class Box<T>(val title: Cell<T>)
+      @Pathable(copyWritableVals = true) data class Panel<T>(val reader: Reader<T>)
       @Pathable sealed interface Event<out T> {
         data class Message<T>(val title: Cell<T>) : Event<T>
+      }
+      @Pathable sealed interface ReadScreen {
+        data class Showing(val reader: Reader<String?>) : ReadScreen
       }
       fun run(): Boolean {
         val title: CellPath<Document, List<String?>> = Document.Paths.title
         val generic: CellPath<Box<String?>, String?> = Box.Paths<String?>().title
         val caseProperty: CellPath<Event.Message<String?>, String?> = Event.Paths<String?>().MessagePaths.title
         val flag: FlagPath<Flags> = Flags.Paths.flag
+        val reader: ReaderPath<Panel<List<String?>>, List<String?>> = Panel.Paths<List<String?>>().reader
+        val caseReader: ReaderPath<ReadScreen.Showing, String?> = ReadScreen.Paths.ShowingPaths.reader
         return title.get(Document(Cell(listOf(null)))) == listOf(null) &&
           generic.get(Box(Cell(null))) == null && generic.__kpaths_valueType == TypeId.of<String?>() &&
           generic.__kpaths_id == PathId.property(TypeId.of<Box<String?>>(), "title") &&
           caseProperty.get(Event.Message(Cell(null))) == null &&
           caseProperty.__kpaths_id == PathId.property(TypeId.of<Event.Message<String?>>(), "title") &&
-          flag.get(Flags(Flag(true)))
+          flag.get(Flags(Flag(true))) &&
+          reader.get(Panel(Readable(listOf("value", null)))) == listOf("value", null) &&
+          reader.__kpaths_valueType == TypeId.of<List<String?>>() &&
+          reader.then(keyPath(List<String?>::size)).get(Panel(Readable(listOf("value", null)))) == 2 &&
+          reader.storage is WritableKeyPath<*, *> &&
+          caseReader.get(ReadScreen.Showing(Readable(null))) == null
       }
     """)
     assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)

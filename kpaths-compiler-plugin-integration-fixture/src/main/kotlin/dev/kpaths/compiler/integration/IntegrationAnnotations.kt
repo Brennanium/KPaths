@@ -42,3 +42,19 @@ class BinaryPath<Root, Value>(private val path: KeyPath<Root, BinaryCell<Value>>
   override val __kpaths_valueType get() = requireNotNull(path.__kpaths_valueType.arguments.single().type)
   override fun get(root: Root): Value = path.get(root).value
 }
+
+@PathsAdapter(factory = BinaryReaderFactory::class)
+interface BinaryReader<out Value> { val value: Value }
+
+class BinaryReadable<Value>(override val value: Value) : BinaryReader<Value>
+
+object BinaryReaderFactory : KPathsAdapterFactory {
+  fun <Root, Value> make(path: KeyPath<Root, BinaryReader<Value>>): BinaryReaderPath<Root, Value> =
+    BinaryReaderPath(path)
+}
+
+class BinaryReaderPath<Root, Value>(val storage: KeyPath<Root, BinaryReader<Value>>) : KeyPathBase<Root, Value>() {
+  override val __kpaths_id get() = storage.__kpaths_id
+  override val __kpaths_valueType get() = storage.__kpaths_valueType.requireTypeArgument(0)
+  override fun get(root: Root): Value = storage.get(root).value
+}
