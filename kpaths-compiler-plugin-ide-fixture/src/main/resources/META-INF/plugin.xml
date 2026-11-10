@@ -1,0 +1,11 @@
+<idea-plugin>
+  <id>dev.kpaths.ide.fixture</id>
+  <name>KPaths IDE Fixture</name>
+  <vendor>KPaths</vendor>
+  <depends>com.intellij.modules.platform</depends>
+  <depends>org.jetbrains.kotlin</depends>
+  <extensions defaultExtensionNs="org.jetbrains.kotlin">
+    <supportsKotlinPluginMode supportsK2="true" supportsK1="false"/>
+    <bundledFirCompilerPluginProvider implementation="dev.kpaths.ide.KPathsFixtureProvider"/>
+  </extensions>
+</idea-plugin>
