@@ -14,6 +14,74 @@ import org.objectweb.asm.Opcodes
 
 class CompilerSnippetTest {
   @Test
+  fun `generic case catalogs preserve case type parameter bounds`() {
+    val result = compileSnippet("BoundedGenericCase.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      import dev.kpaths.core.CaseKeyPath
+      @Pathable sealed interface Loadable<out T : CharSequence> {
+        data object Idle : Loadable<Nothing>
+        data class Loaded<T : CharSequence>(val value: T) : Loadable<T>
+      }
+      fun run(): Boolean {
+        val path: CaseKeyPath<Loadable<String>, String> = Loadable.Paths<String>().Loaded.value
+        return path.embed("hi") == Loadable.Loaded("hi") && path.extract(Loadable.Loaded("hi")) == "hi"
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.BoundedGenericCaseKt").getMethod("run").invoke(null))
+  }
+
+  @Test
+  fun `generic catalogs preserve renamed property path identity`() {
+    val result = compileSnippet("GenericRenamedProperties.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      import dev.kpaths.annotations.PathName
+      import dev.kpaths.core.keyPath
+      @Pathable data class Box<T>(@PathName("content") val value: T)
+      fun run(): Boolean = Box.Paths<String>().content == keyPath(Box<String>::value) &&
+        Box.Paths<String>().content.get(Box("hello")) == "hello"
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.GenericRenamedPropertiesKt").getMethod("run").invoke(null))
+  }
+
+  @Test
+  fun `computed mutable data properties update a copy for concrete and generic roots`() {
+    val result = compileSnippet("ComputedDataProperties.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      import dev.kpaths.core.WritableKeyPath
+
+      @Pathable data class Person(var first: String, var last: String) {
+        var fullName: String
+          get() = "${'$'}first ${'$'}last"
+          set(value) { first = value.substringBefore(' '); last = value.substringAfter(' ') }
+      }
+
+      @Pathable data class Box<T>(var value: T) {
+        var wrapped: T
+          get() = value
+          set(newValue) { value = newValue }
+      }
+
+      fun run(): Boolean {
+        val original = Person("Ada", "Lovelace")
+        val name: WritableKeyPath<Person, String> = Person.Paths.fullName
+        val updated = name.set(original, "Grace Hopper")
+        val box = Box("before")
+        val wrapped: WritableKeyPath<Box<String>, String> = Box.Paths<String>().wrapped
+        val newBox = wrapped.set(box, "after")
+        return name.get(original) == "Ada Lovelace" && original == Person("Ada", "Lovelace") &&
+          updated == Person("Grace", "Hopper") && box.value == "before" && newBox.value == "after"
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.ComputedDataPropertiesKt").getMethod("run").invoke(null))
+  }
+
+  @Test
   fun `reified extension property can recover generic case path identity`() {
     val result = compileSnippet("TemporaryReifiedProperty.kt" to """
       package example
