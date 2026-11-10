@@ -10,6 +10,7 @@ import dev.kpaths.core.TypeArgument
 import dev.kpaths.core.CaseMatch
 import dev.kpaths.core.CaseKeyPathBase
 import dev.kpaths.core.KeyPathBase
+import dev.kpaths.core.ReferenceWritableKeyPathBase
 import dev.kpaths.core.PathId
 import dev.kpaths.core.PathSegment
 import org.objectweb.asm.ClassReader
@@ -18,6 +19,31 @@ import org.objectweb.asm.MethodVisitor
 import org.objectweb.asm.Opcodes
 
 class GeneratedPathsRuntimeTest {
+  @Test
+  fun generatedDraftPathsInvokeTrackingSettersAndPreserveProjectedTypes() {
+    val original = TrackedRecord("Original", RecordAddress("Original city"))
+    val copied = TrackedRecord.GeneratedPaths.name.set(original, "Copy")
+    assertEquals("Original", original.name)
+    assertEquals(TrackedRecord("Copy", original.address), copied)
+
+    val draft = TrackedRecord.Draft()
+    val name: dev.kpaths.core.ReferenceWritableKeyPath<TrackedRecord.Draft, String> = TrackedRecord.Draft.Paths.name
+    val address: dev.kpaths.core.ReferenceWritableKeyPath<TrackedRecord.Draft, DraftAddress> = TrackedRecord.Draft.Paths.address
+    assertEquals(0, draftWriteCount(draft))
+    name.setInPlace(draft, "Revised")
+    assertEquals("Revised", name.get(draft))
+    assertEquals(1, draftWriteCount(draft))
+    address.setInPlace(draft, DraftAddress("Second"))
+    assertEquals(DraftAddress("Second"), address.get(draft))
+    assertEquals(2, draftWriteCount(draft))
+    assertEquals(TypeId.of<DraftAddress>(), address.__kpaths_valueType)
+    assertEquals(PathId.property(TypeId.of<TrackedRecord.Draft>(), "address"), address.__kpaths_id)
+
+    val bytecode = assertDirectGeneratedImplementation(name, ReferenceWritableKeyPathBase::class.java)
+    assertTrue(bytecode.method("setInPlace", "(Ldev/kpaths/compiler/fixture/TrackedRecord\$Draft;Ljava/lang/String;)V")
+      .methodCalls.contains(MethodCall("dev/kpaths/compiler/fixture/TrackedRecord\$Draft", "setName")))
+  }
+
   @Test
   fun externallySynthesizedTypeHasAnAdaptedPath() {
     val path = SyntheticOwner.Snapshot.Paths.title

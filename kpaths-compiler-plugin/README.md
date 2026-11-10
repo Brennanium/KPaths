@@ -193,6 +193,10 @@ The companion modules demonstrate two important boundaries:
   generates a property whose compiled dependency type supplies a declarative adapter. JVM tests
   check reads and identity; a separate module with neither plugin consumes both catalogs. Native
   compilation checks the same synthetic declarations, without running them on a Native device.
+  The contributor also requests copy-writable paths for `TrackedRecord` and synthesizes a
+  `TrackedRecord.Draft` with tracked `var` setters and a projected `DraftAddress` property. JVM
+  tests and the plugin-free consumer verify that the draft's reference-writable paths call the
+  generated setters and preserve the projected property type.
 
 Contributors can opt individual properties out of `copyWritableVals` by passing their FIR property
 symbols in `KPathsGenerationOptions.copyWritableValExclusions`. An excluded `val` keeps its

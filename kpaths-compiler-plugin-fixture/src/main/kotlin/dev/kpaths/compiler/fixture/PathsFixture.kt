@@ -161,6 +161,25 @@ val importedDocumentTitlePath: KeyPath<ImportedDocument, LibraryCell<String>> = 
 @Target(AnnotationTarget.CLASS)
 annotation class ContributedCatalog
 
+data class RecordAddress(val city: String)
+data class DraftAddress(val city: String)
+
+@ContributedCatalog
+data class TrackedRecord(val name: String, val address: RecordAddress)
+
+private data class DraftState(var name: String = "Initial", var address: DraftAddress = DraftAddress("First"), var writes: Int = 0)
+private val draftStates = mutableMapOf<Any, DraftState>()
+private fun state(draft: Any): DraftState = draftStates.getOrPut(draft) { DraftState() }
+fun readDraftName(draft: Any): String = state(draft).name
+fun writeDraftName(draft: Any, value: String) { state(draft).name = value; state(draft).writes++ }
+fun readDraftAddress(draft: Any): DraftAddress = state(draft).address
+fun writeDraftAddress(draft: Any, value: DraftAddress) { state(draft).address = value; state(draft).writes++ }
+fun draftWriteCount(draft: Any): Int = state(draft).writes
+
+val originalNamePath: WritableKeyPath<TrackedRecord, String> = TrackedRecord.GeneratedPaths.name
+val draftNamePath: ReferenceWritableKeyPath<TrackedRecord.Draft, String> = TrackedRecord.Draft.Paths.name
+val draftAddressPath: ReferenceWritableKeyPath<TrackedRecord.Draft, DraftAddress> = TrackedRecord.Draft.Paths.address
+
 /** A separately contributed recipe changes the generated path's focus and public type. */
 @ContributedCatalog
 data class AdaptedDocument(val title: LibraryCell<String>)

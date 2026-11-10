@@ -9,9 +9,13 @@ import dev.kpaths.compiler.fixture.FixtureBox
 import dev.kpaths.compiler.fixture.AdaptedDocument
 import dev.kpaths.compiler.fixture.CellTextPath
 import dev.kpaths.compiler.fixture.SyntheticOwner
+import dev.kpaths.compiler.fixture.TrackedRecord
+import dev.kpaths.compiler.fixture.DraftAddress
 import dev.kpaths.compiler.integration.BinaryPath
 import dev.kpaths.core.KeyPath
 import dev.kpaths.core.CasePathable
+import dev.kpaths.core.WritableKeyPath
+import dev.kpaths.core.ReferenceWritableKeyPath
 
 // The consumer module intentionally has no `-Xplugin` argument.
 val pathsFromAnotherModule: Person.Paths = Person.Paths
@@ -30,4 +34,7 @@ val adaptedPathFromAnotherModule: CellTextPath = AdaptedDocument.GeneratedPaths.
 val syntheticPathFromAnotherModule: BinaryPath<SyntheticOwner.Snapshot, List<String?>> = SyntheticOwner.Snapshot.Paths.title
 val syntheticGenericPathFromAnotherModule: BinaryPath<SyntheticOwner.GenericSnapshot<String?>, String?> =
   SyntheticOwner.GenericSnapshot.Paths<String?>().title
+val originalTrackedName: WritableKeyPath<TrackedRecord, String> = TrackedRecord.GeneratedPaths.name
+val draftTrackedName: ReferenceWritableKeyPath<TrackedRecord.Draft, String> = TrackedRecord.Draft.Paths.name
+val draftProjectedAddress: ReferenceWritableKeyPath<TrackedRecord.Draft, DraftAddress> = TrackedRecord.Draft.Paths.address
 val genericPathFromAnotherModule = FixtureBox.Paths<String?>().value

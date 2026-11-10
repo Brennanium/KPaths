@@ -4,6 +4,10 @@ import dev.kpaths.compiler.fixture.FixtureBox
 import dev.kpaths.compiler.fixture.FixtureEvent
 import dev.kpaths.compiler.fixture.sampleAdaptedDocument
 import dev.kpaths.compiler.fixture.SyntheticOwner
+import dev.kpaths.compiler.fixture.TrackedRecord
+import dev.kpaths.compiler.fixture.RecordAddress
+import dev.kpaths.compiler.fixture.DraftAddress
+import dev.kpaths.compiler.fixture.draftWriteCount
 import dev.kpaths.core.CaseMatch
 import dev.kpaths.core.TypeId
 import dev.kpaths.core.keyPath
@@ -12,6 +16,22 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class GenericConsumerTest {
+  @Test
+  fun `generated draft setters track writes in a plugin-free consumer`() {
+    val original = TrackedRecord("Original", RecordAddress("First"))
+    assertEquals("Original", original.name)
+    assertEquals(TrackedRecord("Copy", original.address), originalTrackedName.set(original, "Copy"))
+    assertEquals("Original", original.name)
+
+    val draft = TrackedRecord.Draft()
+    draftTrackedName.setInPlace(draft, "Revised")
+    draftProjectedAddress.setInPlace(draft, DraftAddress("Second"))
+    assertEquals("Revised", draftTrackedName.get(draft))
+    assertEquals(DraftAddress("Second"), draftProjectedAddress.get(draft))
+    assertEquals(2, draftWriteCount(draft))
+    assertEquals(TypeId.of<DraftAddress>(), draftProjectedAddress.__kpaths_valueType)
+  }
+
   @Test
   fun `externally synthesized catalogs work without either compiler plugin`() {
     assertEquals(listOf("generated", null), syntheticPathFromAnotherModule.get(SyntheticOwner.Snapshot))

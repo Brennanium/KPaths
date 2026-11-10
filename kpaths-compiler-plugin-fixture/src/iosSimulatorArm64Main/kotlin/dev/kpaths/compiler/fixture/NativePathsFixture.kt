@@ -13,11 +13,26 @@ import dev.kpaths.compiler.integration.BinaryPath
 import dev.kpaths.compiler.integration.BinaryReader
 import dev.kpaths.compiler.integration.BinaryReaderPath
 import dev.kpaths.core.WritableKeyPath
+import dev.kpaths.core.ReferenceWritableKeyPath
 import dev.kpaths.core.TypeId
 import dev.kpaths.core.PartialCaseKeyPath
 
 @Target(AnnotationTarget.CLASS)
 annotation class ContributedCatalog
+
+data class RecordAddress(val city: String)
+data class DraftAddress(val city: String)
+@ContributedCatalog data class TrackedRecord(val name: String, val address: RecordAddress)
+private data class DraftState(var name: String = "Initial", var address: DraftAddress = DraftAddress("First"), var writes: Int = 0)
+private val draftStates = mutableMapOf<Any, DraftState>()
+private fun state(draft: Any): DraftState = draftStates.getOrPut(draft) { DraftState() }
+fun readDraftName(draft: Any): String = state(draft).name
+fun writeDraftName(draft: Any, value: String) { state(draft).name = value; state(draft).writes++ }
+fun readDraftAddress(draft: Any): DraftAddress = state(draft).address
+fun writeDraftAddress(draft: Any, value: DraftAddress) { state(draft).address = value; state(draft).writes++ }
+val nativeOriginalNamePath: WritableKeyPath<TrackedRecord, String> = TrackedRecord.GeneratedPaths.name
+val nativeDraftNamePath: ReferenceWritableKeyPath<TrackedRecord.Draft, String> = TrackedRecord.Draft.Paths.name
+val nativeDraftAddressPath: ReferenceWritableKeyPath<TrackedRecord.Draft, DraftAddress> = TrackedRecord.Draft.Paths.address
 
 @ContributedCatalog
 data class AdaptedDocument(val title: Cell<String>)

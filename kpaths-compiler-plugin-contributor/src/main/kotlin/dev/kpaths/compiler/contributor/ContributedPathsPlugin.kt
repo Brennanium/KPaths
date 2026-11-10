@@ -46,6 +46,7 @@ public class ContributedPathsPluginRegistrar : CompilerPluginRegistrar() {
   override fun ExtensionStorage.registerExtensions(configuration: CompilerConfiguration) {
     FirExtensionRegistrarAdapter.registerExtension(ContributedPathsFirRegistrar())
     IrGenerationExtension.registerExtension(SyntheticPathsIrGeneration())
+    IrGenerationExtension.registerExtension(TrackedDraftIrGeneration())
   }
 }
 
@@ -54,6 +55,7 @@ internal class ContributedPathsFirRegistrar : FirExtensionRegistrar() {
     +::ContributedPathsGenerator
     +::ContributedAdapterChecks
     +::SyntheticPathsGenerator
+    +::TrackedDraftGenerator
   }
 }
 
