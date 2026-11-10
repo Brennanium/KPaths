@@ -313,16 +313,33 @@ private class PathsConstructorBodyGenerator(
       val constructor = catalog.primaryConstructor ?: return
       val typeId = pluginContext.referenceClass(dev.kpaths.compiler.PathsIrSymbols.typeIdClassId) ?: return
       val companion = typeId.owner.companionObject() ?: return
-      val of = companion.declarations.filterIsInstance<IrSimpleFunction>()
-        .singleOrNull { it.name.asString() == "of" && it.typeParameters.size == 1 } ?: return
       val builder = DeclarationIrBuilder(pluginContext, declaration.symbol)
+      val classParameters = declaration.parameters.filter { it.kind == IrParameterKind.Regular }
+      val typeFactory = if (classParameters.isEmpty()) {
+        companion.declarations.filterIsInstance<IrSimpleFunction>()
+          .singleOrNull { it.name.asString() == "of" && it.typeParameters.size == 1 }
+      } else {
+        val kClass = pluginContext.referenceClass(org.jetbrains.kotlin.name.ClassId.topLevel(FqName("kotlin.reflect.KClass")))
+          ?: return
+        companion.declarations.filterIsInstance<IrSimpleFunction>()
+          .singleOrNull { function ->
+            function.name.asString() == "from" && function.parameters.any {
+              (it.type as? IrSimpleType)?.classifier == kClass
+            }
+          }
+      } ?: return
       val parameters = declaration.typeParameters.map {
         org.jetbrains.kotlin.ir.types.impl.IrSimpleTypeImpl(it.symbol, false, emptyList(), emptyList())
       }
       val instance = builder.irCallConstructor(constructor.symbol, parameters).apply {
         parameters.forEachIndexed { index, type ->
-          arguments[index] = builder.irCallWithSubstitutedType(of.symbol, listOf(type)).apply {
+          arguments[index] = if (classParameters.isEmpty()) {
+            builder.irCallWithSubstitutedType(typeFactory.symbol, listOf(type)).apply {
+              dispatchReceiver = builder.irGetObject(companion.symbol)
+            }
+          } else builder.irCall(typeFactory.symbol).apply {
             dispatchReceiver = builder.irGetObject(companion.symbol)
+            arguments[1] = builder.irGet(classParameters[index])
           }
         }
       }

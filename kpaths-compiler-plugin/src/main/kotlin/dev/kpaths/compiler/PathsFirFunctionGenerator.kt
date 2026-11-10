@@ -34,7 +34,7 @@ internal class PathsFirFunctionGenerator(
       val root = pathsClass.rootClass() ?: return@with emptyList()
       if (root.fir.typeParameters.isEmpty()) return@with emptyList()
       val catalogId = pathsClass.classId.createNestedClassId(Name.identifier("__kpaths_Catalog"))
-      return@with listOf(createMemberFunction(pathsClass, PathsDeclarationKey, callableId.callableName, { parameters ->
+      val reifiedFactory = createMemberFunction(pathsClass, PathsDeclarationKey, callableId.callableName, { parameters ->
         catalogId.createConeType(session, parameters.map {
           ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty)
             .toTypeProjection(Variance.INVARIANT)
@@ -43,7 +43,25 @@ internal class PathsFirFunctionGenerator(
         copyKPathsTypeParameters(root.fir.typeParameters, session, reified = true)
         status { isOperator = callableId.callableName.asString() == "invoke"; isInline = true }
         withGeneratedDefaultBody()
-      }.symbol)
+      }.symbol
+      if (callableId.callableName.asString() != "of") return@with listOf(reifiedFactory)
+      val classFactory = createMemberFunction(pathsClass, PathsDeclarationKey, callableId.callableName, { parameters ->
+        catalogId.createConeType(session, parameters.map {
+          ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty)
+            .toTypeProjection(Variance.INVARIANT)
+        }.toTypedArray(), false)
+      }) {
+        copyKPathsTypeParameters(root.fir.typeParameters, session, forceNonNull = true)
+        val kClass = org.jetbrains.kotlin.name.ClassId.topLevel(org.jetbrains.kotlin.name.FqName("kotlin.reflect.KClass"))
+        root.fir.typeParameters.forEachIndexed { index, parameter ->
+          valueParameter(Name.identifier("${parameter.symbol.name}Type"), { generated ->
+            val argument = ConeTypeParameterTypeImpl(generated[index].symbol.toLookupTag(), false, ConeAttributes.Empty)
+            kClass.createConeType(session, arrayOf(argument.toTypeProjection(Variance.INVARIANT)), false)
+          })
+        }
+        withGeneratedDefaultBody()
+      }.symbol
+      return@with listOf(reifiedFactory, classFactory)
     }
     if (pathsClass.isGeneratedPaths() && callableId.callableName.asString() == "__kpaths_buildAllCasePaths") {
       val root = pathsClass.rootClass() ?: return@with emptyList()

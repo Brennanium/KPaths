@@ -26,12 +26,14 @@ data class Box<Value>(var value: Value)
 
 val value: WritableKeyPath<Box<String?>, String?> = Box.Paths<String?>().value
 val sameValue = Box.Paths.of<String?>().value
+val stringValue = Box.Paths.of(String::class).value
 ```
 
 The factory captures each reified type argument as a `TypeId`, so path identity preserves generic
 arguments and nullability. The catalog caches direct path implementations; the `TypeId.of` call
-uses Kotlin type metadata at the factory call site. Generic sealed-case catalogs and the KSP
-catalog's `of(KClass)` factory overload is not implemented by the compiler plugin yet.
+uses Kotlin type metadata at the factory call site. A `KClass` can be passed when a non-null class
+token is already available; it does not retain nested generic arguments or nullability. Generic
+sealed-case catalogs are not implemented by the compiler plugin yet.
 
 On supported non-generic roots, `@PathName` changes the generated property-path spelling while
 preserving its identity:
@@ -205,7 +207,7 @@ contributing compiler plugin's `KPathsGenerationOptions`. Generated `allCasePath
 the canonical associated-value paths for object cases and cases with one to three properties.
 Cases without a supported canonical payload are omitted, so `case` can fail for those cases;
 the plugin warns when it generates an incomplete catalog. Generic sealed-case catalogs,
-additional generic factory overloads, adapter-backed property members, diagnostics, and broader
+adapter-backed property members, diagnostics, and broader
 conformance coverage remain future work.
 `@KPathsAdapter` currently establishes the binary metadata contract; producing an adapter's
 specialized path remains the next FIR/IR layer.

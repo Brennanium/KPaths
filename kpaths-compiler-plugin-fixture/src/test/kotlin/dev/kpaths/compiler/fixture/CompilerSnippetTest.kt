@@ -14,6 +14,21 @@ import org.objectweb.asm.Opcodes
 
 class CompilerSnippetTest {
   @Test
+  fun `KClass catalog factories reject nullable and out of bounds arguments`() {
+    val result = compileSnippet("InvalidClassTokens.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      @Pathable data class Bounded<T : CharSequence>(val value: T)
+      @Pathable data class Box<T>(val value: T)
+      val wrongBound = Bounded.Paths.of(Int::class).value
+      val nullableType = Box.Paths.of<String?>(String::class).value
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages, "Argument type mismatch")
+    assertContains(result.messages, "must be subtype of 'Any'")
+  }
+
+  @Test
   fun `generic catalog factory rejects type arguments that violate root bounds`() {
     val result = compileSnippet("InvalidGenericBound.kt" to """
       package example
@@ -30,11 +45,14 @@ class CompilerSnippetTest {
       package example
       import dev.kpaths.annotations.Pathable
       import dev.kpaths.core.ReferenceWritableKeyPath
+      import dev.kpaths.core.KeyPath
       import dev.kpaths.core.TypeId
       import dev.kpaths.core.WritableKeyPath
       @Pathable data class Record<K : Any, V : CharSequence>(var entries: Map<K, V?>)
       @Pathable class Holder<T>(var value: T)
       @Pathable data class Ordered<T : Comparable<T>>(var value: T)
+      fun <T : Any> holderPath(type: kotlin.reflect.KClass<T>): KeyPath<Holder<T>, T> =
+        Holder.Paths.of(TType = type).value
       fun run(): Boolean {
         val entries: WritableKeyPath<Record<Int, String>, Map<Int, String?>> =
           Record.Paths<Int, String>().entries
@@ -44,7 +62,10 @@ class CompilerSnippetTest {
         val holder = Holder<String?>(null)
         value.setInPlace(holder, "updated")
         val ordered = Ordered.Paths<Int>().value
-        return old.entries == mapOf(1 to "a") && next.entries == mapOf(2 to null) &&
+        return entries == Record.Paths.of(Int::class, String::class).entries &&
+          holderPath(String::class) == Holder.Paths<String>().value &&
+          ordered == Ordered.Paths.of(Int::class).value &&
+          old.entries == mapOf(1 to "a") && next.entries == mapOf(2 to null) &&
           entries.__kpaths_valueType == TypeId.of<Map<Int, String?>>() &&
           value.__kpaths_valueType == TypeId.of<String?>() && holder.value == "updated" &&
           ordered.set(Ordered(1), 2) == Ordered(2)
@@ -71,6 +92,7 @@ class CompilerSnippetTest {
         val number = Box.Paths<Int>().value
         val original = Box("before")
         return text === catalog.value && text == Box.Paths.of<String>().value &&
+          text == Box.Paths.of(String::class).value &&
           text == keyPath(Box<String>::value) &&
           text(original) == "before" && text.set(original, "after") == Box("after") &&
           original.value == "before" && text.__kpaths_valueType == TypeId.of<String>() &&

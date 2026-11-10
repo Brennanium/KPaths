@@ -16,6 +16,7 @@ data class NativePerson(val name: String)
 data class NativeBox<T>(var value: T)
 
 val nativeBoxPath: WritableKeyPath<NativeBox<String?>, String?> = NativeBox.Paths<String?>().value
+val nativeBoxClassPath: WritableKeyPath<NativeBox<String>, String> = NativeBox.Paths.of(String::class).value
 
 val nativePersonPaths: NativePerson.Paths = NativePerson.Paths
 val nativePersonNamePath: KeyPath<NativePerson, String> = NativePerson.Paths.name
