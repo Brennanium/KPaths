@@ -14,6 +14,29 @@ import org.objectweb.asm.Opcodes
 
 class CompilerSnippetTest {
   @Test
+  fun `reified extension property can recover generic case path identity`() {
+    val result = compileSnippet("TemporaryReifiedProperty.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      import dev.kpaths.core.PartialCaseKeyPath
+      @Pathable sealed interface Loadable<out T> {
+        data object Idle : Loadable<Nothing>
+        data class Loaded<T>(val value: T) : Loadable<T>
+      }
+      inline val <reified T> Loadable<T>.`case`: PartialCaseKeyPath<Loadable<T>>
+        get() = Loadable.Paths<T>().caseOf(this)
+      fun run(): Boolean {
+        val s: Loadable<String> = Loadable.Idle
+        val i: Loadable<Int> = Loadable.Idle
+        return s.`case` == Loadable.Paths<String>().Idle.unit &&
+          i.`case` == Loadable.Paths<Int>().Idle.unit && s.`case` != i.`case`
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.TemporaryReifiedPropertyKt").getMethod("run").invoke(null))
+  }
+
+  @Test
   fun `generic case property catalog names diagnose collisions`() {
     val result = compileSnippet("GenericPropertyCatalogCollision.kt" to """
       package example

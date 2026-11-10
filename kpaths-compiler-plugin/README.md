@@ -87,6 +87,8 @@ val cases = Loadable.Paths<String>().allCasePaths
 Generic catalogs expose whole-case paths, direct payload paths for object cases and data cases with
 one to three constructor properties, case property KeyPath catalogs, bound payload factories, and
 `allCasePaths`. Automatic `CasePathable` conformance for generic roots remains future work.
+The [generic `CasePathable` research notes](generic-case-pathable-research.md) cover the type
+identity problem, possible contracts, compiler-assisted access, and experiments to run.
 
 Use `@CaseName` on a sealed case or enum entry to choose its generated member name. Its identity
 continues to use the original case name, and invalid or colliding names are diagnosed:
