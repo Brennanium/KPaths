@@ -33,6 +33,8 @@ public data class KPathsCompilerPropertyContext(
 @ExperimentalKPathsCompilerApi
 public data class KPathsCompilerPropertyRecipe(
   public val publicPathType: ConeKotlinType,
+  /** Whether the recipe requires a directly generated path rather than a property-reference fallback. */
+  public val requiresDirectPath: Boolean = false,
   public val emit: (KPathsCompilerPropertyIrContext) -> IrExpression,
 )
 

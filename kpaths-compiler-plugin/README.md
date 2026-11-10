@@ -197,6 +197,11 @@ ordinary read-only path; excluding a `var` does not remove its ordinary write ac
 option applies to properties of supported sealed cases. Properties are identified by their owners
 as well as their names, so excluding one case's property does not exclude a namesake in another.
 
+`@Pathable` automatically recognizes declarative `@PathsAdapter` factories. The factory's single
+`make(KeyPath<Root, Storage>)` function determines the specialized generated path type; KPaths
+emits a call without loading the factory into the compiler. The shared contract and supported
+restrictions are described in [Advanced path techniques](../docs/advanced-paths.md).
+
 A cooperating compiler plugin can call `session.kpaths.adapterFactoryFor(storageClass)` on a
 resolved storage class symbol to discover its `@PathsAdapter` factory's class ID, including when
 the storage type comes from a compiled dependency. This lookup is experimental and returns `null`
@@ -215,8 +220,8 @@ for an end-to-end example using a storage type from a compiled dependency.
 This compiler integration is experimental: adapters must generate type-correct IR and preserve
 the intended identity and value semantics. The callback is compiler-version-specific, and KPaths
 does not yet validate adapter types or provide dedicated diagnostics for malformed recipes.
-Adapters are currently supplied on explicit compiler-plugin catalog requests; the annotation
-alone does not register one for every `@Pathable` declaration.
+These lower-level IR adapters are supplied on explicit compiler-plugin catalog requests. The
+declarative factory route does not require an integration-specific compiler plugin.
 
 Useful verification commands:
 
@@ -254,8 +259,8 @@ Cases without a supported canonical payload are omitted, so `case` can fail for 
 the plugin warns when it generates an incomplete catalog. Broader diagnostics and conformance
 coverage remain future work.
 `@PathsAdapter` establishes the binary metadata contract and factory lookup. Explicit catalog
-requests can supply compiler-side adapters; automatic integration-wide registration and broader
-adapter validation remain future work.
+requests can supply compiler-side adapters; automatic integration-wide registration of those
+lower-level IR adapters and broader adapter validation remain future work.
 
 `kpaths-compiler-plugin-fixture/LanguageSyntaxExperiments.kt` separately demonstrates the Kotlin
 generic `invoke` syntax used by generated catalogs.

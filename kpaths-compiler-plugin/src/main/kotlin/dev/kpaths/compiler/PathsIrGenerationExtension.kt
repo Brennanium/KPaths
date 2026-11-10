@@ -348,13 +348,17 @@ private class PathsConstructorBodyGenerator(
       }
     } else if (sourceProperty != null && !enumCase) {
       val pathKind = declaration.generatedPathKind(rootClass, sourceProperty, adapter?.defaultPathClass?.asSingleFqName()?.asString())
-      builder.directKeyPathInitializer(
+      val directPath = builder.directKeyPathInitializer(
         pathsClass = pathsClass,
         rootClass = rootClass,
         sourceProperty = sourceProperty,
         pathKind = pathKind,
       )
-        ?: builder.kPropertyFallback(rootClass, sourceProperty)
+      if (adapter?.recipe?.requiresDirectPath == true) {
+        checkNotNull(directPath) {
+          "KPaths could not generate the ordinary property path required by the adapter for ${pathsClass.name}.${declaration.name}."
+        }
+      } else directPath ?: builder.kPropertyFallback(rootClass, sourceProperty)
     } else {
       builder.directCaseKeyPathInitializer(pathsClass, rootClass, declaration)
         ?: builder.generatedCasePathFactoryInitializer(declaration)

@@ -15,6 +15,8 @@ import dev.kpaths.core.ReferenceWritableKeyPath
 import dev.kpaths.core.WritableKeyPath
 import dev.kpaths.compiler.integration.Cell as LibraryCell
 import dev.kpaths.compiler.integration.LibraryPathable
+import dev.kpaths.compiler.integration.BinaryCell
+import dev.kpaths.compiler.integration.BinaryPath
 
 @Pathable
 data class Person(val name: String)
@@ -22,6 +24,10 @@ data class Person(val name: String)
 /** This must resolve without a user-declared companion and without a KSP-generated source file. */
 val personPaths: Person.Paths = Person.Paths
 val personNamePath: KeyPath<Person, String> = Person.Paths.name
+
+@Pathable
+data class BinaryDocument(val text: BinaryCell<String?>)
+val binaryDocumentText: BinaryPath<BinaryDocument, String?> = BinaryDocument.Paths.text
 
 @Pathable
 sealed interface Delivery {
@@ -100,8 +106,10 @@ val optionalDocumentTitlePath: KeyPath<OptionalDocument, String?> = OptionalDocu
 annotation class Catalogued
 
 /** A generic storage type carrying a binary-visible specialization declaration. */
-@PathsAdapter(factory = CellPaths::class)
 class Cell<Value>(var value: Value)
+
+@PathsAdapter(factory = CellPaths::class)
+class SourceAdapterCell<Value>(var value: Value)
 
 /** Placeholder for the eventual runtime factory ABI; this fixture proves annotation discovery. */
 object CellPaths : KPathsAdapterFactory

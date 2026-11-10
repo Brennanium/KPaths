@@ -6,6 +6,7 @@ import com.google.devtools.ksp.symbol.KSFunctionDeclaration
 import com.google.devtools.ksp.symbol.KSPropertyDeclaration
 import com.google.devtools.ksp.symbol.KSType
 import com.google.devtools.ksp.symbol.KSTypeParameter
+import com.google.devtools.ksp.symbol.KSTypeAlias
 import com.google.devtools.ksp.symbol.Modifier
 import com.google.devtools.ksp.symbol.Variance
 import dev.kpaths.annotations.PathsAdapter
@@ -29,6 +30,15 @@ internal fun declarativeAdapter(
   rootParameters: Map<String, String> = emptyMap(),
 ): DeclarativeAdapterResult {
   val storageType = property.type.resolve()
+  val alias = storageType.declaration as? KSTypeAlias
+  if (alias != null) {
+    val target = alias.type.resolve().declaration as? KSClassDeclaration
+    if (target?.annotations?.any {
+        it.annotationType.resolve().declaration.qualifiedName?.asString() == PathsAdapter::class.qualifiedName
+      } == true) {
+      return DeclarativeAdapterResult.Invalid("type aliases of adapted storage types are not yet supported")
+    }
+  }
   val storage = storageType.declaration as? KSClassDeclaration ?: return DeclarativeAdapterResult.Absent
   val annotation = storage.annotations.firstOrNull {
     it.annotationType.resolve().declaration.qualifiedName?.asString() == PathsAdapter::class.qualifiedName
@@ -58,6 +68,12 @@ internal fun declarativeAdapter(
     isAccessible = function != null && function.modifiers.none { it == Modifier.PRIVATE || it == Modifier.PROTECTED || it == Modifier.INTERNAL } &&
       factory.modifiers.none { it == Modifier.PRIVATE || it == Modifier.PROTECTED || it == Modifier.INTERNAL },
     isSuspend = function?.modifiers?.contains(Modifier.SUSPEND) == true,
+    isExtension = function?.extensionReceiver != null,
+    hasExplicitBounds = function?.typeParameters?.any { parameter ->
+      parameter.bounds.map { it.resolve() }.any {
+        it.declaration.qualifiedName?.asString() != "kotlin.Any" || !it.isMarkedNullable
+      }
+    } == true,
     parameterCount = function?.parameters?.size ?: 0,
     parameterType = function?.parameters?.singleOrNull()?.type?.resolve()?.toAdapterModel(variables),
     resultType = resultType?.toAdapterModel(variables),

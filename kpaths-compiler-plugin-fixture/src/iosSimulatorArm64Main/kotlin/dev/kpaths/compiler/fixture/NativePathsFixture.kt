@@ -8,6 +8,8 @@ import dev.kpaths.core.CasePathable
 import dev.kpaths.core.KeyPath
 import dev.kpaths.core.KeyPathBase
 import dev.kpaths.compiler.integration.Cell
+import dev.kpaths.compiler.integration.BinaryCell
+import dev.kpaths.compiler.integration.BinaryPath
 import dev.kpaths.core.WritableKeyPath
 import dev.kpaths.core.TypeId
 import dev.kpaths.core.PartialCaseKeyPath
@@ -27,6 +29,10 @@ class CellTextPath(private val storage: KeyPath<AdaptedDocument, Cell<String>>) 
 
 fun makeCellTextPath(storage: KeyPath<AdaptedDocument, Cell<String>>): CellTextPath = CellTextPath(storage)
 val nativeAdaptedTitle: CellTextPath = AdaptedDocument.GeneratedPaths.title
+
+@Pathable
+data class NativeBinaryDocument(val text: BinaryCell<String?>)
+val nativeDeclarativePath: BinaryPath<NativeBinaryDocument, String?> = NativeBinaryDocument.Paths.text
 
 /** Proves the same synthetic nested declaration reaches Kotlin/Native's backend. */
 @Pathable

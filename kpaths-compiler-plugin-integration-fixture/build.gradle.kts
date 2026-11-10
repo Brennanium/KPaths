@@ -17,6 +17,7 @@ kotlin {
       kotlin.srcDir("src/main/kotlin")
       dependencies {
         implementation(project(":kpaths-annotations"))
+        implementation(project(":kpaths-core"))
       }
     }
   }

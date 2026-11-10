@@ -51,6 +51,13 @@ import org.jetbrains.kotlin.fir.resolve.fullyExpandedType
 import org.jetbrains.kotlin.fir.symbols.SymbolInternals
 import org.jetbrains.kotlin.fir.types.ConeClassLikeType
 import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
+import org.jetbrains.kotlin.fir.types.ConeAttributes
+import org.jetbrains.kotlin.fir.types.impl.ConeTypeParameterTypeImpl
+import org.jetbrains.kotlin.fir.types.toTypeProjection
+import org.jetbrains.kotlin.fir.plugin.createConeType
+import org.jetbrains.kotlin.fir.resolve.providers.symbolProvider
+import org.jetbrains.kotlin.fir.symbols.impl.FirClassSymbol
+import org.jetbrains.kotlin.types.Variance
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.psi.KtElement
 
@@ -65,6 +72,7 @@ internal object PathsDiagnostics : KtDiagnosticsContainer() {
   val INVALID_CASE_CATALOG_NAME by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
   val UNSUPPORTED_SEALED_VARIANT by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
   val AMBIGUOUS_COMPANION by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
+  val INVALID_PATHS_ADAPTER by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
 
   override fun getRendererFactory(): BaseDiagnosticRendererFactory = Renderers
 
@@ -80,6 +88,7 @@ internal object PathsDiagnostics : KtDiagnosticsContainer() {
       it.put(INVALID_CASE_CATALOG_NAME, "{0}", CommonRenderers.STRING)
       it.put(UNSUPPORTED_SEALED_VARIANT, "{0}", CommonRenderers.STRING)
       it.put(AMBIGUOUS_COMPANION, "{0}", CommonRenderers.STRING)
+      it.put(INVALID_PATHS_ADAPTER, "{0}", CommonRenderers.STRING)
     }
   }
 }
@@ -186,6 +195,24 @@ internal class PathsDiagnosticCheckers(private val pluginSession: FirSession) : 
         .filter { it.name.asString() in sourceCaseNames }
         .flatMap { it.declarations.filterIsInstance<FirProperty>() }
         .filter { it.origin == FirDeclarationOrigin.Source && it.isKPathsAccessible() }
+      if (pluginSession.kpaths.optionsFor(declaration.symbol)?.propertyPathAdapters.isNullOrEmpty()) {
+        (properties + caseProperties).forEach { property ->
+          val storage = ((property.returnTypeRef as? FirResolvedTypeRef)?.coneType as? ConeClassLikeType)
+            ?.fullyExpandedType() ?: return@forEach
+          val storageClass = pluginSession.symbolProvider.getClassLikeSymbolByClassId(storage.lookupTag.classId)
+            as? FirClassSymbol<*> ?: return@forEach
+          if (pluginSession.kpaths.adapterFactoryFor(storageClass) == null) return@forEach
+          val ownerId = property.symbol.callableId?.classId ?: return@forEach
+          val owner = pluginSession.symbolProvider.getClassLikeSymbolByClassId(ownerId) as? FirClassSymbol<*> ?: return@forEach
+          val rootType = owner.classId.createConeType(pluginSession, owner.fir.typeParameters.map {
+            ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty).toTypeProjection(Variance.INVARIANT)
+          }.toTypedArray(), false)
+          if (declarativeCompilerAdapter(pluginSession, rootType, storage) == null) {
+            reporter.reportOn(property.source, PathsDiagnostics.INVALID_PATHS_ADAPTER,
+              "[KPaths] Invalid @PathsAdapter on '${property.name}': factory must declare one accessible, non-suspending make(KeyPath<Root, Storage>) returning a KeyPath subtype, with inferable type parameters and supported invariant types.")
+          }
+        }
+      }
       (properties + caseProperties).forEach { property ->
         property.configuredKPathsName()?.let { name ->
           validateKPathsConfiguredName(name)?.let { error ->

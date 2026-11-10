@@ -19,6 +19,8 @@ public data class KPathsAdapterFactoryShape(
   public val isObjectFactory: Boolean,
   public val isAccessible: Boolean,
   public val isSuspend: Boolean,
+  public val isExtension: Boolean = false,
+  public val hasExplicitBounds: Boolean = false,
   public val parameterCount: Int,
   public val parameterType: KPathsAdapterType?,
   public val resultType: KPathsAdapterType?,
@@ -50,6 +52,8 @@ public fun planKPathsAdapter(
   if (!shape.isAccessible || shape.isSuspend || shape.parameterCount != 1) {
     return invalid("make must be accessible, non-suspending, and take exactly one parameter")
   }
+  if (shape.isExtension) return invalid("make must not be an extension function")
+  if (shape.hasExplicitBounds) return invalid("make type parameters must not have explicit bounds")
   val parameter = shape.parameterType as? KPathsAdapterType.Classifier
     ?: return invalid("make must accept KeyPath<Root, Storage>")
   if (parameter.name != "dev.kpaths.core.KeyPath" || parameter.nullable || parameter.arguments.size != 2) {

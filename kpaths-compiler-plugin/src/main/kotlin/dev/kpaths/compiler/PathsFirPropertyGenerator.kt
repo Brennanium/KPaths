@@ -356,7 +356,9 @@ internal class PathsFirPropertyGenerator(
   ): ConeKotlinType = with(analysis) {
     val adapters = owner.generationOptions()?.propertyPathAdapters.orEmpty()
     val context = KPathsCompilerPropertyContext(session, property, rootType, storageType, defaultType)
-    val recipe = adapters.firstNotNullOfOrNull { it.pathRecipe(context) } ?: return@with defaultType
+    val recipe = adapters.firstNotNullOfOrNull { it.pathRecipe(context) }
+      ?: declarativeCompilerAdapter(session, rootType, storageType)
+      ?: return@with defaultType
     val defaultPathClass = (defaultType as ConeClassLikeType).lookupTag.classId
     session.kpaths.adapterBridge.record(CallableId(catalog.classId, property.fir.generatedKPathsName()), recipe, defaultPathClass)
     recipe.publicPathType

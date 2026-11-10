@@ -40,7 +40,17 @@ class KPathsProcessorIntegrationTest {
         override val __kpaths_valueType get() = requireNotNull(storage.__kpaths_valueType.arguments.single().type)
         override fun get(root: Root): Value = storage.get(root).value
       }
+      @PathsAdapter(factory = FlagFactory::class) class Flag(val enabled: Boolean)
+      object FlagFactory : KPathsAdapterFactory {
+        fun <Root> make(path: KeyPath<Root, Flag>): FlagPath<Root> = FlagPath(path)
+      }
+      class FlagPath<Root>(private val storage: KeyPath<Root, Flag>) : KeyPathBase<Root, Boolean>() {
+        override val __kpaths_id get() = storage.__kpaths_id
+        override val __kpaths_valueType get() = TypeId.of<Boolean>()
+        override fun get(root: Root): Boolean = storage.get(root).enabled
+      }
       @Pathable data class Document(val title: Cell<List<String?>>) { companion object }
+      @Pathable data class Flags(val flag: Flag) { companion object }
       val title: CellPath<Document, List<String?>> = Document.Paths.title
       @Pathable data class Box<T>(val title: Cell<T>) { companion object Factory }
       val generic: CellPath<Box<String?>, String?> = Box.Paths.of<String?>().title
@@ -49,6 +59,8 @@ class KPathsProcessorIntegrationTest {
         check(generic.get(Box(Cell(null))) == null)
         check(generic.__kpaths_valueType == TypeId.of<String?>())
         check(generic.__kpaths_id == PathId.property(TypeId.of<Box<String?>>(), "title"))
+        val flag: FlagPath<Flags> = Flags.Paths.flag
+        check(flag.get(Flags(Flag(true))))
       }
     """.trimIndent(), expectFailure = false, runMain = true)
   }

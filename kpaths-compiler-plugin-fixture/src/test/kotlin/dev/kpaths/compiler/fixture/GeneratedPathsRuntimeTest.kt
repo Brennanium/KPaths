@@ -19,6 +19,14 @@ import org.objectweb.asm.Opcodes
 
 class GeneratedPathsRuntimeTest {
   @Test
+  fun declarativeAdapterFactoryWorksFromDependency() {
+    val path = BinaryDocument.Paths.text
+    assertEquals(null, path.get(BinaryDocument(dev.kpaths.compiler.integration.BinaryCell(null))))
+    assertEquals(TypeId.of<String?>(), path.__kpaths_valueType)
+    assertEquals(PathId.property(TypeId.of<BinaryDocument>(), "text"), path.__kpaths_id)
+  }
+
+  @Test
   fun contributedAdapterEmitsASpecializedPath() {
     val path: CellTextPath = AdaptedDocument.GeneratedPaths.title
     val document = AdaptedDocument(dev.kpaths.compiler.integration.Cell("hello"))

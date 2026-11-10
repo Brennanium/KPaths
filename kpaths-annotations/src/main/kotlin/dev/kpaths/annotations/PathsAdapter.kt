@@ -19,11 +19,10 @@ public interface KPathsAdapterFactory
  * a generic type, a non-generic type, several values, or expose a specialized path subtype with
  * entirely different semantics.
  *
- * The KSP generator supports an accessible object with one non-suspending `make` function of the
+ * KSP and the compiler plugin support an accessible object with one non-suspending `make` function of the
  * form `fun <Root, Value> make(path: KeyPath<Root, Storage<Value>>): SpecializedPath<Root, Value>`.
- * It uses the return type for the generated member and emits a call to the factory. The compiler
- * plugin's automatic declarative support is under development. Integrations may also use their
- * respective lower-level code-generation APIs.
+ * They use the return type for the generated member and emit a call to the factory. Integrations
+ * may also use their respective lower-level code-generation APIs.
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)

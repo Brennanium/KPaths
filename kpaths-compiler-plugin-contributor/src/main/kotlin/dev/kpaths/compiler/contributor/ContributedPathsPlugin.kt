@@ -62,7 +62,7 @@ internal class ContributedAdapterChecks(private val pluginSession: FirSession) :
       FirDeclarationChecker<FirRegularClass>(MppCheckerKind.Common) {
       context(context: CheckerContext, reporter: DiagnosticReporter)
       override fun check(declaration: FirRegularClass) {
-        if (declaration.symbol.classId.asSingleFqName().asString() != "dev.kpaths.compiler.fixture.Cell") return
+        if (declaration.symbol.classId.asSingleFqName().asString() != "dev.kpaths.compiler.fixture.SourceAdapterCell") return
         check(pluginSession.kpaths.adapterFactoryFor(declaration.symbol) ==
           ClassId.topLevel(FqName("dev.kpaths.compiler.fixture.CellPaths"))) {
           "KPaths must read a resolved source adapter annotation"

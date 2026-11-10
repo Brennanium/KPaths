@@ -33,5 +33,7 @@ class KPathsAdapterPolicyTest {
   @Test fun `rejects overloaded and inaccessible factories`() {
     assertIs<KPathsAdapterPlan.Invalid>(planKPathsAdapter(shape.copy(functionCount = 2), root, value))
     assertIs<KPathsAdapterPlan.Invalid>(planKPathsAdapter(shape.copy(isAccessible = false), root, value))
+    assertIs<KPathsAdapterPlan.Invalid>(planKPathsAdapter(shape.copy(isExtension = true), root, value))
+    assertIs<KPathsAdapterPlan.Invalid>(planKPathsAdapter(shape.copy(hasExplicitBounds = true), root, value))
   }
 }

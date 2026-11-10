@@ -14,6 +14,89 @@ import org.objectweb.asm.Opcodes
 
 class CompilerSnippetTest {
   @Test
+  fun `declarative adapter diagnoses missing factory method`() {
+    val result = compileSnippet("InvalidDeclarativeFactory.kt" to """
+      package example
+      import dev.kpaths.annotations.*
+      @PathsAdapter(factory = Factory::class) class Cell<T>(val value: T)
+      object Factory : KPathsAdapterFactory
+      @Pathable data class Document(val title: Cell<String>)
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages, "[KPaths] Invalid @PathsAdapter on 'title'")
+  }
+
+  @Test
+  fun `declarative adapter diagnoses non key path return and overloaded methods`() {
+    val result = compileSnippet("InvalidDeclarativeFactoryShapes.kt" to """
+      package example
+      import dev.kpaths.annotations.*
+      import dev.kpaths.core.*
+      @PathsAdapter(factory = WrongReturn::class) class Cell<T>(val value: T)
+      object WrongReturn : KPathsAdapterFactory {
+        fun <R, V> make(path: KeyPath<R, Cell<V>>): String = "invalid"
+      }
+      @PathsAdapter(factory = Overloaded::class) class Other<T>(val value: T)
+      object Overloaded : KPathsAdapterFactory {
+        fun <R, V> make(path: KeyPath<R, Other<V>>): KeyPath<R, Other<V>> = path
+        fun make(path: String): String = path
+      }
+      @Pathable data class Document(val first: Cell<String>, val second: Other<String>)
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages, "Invalid @PathsAdapter on 'first'")
+    assertContains(result.messages, "Invalid @PathsAdapter on 'second'")
+  }
+
+  @Test
+  fun `declarative adapter factory generates specialized paths without a contributor`() {
+    val result = compileSnippet("DeclarativeFactory.kt" to """
+      package example
+      import dev.kpaths.annotations.*
+      import dev.kpaths.core.*
+      @PathsAdapter(factory = CellFactory::class)
+      class Cell<T>(val value: T)
+      object CellFactory : KPathsAdapterFactory {
+        fun <Root, Value> make(storage: KeyPath<Root, Cell<Value>>): CellPath<Root, Value> = CellPath(storage)
+      }
+      class CellPath<Root, Value>(private val storage: KeyPath<Root, Cell<Value>>) : KeyPathBase<Root, Value>() {
+        override val __kpaths_id get() = storage.__kpaths_id
+        override val __kpaths_valueType get() = requireNotNull(storage.__kpaths_valueType.arguments.single().type)
+        override fun get(root: Root): Value = storage.get(root).value
+      }
+      @PathsAdapter(factory = FlagFactory::class) class Flag(val enabled: Boolean)
+      object FlagFactory : KPathsAdapterFactory {
+        fun <Root> make(path: KeyPath<Root, Flag>): FlagPath<Root> = FlagPath(path)
+      }
+      class FlagPath<Root>(private val storage: KeyPath<Root, Flag>) : KeyPathBase<Root, Boolean>() {
+        override val __kpaths_id get() = storage.__kpaths_id
+        override val __kpaths_valueType get() = TypeId.of<Boolean>()
+        override fun get(root: Root): Boolean = storage.get(root).enabled
+      }
+      @Pathable data class Document(val title: Cell<List<String?>>)
+      @Pathable data class Flags(val flag: Flag)
+      @Pathable data class Box<T>(val title: Cell<T>)
+      @Pathable sealed interface Event<out T> {
+        data class Message<T>(val title: Cell<T>) : Event<T>
+      }
+      fun run(): Boolean {
+        val title: CellPath<Document, List<String?>> = Document.Paths.title
+        val generic: CellPath<Box<String?>, String?> = Box.Paths<String?>().title
+        val caseProperty: CellPath<Event.Message<String?>, String?> = Event.Paths<String?>().MessagePaths.title
+        val flag: FlagPath<Flags> = Flags.Paths.flag
+        return title.get(Document(Cell(listOf(null)))) == listOf(null) &&
+          generic.get(Box(Cell(null))) == null && generic.__kpaths_valueType == TypeId.of<String?>() &&
+          generic.__kpaths_id == PathId.property(TypeId.of<Box<String?>>(), "title") &&
+          caseProperty.get(Event.Message(Cell(null))) == null &&
+          caseProperty.__kpaths_id == PathId.property(TypeId.of<Event.Message<String?>>(), "title") &&
+          flag.get(Flags(Flag(true)))
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.DeclarativeFactoryKt").getMethod("run").invoke(null))
+  }
+
+  @Test
   fun `generic case catalogs preserve case type parameter bounds`() {
     val result = compileSnippet("BoundedGenericCase.kt" to """
       package example
