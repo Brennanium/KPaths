@@ -188,14 +188,32 @@ The companion modules demonstrate two important boundaries:
   against the adapter type's binary metadata.
 * `kpaths-compiler-plugin-contributor` is a second compiler plugin. It calls
   `session.kpaths.pathable(generatedClass, options)` and the fixture successfully resolves the
-  resulting `RequestedDocument.Paths` catalog. This is the intended integration path for a type
-  owned or synthesized by another compiler plugin.
+  resulting catalog for a source-declared class. It also synthesizes `SyntheticOwner.Snapshot`
+  and `SyntheticOwner.GenericSnapshot<T>`, delegates their catalog declarations to KPaths, and
+  generates a property whose compiled dependency type supplies a declarative adapter. JVM tests
+  check reads and identity; a separate module with neither plugin consumes both catalogs. Native
+  compilation checks the same synthetic declarations, without running them on a Native device.
 
 Contributors can opt individual properties out of `copyWritableVals` by passing their FIR property
 symbols in `KPathsGenerationOptions.copyWritableValExclusions`. An excluded `val` keeps its
 ordinary read-only path; excluding a `var` does not remove its ordinary write access. The same
 option applies to properties of supported sealed cases. Properties are identified by their owners
 as well as their names, so excluding one case's property does not exclude a namesake in another.
+
+When a contributor owns a synthesized FIR class, it calls `session.kpaths.pathable` before nested
+classifier lookup and delegates the class's catalog lookup and generation through
+`nestedClassifierNames` and `generateNestedClassifier`. It also delegates the generated catalog's
+member and nested-classifier callbacks through the registry's `callableNames`,
+`generateConstructors`, `generateProperties`, and `generateFunctions` methods. The contributor
+still generates the original class and properties and implements their IR bodies; KPaths generates
+the catalog and its paths. See `SyntheticPathsGenerator` in the contributor fixture for a complete
+example, including generic roots and a declarative adapter from another module.
+
+For properties synthesized by another plugin, FIR does not run the usual source-declaration
+checker. KPaths reports an invalid adapter when the corresponding generated property path is
+accessed; merely declaring or accessing the catalog does not guarantee that every synthesized
+property has been diagnosed. The error appears at the path access because the generated property
+itself has no source location.
 
 `@Pathable` automatically recognizes declarative `@PathsAdapter` factories. The factory's single
 `make(KeyPath<Root, Storage>)` function determines the specialized generated path type; KPaths

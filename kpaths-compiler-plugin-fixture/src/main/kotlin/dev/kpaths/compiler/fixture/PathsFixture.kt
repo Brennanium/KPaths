@@ -31,6 +31,15 @@ val personNamePath: KeyPath<Person, String> = Person.Paths.name
 data class BinaryDocument(val text: BinaryCell<String?>)
 val binaryDocumentText: BinaryPath<BinaryDocument, String?> = BinaryDocument.Paths.text
 
+/** The independent contributor synthesizes Snapshot and requests its KPaths catalog. */
+class SyntheticOwner
+fun makeSyntheticStorage(): BinaryCell<List<String?>> = BinaryCell(listOf("generated", null))
+val synthesizedTitlePath: BinaryPath<SyntheticOwner.Snapshot, List<String?>> = SyntheticOwner.Snapshot.Paths.title
+@Suppress("UNCHECKED_CAST")
+fun <T> makeSyntheticGenericStorage(): BinaryCell<T> = BinaryCell(null as T)
+val synthesizedGenericTitlePath: BinaryPath<SyntheticOwner.GenericSnapshot<String?>, String?> =
+  SyntheticOwner.GenericSnapshot.Paths<String?>().title
+
 @Pathable
 data class BinaryReaderDocument<T>(val reader: BinaryReader<T>)
 val binaryReaderPath: BinaryReaderPath<BinaryReaderDocument<List<String?>>, List<String?>> =

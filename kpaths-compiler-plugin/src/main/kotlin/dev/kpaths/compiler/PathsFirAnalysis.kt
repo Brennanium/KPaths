@@ -240,9 +240,16 @@ internal class PathsFirAnalysis(private val session: FirSession) {
   private fun FirClassSymbol<*>.declaredProperties(): List<FirPropertySymbol> =
     declaredProperties(session, FirResolvePhase.TYPES)
 
-  /** Excludes members that this extension itself has generated for the root. */
+  /** Includes externally generated members on requested roots, but excludes KPaths' own members. */
   fun FirClassSymbol<*>.sourceDeclaredProperties(): List<FirPropertySymbol> =
-    declaredProperties().filter { it.fir.origin == FirDeclarationOrigin.Source && it.fir.isKPathsAccessible() }
+    declaredProperties().filter { property ->
+      val origin = property.fir.origin
+      (origin == FirDeclarationOrigin.Source ||
+        (session.kpaths.optionsFor(this) != null && origin is FirDeclarationOrigin.Plugin &&
+          origin.key !in setOf(PathsDeclarationKey, PathsCaseDeclarationKey, PathsCasePropertyCatalogKey,
+            PathsGenericCatalogKey, PathsGenericCaseDeclarationKey, PathsGenericCasePropertyCatalogKey))) &&
+        property.fir.isKPathsAccessible()
+    }
 
   fun FirClassSymbol<*>.canGenerateCaseCatalog(): Boolean =
     fir.typeParameters.isEmpty() && caseSymbols().isNotEmpty()

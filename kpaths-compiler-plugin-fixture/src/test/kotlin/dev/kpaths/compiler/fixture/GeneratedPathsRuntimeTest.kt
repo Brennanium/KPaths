@@ -19,6 +19,20 @@ import org.objectweb.asm.Opcodes
 
 class GeneratedPathsRuntimeTest {
   @Test
+  fun externallySynthesizedTypeHasAnAdaptedPath() {
+    val path = SyntheticOwner.Snapshot.Paths.title
+    assertEquals(listOf("generated", null), path.get(SyntheticOwner.Snapshot))
+    assertEquals(TypeId.of<List<String?>>(), path.__kpaths_valueType)
+    assertEquals(PathId.property(TypeId.of<SyntheticOwner.Snapshot>(), "title"), path.__kpaths_id)
+    assertSame(path, SyntheticOwner.Snapshot.Paths.title)
+    val generic = SyntheticOwner.GenericSnapshot.Paths<String?>().title
+    val value = SyntheticOwner.GenericSnapshot<String?>()
+    assertEquals(null, generic.get(value))
+    assertEquals(TypeId.of<String?>(), generic.__kpaths_valueType)
+    assertEquals(PathId.property(TypeId.of<SyntheticOwner.GenericSnapshot<String?>>(), "title"), generic.__kpaths_id)
+  }
+
+  @Test
   fun declarativeAdapterFactoryWorksFromDependency() {
     val path = BinaryDocument.Paths.text
     assertEquals(null, path.get(BinaryDocument(dev.kpaths.compiler.integration.BinaryCell(null))))

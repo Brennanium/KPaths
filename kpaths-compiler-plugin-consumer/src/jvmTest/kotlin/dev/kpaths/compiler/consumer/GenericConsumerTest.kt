@@ -3,12 +3,25 @@ package dev.kpaths.compiler.consumer
 import dev.kpaths.compiler.fixture.FixtureBox
 import dev.kpaths.compiler.fixture.FixtureEvent
 import dev.kpaths.compiler.fixture.sampleAdaptedDocument
+import dev.kpaths.compiler.fixture.SyntheticOwner
 import dev.kpaths.core.CaseMatch
 import dev.kpaths.core.TypeId
+import dev.kpaths.core.keyPath
+import dev.kpaths.core.PathId
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class GenericConsumerTest {
+  @Test
+  fun `externally synthesized catalogs work without either compiler plugin`() {
+    assertEquals(listOf("generated", null), syntheticPathFromAnotherModule.get(SyntheticOwner.Snapshot))
+    assertEquals(TypeId.of<List<String?>>(), syntheticPathFromAnotherModule.__kpaths_valueType)
+    assertEquals(PathId.property(TypeId.of<SyntheticOwner.Snapshot>(), "title"), syntheticPathFromAnotherModule.__kpaths_id)
+    assertEquals(null, syntheticGenericPathFromAnotherModule.get(SyntheticOwner.GenericSnapshot<String?>()))
+    assertEquals(TypeId.of<String?>(), syntheticGenericPathFromAnotherModule.__kpaths_valueType)
+    assertEquals(keyPath(SyntheticOwner.GenericSnapshot<String?>::title).__kpaths_id, syntheticGenericPathFromAnotherModule.__kpaths_id)
+  }
+
   @Test
   fun `specialized adapter path is visible without the compiler plugin`() {
     assertEquals("from dependency", adaptedPathFromAnotherModule.get(sampleAdaptedDocument()))

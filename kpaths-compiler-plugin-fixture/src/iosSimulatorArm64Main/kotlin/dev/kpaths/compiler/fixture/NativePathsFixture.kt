@@ -36,6 +36,14 @@ val nativeAdaptedTitle: CellTextPath = AdaptedDocument.GeneratedPaths.title
 data class NativeBinaryDocument(val text: BinaryCell<String?>)
 val nativeDeclarativePath: BinaryPath<NativeBinaryDocument, String?> = NativeBinaryDocument.Paths.text
 
+class SyntheticOwner
+fun makeSyntheticStorage(): BinaryCell<List<String?>> = BinaryCell(listOf("generated", null))
+val nativeSynthesizedTitlePath: BinaryPath<SyntheticOwner.Snapshot, List<String?>> = SyntheticOwner.Snapshot.Paths.title
+@Suppress("UNCHECKED_CAST")
+fun <T> makeSyntheticGenericStorage(): BinaryCell<T> = BinaryCell(null as T)
+val nativeSynthesizedGenericPath: BinaryPath<SyntheticOwner.GenericSnapshot<String?>, String?> =
+  SyntheticOwner.GenericSnapshot.Paths<String?>().title
+
 @Pathable
 data class NativeReaderDocument<T>(val reader: BinaryReader<T>)
 val nativeReaderPath: BinaryReaderPath<NativeReaderDocument<String?>, String?> =

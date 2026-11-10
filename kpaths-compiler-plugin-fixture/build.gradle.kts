@@ -15,7 +15,7 @@ kotlin {
       dependencies {
         implementation(project(":kpaths-annotations"))
         implementation(project(":kpaths-core"))
-        implementation(project(":kpaths-compiler-plugin-integration-fixture"))
+        api(project(":kpaths-compiler-plugin-integration-fixture"))
       }
     }
 

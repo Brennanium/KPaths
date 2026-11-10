@@ -8,6 +8,8 @@ import dev.kpaths.compiler.fixture.RequestedDocument
 import dev.kpaths.compiler.fixture.FixtureBox
 import dev.kpaths.compiler.fixture.AdaptedDocument
 import dev.kpaths.compiler.fixture.CellTextPath
+import dev.kpaths.compiler.fixture.SyntheticOwner
+import dev.kpaths.compiler.integration.BinaryPath
 import dev.kpaths.core.KeyPath
 import dev.kpaths.core.CasePathable
 
@@ -25,4 +27,7 @@ val enumConformanceFromAnotherModule: CasePathable<ConnectionStatus> = Connectio
 // This catalog was requested by a different compiler plugin in the producer module.
 val contributedPathsFromAnotherModule: RequestedDocument.GeneratedPaths = RequestedDocument.GeneratedPaths
 val adaptedPathFromAnotherModule: CellTextPath = AdaptedDocument.GeneratedPaths.title
+val syntheticPathFromAnotherModule: BinaryPath<SyntheticOwner.Snapshot, List<String?>> = SyntheticOwner.Snapshot.Paths.title
+val syntheticGenericPathFromAnotherModule: BinaryPath<SyntheticOwner.GenericSnapshot<String?>, String?> =
+  SyntheticOwner.GenericSnapshot.Paths<String?>().title
 val genericPathFromAnotherModule = FixtureBox.Paths<String?>().value

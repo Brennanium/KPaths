@@ -6,6 +6,7 @@ import dev.kpaths.compiler.KPathsCompilerPropertyAdapter
 import dev.kpaths.compiler.KPathsCompilerPropertyRecipe
 import dev.kpaths.compiler.kpaths
 import org.jetbrains.kotlin.compiler.plugin.CompilerPluginRegistrar
+import org.jetbrains.kotlin.backend.common.extensions.IrGenerationExtension
 import org.jetbrains.kotlin.config.CompilerConfiguration
 import org.jetbrains.kotlin.fir.FirSession
 import org.jetbrains.kotlin.fir.declarations.DirectDeclarationsAccess
@@ -44,6 +45,7 @@ public class ContributedPathsPluginRegistrar : CompilerPluginRegistrar() {
 
   override fun ExtensionStorage.registerExtensions(configuration: CompilerConfiguration) {
     FirExtensionRegistrarAdapter.registerExtension(ContributedPathsFirRegistrar())
+    IrGenerationExtension.registerExtension(SyntheticPathsIrGeneration())
   }
 }
 
@@ -51,6 +53,7 @@ internal class ContributedPathsFirRegistrar : FirExtensionRegistrar() {
   override fun ExtensionRegistrarContext.configurePlugin() {
     +::ContributedPathsGenerator
     +::ContributedAdapterChecks
+    +::SyntheticPathsGenerator
   }
 }
 

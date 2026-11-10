@@ -14,6 +14,17 @@ import org.objectweb.asm.Opcodes
 
 class CompilerSnippetTest {
   @Test
+  fun `externally synthesized properties diagnose invalid declarative factories`() {
+    val result = compileSnippetWithContributor("InvalidSynthetic.kt" to """
+      package dev.kpaths.compiler.fixture
+      class InvalidSyntheticOwner
+      val path = InvalidSyntheticOwner.Snapshot.Paths.title
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages, "Invalid @PathsAdapter on 'title': the adapter factory must declare exactly one make function.")
+  }
+
+  @Test
   fun `invalid lower level adapter public type receives a diagnostic`() {
     val result = compileSnippetWithContributor("InvalidRecipe.kt" to """
       package dev.kpaths.compiler.fixture

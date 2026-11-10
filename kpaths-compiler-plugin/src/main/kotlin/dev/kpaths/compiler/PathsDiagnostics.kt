@@ -40,6 +40,11 @@ import org.jetbrains.kotlin.fir.analysis.checkers.context.CheckerContext
 import org.jetbrains.kotlin.fir.analysis.checkers.declaration.DeclarationCheckers
 import org.jetbrains.kotlin.fir.analysis.checkers.declaration.FirDeclarationChecker
 import org.jetbrains.kotlin.fir.analysis.extensions.FirAdditionalCheckersExtension
+import org.jetbrains.kotlin.fir.analysis.checkers.expression.ExpressionCheckers
+import org.jetbrains.kotlin.fir.analysis.checkers.expression.FirExpressionChecker
+import org.jetbrains.kotlin.fir.expressions.FirPropertyAccessExpression
+import org.jetbrains.kotlin.fir.references.FirResolvedNamedReference
+import org.jetbrains.kotlin.fir.symbols.impl.FirPropertySymbol
 import org.jetbrains.kotlin.fir.declarations.DirectDeclarationsAccess
 import org.jetbrains.kotlin.fir.declarations.FirConstructor
 import org.jetbrains.kotlin.fir.declarations.FirDeclarationOrigin
@@ -76,6 +81,7 @@ internal object PathsDiagnostics : KtDiagnosticsContainer() {
   val UNSUPPORTED_SEALED_VARIANT by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
   val AMBIGUOUS_COMPANION by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
   val INVALID_PATHS_ADAPTER by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
+  val INVALID_GENERATED_PATHS_ADAPTER by error1<KtElement, String>(SourceElementPositioningStrategies.DEFAULT)
 
   override fun getRendererFactory(): BaseDiagnosticRendererFactory = Renderers
 
@@ -92,6 +98,7 @@ internal object PathsDiagnostics : KtDiagnosticsContainer() {
       it.put(UNSUPPORTED_SEALED_VARIANT, "{0}", CommonRenderers.STRING)
       it.put(AMBIGUOUS_COMPANION, "{0}", CommonRenderers.STRING)
       it.put(INVALID_PATHS_ADAPTER, "{0}", CommonRenderers.STRING)
+      it.put(INVALID_GENERATED_PATHS_ADAPTER, "{0}", CommonRenderers.STRING)
     }
   }
 }
@@ -105,6 +112,46 @@ internal class PathsDiagnosticCheckers(private val pluginSession: FirSession) : 
 
   override val declarationCheckers: DeclarationCheckers = object : DeclarationCheckers() {
     override val regularClassCheckers: Set<FirDeclarationChecker<FirRegularClass>> = setOf(CatalogChecker())
+  }
+
+  // FIR does not run declaration checkers for a different plugin's synthesized property. Check
+  // the generated catalog access instead, where a real source location is available.
+  override val expressionCheckers: ExpressionCheckers = object : ExpressionCheckers() {
+    override val propertyAccessExpressionCheckers: Set<FirExpressionChecker<FirPropertyAccessExpression>> =
+      setOf(GeneratedAdapterAccessChecker())
+  }
+
+  private inner class GeneratedAdapterAccessChecker : FirExpressionChecker<FirPropertyAccessExpression>(MppCheckerKind.Common) {
+    context(context: CheckerContext, reporter: DiagnosticReporter)
+    override fun check(expression: FirPropertyAccessExpression) {
+      val generated = (expression.calleeReference as? FirResolvedNamedReference)?.resolvedSymbol as? FirPropertySymbol ?: return
+      val catalogId = generated.callableId?.classId ?: return
+      val catalog = pluginSession.symbolProvider.getClassLikeSymbolByClassId(catalogId) as? FirClassSymbol<*> ?: return
+      val analysis = PathsFirAnalysis(pluginSession)
+      with(analysis) {
+        val root = when {
+          catalog.isGeneratedPaths() -> catalog.rootClass()
+          catalog.isGeneratedGenericCatalog() -> catalog.genericCatalogRoot()
+          else -> null
+        } ?: return
+        if (root.fir.origin !is FirDeclarationOrigin.Plugin) return
+        val options = pluginSession.kpaths.optionsFor(root) ?: return
+        val property = root.sourceDeclaredProperties().singleOrNull { it.fir.generatedKPathsName() == generated.name } ?: return
+        val storage = property.resolvedReturnType
+        val rootType = root.classId.createConeType(pluginSession, root.fir.typeParameters.map {
+          ConeTypeParameterTypeImpl(it.symbol.toLookupTag(), false, ConeAttributes.Empty).toTypeProjection(Variance.INVARIANT)
+        }.toTypedArray(), false)
+        val selection = selectCompilerPropertyAdapter(
+          KPathsCompilerPropertyContext(pluginSession, property, rootType, storage, generated.resolvedReturnType),
+          options.propertyPathAdapters,
+        )
+        if (selection is CompilerAdapterAnalysis.Invalid) {
+          val message = if (selection.isIntegration) kPathsIntegrationAdapterDiagnostic(property.name.asString(), selection.reason)
+            else kPathsAdapterDiagnostic(property.name.asString(), selection.reason)
+          reporter.reportOn(expression.source, PathsDiagnostics.INVALID_GENERATED_PATHS_ADAPTER, "[KPaths] $message")
+        }
+      }
+    }
   }
 
   private inner class CatalogChecker : FirDeclarationChecker<FirRegularClass>(MppCheckerKind.Common) {
@@ -192,7 +239,10 @@ internal class PathsDiagnosticCheckers(private val pluginSession: FirSession) : 
           }
         }
       }
-      val properties = declaration.declarations.filterIsInstance<FirProperty>()
+      val properties = if (declaration.origin is FirDeclarationOrigin.Plugin &&
+        pluginSession.kpaths.optionsFor(declaration.symbol) != null) {
+        with(PathsFirAnalysis(pluginSession)) { declaration.symbol.sourceDeclaredProperties().map { it.fir } }
+      } else declaration.declarations.filterIsInstance<FirProperty>()
         .filter { it.origin == FirDeclarationOrigin.Source && it.isKPathsAccessible() }
       val caseProperties = declaration.declarations.filterIsInstance<FirRegularClass>()
         .filter { it.name.asString() in sourceCaseNames }
