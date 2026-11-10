@@ -7,7 +7,7 @@ import kotlin.reflect.KClass
  *
  * The marker deliberately has no code-generation methods: those belong in the integration's KSP
  * processor or Kotlin compiler plugin, where compiler symbols are available. It gives
- * [KPathsAdapter.factory] a type-safe, stable identity shared by runtime and codegen artifacts.
+ * [PathsAdapter.factory] a type-safe, stable identity shared by runtime and codegen artifacts.
  */
 public interface KPathsAdapterFactory
 
@@ -26,6 +26,6 @@ public interface KPathsAdapterFactory
  */
 @Target(AnnotationTarget.CLASS)
 @Retention(AnnotationRetention.BINARY)
-public annotation class KPathsAdapter(
+public annotation class PathsAdapter(
   public val factory: KClass<out KPathsAdapterFactory>,
 )

@@ -62,7 +62,7 @@ public class KPathsGenerationRegistry(session: FirSession) : FirExtensionSession
     requests[classSymbol.classId]
 
   /**
-   * Returns the factory named by a resolved storage type's `@KPathsAdapter`, if present.
+   * Returns the factory named by a resolved storage type's `@PathsAdapter`, if present.
    *
    * Call this after the type's annotations and annotation arguments are resolved. The returned
    * class ID identifies an integration-owned factory; it does not register an adapter or cause
@@ -85,7 +85,7 @@ public class KPathsGenerationRegistry(session: FirSession) : FirExtensionSession
   }
 
   private companion object {
-    val adapterAnnotationId: ClassId = ClassId.topLevel(org.jetbrains.kotlin.name.FqName("dev.kpaths.annotations.KPathsAdapter"))
+    val adapterAnnotationId: ClassId = ClassId.topLevel(org.jetbrains.kotlin.name.FqName("dev.kpaths.annotations.PathsAdapter"))
   }
 }
 

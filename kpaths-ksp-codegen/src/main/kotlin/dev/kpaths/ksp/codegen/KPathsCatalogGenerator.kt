@@ -28,7 +28,7 @@ import com.squareup.kotlinpoet.STAR
 import com.squareup.kotlinpoet.TypeName
 import com.squareup.kotlinpoet.TypeVariableName
 import dev.kpaths.annotations.CaseName
-import dev.kpaths.annotations.KPathsAdapter
+import dev.kpaths.annotations.PathsAdapter
 import dev.kpaths.annotations.PathName
 import dev.kpaths.annotations.PathsName
 import dev.kpaths.codegen.model.KPathsCaseCatalogAccess
@@ -67,7 +67,7 @@ import java.nio.file.Files
 import java.nio.file.Path
 
 private val caseNameAnnotation = CaseName::class.qualifiedName!!
-private val kpathsAdapterAnnotation = KPathsAdapter::class.qualifiedName!!
+private val kpathsAdapterAnnotation = PathsAdapter::class.qualifiedName!!
 private val pathNameAnnotation = PathName::class.qualifiedName!!
 private val pathsNameAnnotation = PathsName::class.qualifiedName!!
 
@@ -130,7 +130,7 @@ public class KPathsPropertyPathContext internal constructor(
   private val typeIdRenderer: (KSType) -> CodeBlock,
 ) {
   /**
-   * The qualified name of the storage type's declared [KPathsAdapter.factory], if it has one.
+   * The qualified name of the storage type's declared [PathsAdapter.factory], if it has one.
    *
    * An integration uses this as an identity check before returning a specialized recipe. KPaths
    * does not instantiate the factory: processor and compiler-plugin artifacts own that behavior,

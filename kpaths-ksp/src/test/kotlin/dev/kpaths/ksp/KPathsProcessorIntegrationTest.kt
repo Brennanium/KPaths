@@ -185,7 +185,7 @@ class KPathsProcessorIntegrationTest {
       """
         package fixture
 
-        import dev.kpaths.annotations.KPathsAdapter
+        import dev.kpaths.annotations.PathsAdapter
         import dev.kpaths.annotations.KPathsAdapterFactory
         import dev.kpaths.core.PathId
         import dev.kpaths.core.TypeId
@@ -196,7 +196,7 @@ class KPathsProcessorIntegrationTest {
 
         object CellPathFactory : KPathsAdapterFactory
 
-        @KPathsAdapter(factory = CellPathFactory::class)
+        @PathsAdapter(factory = CellPathFactory::class)
         class Cell<Value>(var value: Value)
 
         interface WritableCellValueKeyPath<Root, Value> : WritableKeyPath<Root, Value>

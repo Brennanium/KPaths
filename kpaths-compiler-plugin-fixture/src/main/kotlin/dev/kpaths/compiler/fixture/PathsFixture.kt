@@ -1,6 +1,6 @@
 package dev.kpaths.compiler.fixture
 
-import dev.kpaths.annotations.KPathsAdapter
+import dev.kpaths.annotations.PathsAdapter
 import dev.kpaths.annotations.KPathsAdapterFactory
 import dev.kpaths.annotations.KPathsPathable
 import dev.kpaths.annotations.Pathable
@@ -98,7 +98,7 @@ val optionalDocumentTitlePath: KeyPath<OptionalDocument, String?> = OptionalDocu
 annotation class Catalogued
 
 /** A generic storage type carrying a binary-visible specialization declaration. */
-@KPathsAdapter(factory = CellPaths::class)
+@PathsAdapter(factory = CellPaths::class)
 class Cell<Value>(var value: Value)
 
 /** Placeholder for the eventual runtime factory ABI; this fixture proves annotation discovery. */

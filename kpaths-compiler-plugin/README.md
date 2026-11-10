@@ -183,7 +183,7 @@ The companion modules demonstrate two important boundaries:
   yet compiles `Person.Paths` from the fixture's published project dependency. This confirms the
   generated nested declaration is present in ordinary Kotlin metadata/bytecode for consumers.
 * `kpaths-compiler-plugin-integration-fixture` simulates a separately published library. It
-  supplies a `@KPathsPathable` meta-annotation and a `@KPathsAdapter`-annotated generic storage
+  supplies a `@KPathsPathable` meta-annotation and a `@PathsAdapter`-annotated generic storage
   type. The fixture receives `ImportedDocument.Paths` through the meta-annotation while compiling
   against the adapter type's binary metadata.
 * `kpaths-compiler-plugin-contributor` is a second compiler plugin. It calls
@@ -198,7 +198,7 @@ option applies to properties of supported sealed cases. Properties are identifie
 as well as their names, so excluding one case's property does not exclude a namesake in another.
 
 A cooperating compiler plugin can call `session.kpaths.adapterFactoryFor(storageClass)` on a
-resolved storage class symbol to discover its `@KPathsAdapter` factory's class ID, including when
+resolved storage class symbol to discover its `@PathsAdapter` factory's class ID, including when
 the storage type comes from a compiled dependency. This lookup is experimental and returns `null`
 when the annotation or its arguments are not available in the resolved form; callers must invoke
 it at a suitable compiler phase. It does not register an adapter or generate a specialized path.
@@ -238,7 +238,7 @@ the canonical associated-value paths for object cases and cases with one to thre
 Cases without a supported canonical payload are omitted, so `case` can fail for those cases;
 the plugin warns when it generates an incomplete catalog. Adapter-backed property members, diagnostics, and broader
 conformance coverage remain future work.
-`@KPathsAdapter` establishes the binary metadata contract and factory lookup; registering an
+`@PathsAdapter` establishes the binary metadata contract and factory lookup; registering an
 adapter and producing its specialized path remain future FIR/IR work.
 
 `kpaths-compiler-plugin-fixture/LanguageSyntaxExperiments.kt` separately demonstrates the Kotlin
