@@ -107,5 +107,7 @@ jobs:
         if: always()
         run: |
           if mount | grep -Fq " on $RUNNER_TEMP/studio "; then
-            hdiutil detach "$RUNNER_TEMP/studio"
+            # The test JVM or a Gradle daemon can still hold files in the mounted IDE.
+            # This is a disposable runner and no later step needs the disk image.
+            hdiutil detach -force "$RUNNER_TEMP/studio"
           fi
