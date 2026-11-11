@@ -2,13 +2,104 @@ package dev.kpaths.compiler.testing
 
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import kotlin.test.Test
 import kotlin.test.assertContains
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import org.junit.jupiter.api.io.TempDir
 
 class InlineCompilerSnapshotsTest {
+  @Test
+  fun `multiple compiled source locations record safely in either order`(@TempDir directory: Path) {
+    val original = """
+      fun first() {
+        assertCompiler(
+          source = "first",
+        )
+      }
+      fun second() {
+        assertCompiler(
+          source = "second",
+        )
+      }
+    """.trimIndent()
+    for ((name, lines) in listOf("forward" to listOf(2, 7), "reverse" to listOf(7, 2))) {
+      val file = directory.resolve("$name.kt")
+      Files.writeString(file, original)
+      for (line in lines) {
+        InlineCompilerSnapshots.write(
+          file, line, mapOf(CompilerSnapshotKind.FIR to "result for $line\nsecond line"), "2.4.21", false,
+          expectedSource = original, compiledSourceLine = true,
+        )
+      }
+      val updated = Files.readString(file)
+      val first = updated.indexOf("result for 2")
+      val second = updated.indexOf("result for 7")
+      assertTrue(first >= 0 && second > first, updated)
+    }
+  }
+
+  @Test
+  fun `concurrent recordings from one compiled file do not lose updates`(@TempDir directory: Path) {
+    val original = """
+      fun first() {
+        assertCompiler(
+          source = "first",
+        )
+      }
+      fun second() {
+        assertCompiler(
+          source = "second",
+        )
+      }
+    """.trimIndent()
+    val file = directory.resolve("concurrent.kt")
+    Files.writeString(file, original)
+    val start = CountDownLatch(1)
+    val executor = Executors.newFixedThreadPool(2)
+    try {
+      val tasks = listOf(2, 7).map { line ->
+        executor.submit {
+          start.await()
+          InlineCompilerSnapshots.write(
+            file, line, mapOf(CompilerSnapshotKind.IR to "result for $line"), "2.4.21", false,
+            expectedSource = original, compiledSourceLine = true,
+          )
+        }
+      }
+      start.countDown()
+      tasks.forEach { it.get() }
+    } finally {
+      executor.shutdownNow()
+    }
+    val updated = Files.readString(file)
+    assertContains(updated, "result for 2")
+    assertContains(updated, "result for 7")
+  }
+
+  @Test
+  fun `external edits after recording are never overwritten`(@TempDir directory: Path) {
+    val file = directory.resolve("edited.kt")
+    val original = "fun first() {\n  assertCompiler(\n    source = \"first\",\n  )\n}\nfun second() {\n  assertCompiler(\n    source = \"second\",\n  )\n}"
+    Files.writeString(file, original)
+    InlineCompilerSnapshots.write(
+      file, 2, mapOf(CompilerSnapshotKind.FIR to "first"), "2.4.21", false,
+      expectedSource = original, compiledSourceLine = true,
+    )
+    val edited = Files.readString(file) + "\n// user edit\n"
+    Files.writeString(file, edited)
+    assertFailsWith<IllegalStateException> {
+      InlineCompilerSnapshots.write(
+        file, 7, mapOf(CompilerSnapshotKind.FIR to "second"), "2.4.21", false,
+        expectedSource = original, compiledSourceLine = true,
+      )
+    }
+    assertEquals(edited, Files.readString(file))
+  }
+
   @Test
   fun `records both missing phases and preserves unrelated source`(@TempDir directory: Path) {
     val file = directory.resolve("Example.kt")

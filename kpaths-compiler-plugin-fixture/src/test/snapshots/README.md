@@ -12,6 +12,8 @@ Inline recording requires an unambiguous `assertCompiler` call and literal expec
 reports unsupported shapes without changing the file. With
 `-Pkpaths.snapshotRecordVersion=true`, existing shared expectations can be supplemented with
 an override for `-Pkpaths.testKotlinVersion=<version>`.
+Multiple assertions in one test run can record to the same source file; the recorder accounts
+for line-number changes caused by earlier recordings and refuses to overwrite external edits.
 
 ## File-backed snapshots
 

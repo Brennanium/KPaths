@@ -23,11 +23,35 @@ import org.jetbrains.kotlin.psi.KtStringTemplateExpression
 @OptIn(CompilerConfiguration.Internals::class, ExperimentalCompilerApi::class)
 internal object InlineCompilerSnapshots {
   private val lock = Any()
+  private data class Rewrite(val compiledLine: Int, val addedLines: Int)
+  private data class SourceHistory(
+    var current: String,
+    val versions: MutableSet<String>,
+    val rewrites: MutableList<Rewrite>,
+  )
+  private val histories = mutableMapOf<Path, SourceHistory>()
 
-  fun write(file: Path, line: Int, values: Map<CompilerSnapshotKind, String>, version: String, versioned: Boolean, expectedSource: String? = null) = synchronized(lock) {
+  fun write(
+    file: Path,
+    line: Int,
+    values: Map<CompilerSnapshotKind, String>,
+    version: String,
+    versioned: Boolean,
+    expectedSource: String? = null,
+    compiledSourceLine: Boolean = false,
+  ) = synchronized(lock) {
     require(values.isNotEmpty())
     val original = Files.readString(file)
-    check(expectedSource == null || original == expectedSource) { "Source changed while compilation was running: $file." }
+    val key = file.toAbsolutePath().normalize()
+    val history = if (compiledSourceLine) histories[key] else null
+    check(history == null || history.current == original) { "Source changed outside snapshot recording: $file." }
+    check(expectedSource == null || original == expectedSource || history?.versions?.contains(expectedSource) == true) {
+      "Source changed while compilation was running: $file."
+    }
+    check(history?.rewrites?.none { it.compiledLine == line } != false) {
+      "This assertion has already been recorded in this test run: $file:$line."
+    }
+    val currentLine = line + history?.rewrites.orEmpty().filter { it.compiledLine < line }.sumOf { it.addedLines }
     val disposable = Disposer.newDisposable()
     try {
       val configuration = CompilerConfiguration().apply { extensionsStorage = CompilerPluginRegistrar.ExtensionStorage() }
@@ -36,7 +60,7 @@ internal object InlineCompilerSnapshots {
       fun lineOf(offset: Int) = original.take(offset).count { it == '\n' } + 1
       val candidates = PsiTreeUtil.collectElementsOfType(parsed, KtCallExpression::class.java).filter {
         it.calleeExpression?.text == "assertCompiler" &&
-          line in lineOf(it.textRange.startOffset)..lineOf(it.textRange.endOffset)
+          currentLine in lineOf(it.textRange.startOffset)..lineOf(it.textRange.endOffset)
       }
       require(candidates.size == 1) { "Expected exactly one assertCompiler call at $file:$line, found ${candidates.size}." }
       val call = candidates.single()
@@ -128,6 +152,12 @@ internal object InlineCompilerSnapshots {
         val attributes = Files.getFileAttributeView(file, PosixFileAttributeView::class.java)
         if (attributes != null) Files.setPosixFilePermissions(temporary, attributes.readAttributes().permissions())
         Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)
+        if (compiledSourceLine) {
+          val state = history ?: SourceHistory(original, mutableSetOf(original), mutableListOf()).also { histories[key] = it }
+          state.current = updated
+          state.versions.add(updated)
+          state.rewrites.add(Rewrite(line, updated.count { it == '\n' } - original.count { it == '\n' }))
+        }
       } finally {
         Files.deleteIfExists(temporary)
       }
