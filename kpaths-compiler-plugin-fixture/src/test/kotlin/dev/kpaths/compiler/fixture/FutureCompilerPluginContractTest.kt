@@ -33,6 +33,210 @@ import org.objectweb.asm.Opcodes
 @Tag("compiler-plugin-contract")
 class FutureCompilerPluginContractTest {
   @Test
+  fun `snapshot property visibility and writable flavors`(@TempDir directory: Path) {
+    assertCompiler(
+      directory = directory,
+      source = """
+        package fixture
+        import dev.kpaths.annotations.Pathable
+        @Pathable data class Document(val title: String, var page: Int)
+        @Pathable class Counter {
+          var count = 0
+          var protectedCount = 0
+            private set
+        }
+        val title = Document.Paths.title
+        val page = Document.Paths.page
+        val count = Counter.Paths.count
+        val protectedCount = Counter.Paths.protectedCount
+      """,
+      fir = SnapshotExpectation("""
+        KPaths resolved FIR callables
+
+        fixture/Counter.Paths.count
+        public final val count: R|dev/kpaths/core/ReferenceWritableKeyPath<fixture/Counter, kotlin/Int>|
+            public get(): R|dev/kpaths/core/ReferenceWritableKeyPath<fixture/Counter, kotlin/Int>|
+
+        fixture/Counter.Paths.protectedCount
+        public final val protectedCount: R|dev/kpaths/core/KeyPath<fixture/Counter, kotlin/Int>|
+            public get(): R|dev/kpaths/core/KeyPath<fixture/Counter, kotlin/Int>|
+
+        fixture/Document.Paths.page
+        public final val page: R|dev/kpaths/core/WritableKeyPath<fixture/Document, kotlin/Int>|
+            public get(): R|dev/kpaths/core/WritableKeyPath<fixture/Document, kotlin/Int>|
+
+        fixture/Document.Paths.title
+        public final val title: R|dev/kpaths/core/KeyPath<fixture/Document, kotlin/String>|
+            public get(): R|dev/kpaths/core/KeyPath<fixture/Document, kotlin/String>|
+        """),
+      ir = SnapshotExpectation("""
+        KPaths post-generation IR
+
+        class fixture.Counter.Paths
+          extends kotlin.Any
+          val count: dev.kpaths.core.ReferenceWritableKeyPath<fixture.Counter, kotlin.Int>
+          val protectedCount: dev.kpaths.core.KeyPath<fixture.Counter, kotlin.Int>
+
+        class fixture.Counter.Paths.__KPaths_count_Path
+          extends dev.kpaths.core.ReferenceWritableKeyPathBase<fixture.Counter, kotlin.Int>
+          val __kpaths_id: dev.kpaths.core.PathId
+          val __kpaths_valueType: dev.kpaths.core.TypeId
+          fun get(root: fixture.Counter): kotlin.Int
+          fun get(root: kotlin.Any): kotlin.Any
+          fun setInPlace(root: fixture.Counter, value: kotlin.Int): kotlin.Unit
+
+        class fixture.Counter.Paths.__KPaths_protectedCount_Path
+          extends dev.kpaths.core.KeyPathBase<fixture.Counter, kotlin.Int>
+          val __kpaths_id: dev.kpaths.core.PathId
+          val __kpaths_valueType: dev.kpaths.core.TypeId
+          fun get(root: fixture.Counter): kotlin.Int
+          fun get(root: kotlin.Any): kotlin.Any
+
+        class fixture.Document.Paths
+          extends kotlin.Any
+          val page: dev.kpaths.core.WritableKeyPath<fixture.Document, kotlin.Int>
+          val title: dev.kpaths.core.KeyPath<fixture.Document, kotlin.String>
+
+        class fixture.Document.Paths.__KPaths_page_Path
+          extends dev.kpaths.core.WritableKeyPathBase<fixture.Document, kotlin.Int>
+          val __kpaths_id: dev.kpaths.core.PathId
+          val __kpaths_valueType: dev.kpaths.core.TypeId
+          fun get(root: fixture.Document): kotlin.Int
+          fun get(root: kotlin.Any): kotlin.Any
+          fun set(root: fixture.Document, value: kotlin.Int): fixture.Document
+
+        class fixture.Document.Paths.__KPaths_title_Path
+          extends dev.kpaths.core.KeyPathBase<fixture.Document, kotlin.String>
+          val __kpaths_id: dev.kpaths.core.PathId
+          val __kpaths_valueType: dev.kpaths.core.TypeId
+          fun get(root: fixture.Document): kotlin.String
+          fun get(root: kotlin.Any): kotlin.Any
+        """),
+    )
+  }
+
+  @Test
+  fun `snapshot renamed paths and escaped cases`(@TempDir directory: Path) {
+    assertCompiler(
+      directory = directory,
+      source = """
+        package fixture
+        import dev.kpaths.annotations.*
+        @Pathable data class Person(@PathName("display") var name: String)
+        @Pathable sealed interface Event {
+          @CaseName("when") data object Refresh : Event
+        }
+        val name = Person.Paths.display
+        val refresh = Event.Paths.`when`.unit
+      """,
+      fir = SnapshotExpectation("""
+        KPaths resolved FIR callables
+
+        fixture/Event.Paths.when.unit
+        public final val unit: R|dev/kpaths/core/CaseKeyPath<fixture/Event, kotlin/Unit>|
+            public get(): R|dev/kpaths/core/CaseKeyPath<fixture/Event, kotlin/Unit>|
+
+        fixture/Person.Paths.display
+        public final val display: R|dev/kpaths/core/WritableKeyPath<fixture/Person, kotlin/String>|
+            public get(): R|dev/kpaths/core/WritableKeyPath<fixture/Person, kotlin/String>|
+        """),
+      ir = SnapshotExpectation("""
+        KPaths post-generation IR
+
+        class fixture.Event.Paths
+          extends dev.kpaths.core.CasePathCatalogBase<fixture.Event>
+          val allCasePaths: kotlin.collections.List<dev.kpaths.core.PartialCaseKeyPath<fixture.Event>>
+          val when: fixture.Event.Paths.when
+          fun __kpaths_buildAllCasePaths(): kotlin.collections.List<dev.kpaths.core.PartialCaseKeyPath<fixture.Event>>
+
+        class fixture.Event.Paths.when
+          extends dev.kpaths.core.CaseKeyPathBase<fixture.Event, fixture.Event.Refresh>
+          val __kpaths_id: dev.kpaths.core.PathId
+          val __kpaths_valueType: dev.kpaths.core.TypeId
+          val unit: dev.kpaths.core.CaseKeyPath<fixture.Event, kotlin.Unit>
+          fun embed(value: fixture.Event.Refresh): fixture.Event
+          fun match(root: fixture.Event): dev.kpaths.core.CaseMatch<fixture.Event.Refresh>
+
+        class fixture.Event.Paths.when.__KPaths_unit_CasePath
+          extends dev.kpaths.core.CaseKeyPathBase<fixture.Event, kotlin.Unit>
+          val __kpaths_id: dev.kpaths.core.PathId
+          val __kpaths_valueType: dev.kpaths.core.TypeId
+          fun embed(value: kotlin.Unit): fixture.Event
+          fun match(root: fixture.Event): dev.kpaths.core.CaseMatch<kotlin.Unit>
+
+        class fixture.Person.Paths
+          extends kotlin.Any
+          val display: dev.kpaths.core.WritableKeyPath<fixture.Person, kotlin.String>
+
+        class fixture.Person.Paths.__KPaths_name_Path
+          extends dev.kpaths.core.WritableKeyPathBase<fixture.Person, kotlin.String>
+          val __kpaths_id: dev.kpaths.core.PathId
+          val __kpaths_valueType: dev.kpaths.core.TypeId
+          fun get(root: fixture.Person): kotlin.String
+          fun get(root: kotlin.Any): kotlin.Any
+          fun set(root: fixture.Person, value: kotlin.String): fixture.Person
+        """),
+    )
+  }
+
+  @Test
+  fun `snapshot specialized nullable adapter path`(@TempDir directory: Path) {
+    assertCompiler(
+      directory = directory,
+      source = """
+        package fixture
+        import dev.kpaths.annotations.*
+        import dev.kpaths.core.*
+        @PathsAdapter(factory = CellFactory::class)
+        class Cell<T>(val value: T)
+        object CellFactory : KPathsAdapterFactory {
+          fun <Root, Value> make(storage: KeyPath<Root, Cell<Value>>): CellPath<Root, Value> = CellPath(storage)
+        }
+        class CellPath<Root, Value>(private val storage: KeyPath<Root, Cell<Value>>) : KeyPathBase<Root, Value>() {
+          override val __kpaths_id get() = storage.__kpaths_id
+          override val __kpaths_valueType get() = storage.__kpaths_valueType.requireTypeArgument(0)
+          override fun get(root: Root): Value = storage.get(root).value
+        }
+        @Pathable data class Box<T>(val value: Cell<T>)
+        val path: CellPath<Box<String?>, String?> = Box.Paths<String?>().value
+      """,
+      fir = SnapshotExpectation("""
+        KPaths resolved FIR callables
+
+        fixture/Box.Paths.__kpaths_Catalog.value
+        public final override val value: R|fixture/CellPath<fixture/Box<kotlin/String?>, kotlin/String?>|
+            public get(): R|fixture/CellPath<fixture/Box<kotlin/String?>, kotlin/String?>|
+
+        fixture/Box.Paths.invoke
+        public final inline operator fun <reified T> invoke(): R|fixture/Box.Paths.__kpaths_Catalog<T>| {
+            ^invoke throw R|kotlin/Throwable.Throwable|(String(Stub for declaration generated by Plugin[PathsDeclarationKey]))
+        }
+        """),
+      ir = SnapshotExpectation("""
+        KPaths post-generation IR
+
+        class fixture.Box.Paths
+          extends kotlin.Any
+          fun invoke(): fixture.Box.Paths.__kpaths_Catalog<T>
+          fun of(): fixture.Box.Paths.__kpaths_Catalog<T>
+          fun of(TType: kotlin.reflect.KClass<T>): fixture.Box.Paths.__kpaths_Catalog<T>
+          fun of(TTypeId: dev.kpaths.core.TypeId): fixture.Box.Paths.__kpaths_Catalog<T>
+
+        class fixture.Box.Paths.__kpaths_Catalog
+          extends kotlin.Any
+          val value: fixture.CellPath<fixture.Box<T>, T>
+
+        class fixture.Box.Paths.__kpaths_Catalog.__KPaths_value_Path
+          extends dev.kpaths.core.KeyPathBase<fixture.Box<T>, fixture.Cell<T>>
+          val __kpaths_id: dev.kpaths.core.PathId
+          val __kpaths_valueType: dev.kpaths.core.TypeId
+          fun get(root: fixture.Box<T>): fixture.Cell<T>
+          fun get(root: kotlin.Any): kotlin.Any
+        """),
+    )
+  }
+
+  @Test
   fun `inline recording captures both phases by default`(@TempDir directory: Path) {
     assertCompiler(
       directory = directory,
