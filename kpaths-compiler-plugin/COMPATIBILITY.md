@@ -33,6 +33,8 @@ covers a focused runtime scenario; it is not a promise that every compiler-plugi
 exercised on every target. The IDE has a separate compiler and compatibility story: the experimental
 [KEFS fixture](../kpaths-kefs-ide-fixture/README.md) currently tests one Android Studio build and is
 not part of this Kotlin compiler matrix. IDE-specific artifacts and versions require separate tests.
+The fixture maintains its own [IDE compatibility matrix](../kpaths-kefs-ide-fixture/ide-compatibility.json)
+and an automated local verification workflow for the selected IDE.
 
 Before adding a version to the list, run the consumer tests with that version and the current
 compiler plugin. The test harness accepts `-Pkpaths.testKotlinVersion=<version>` independently of

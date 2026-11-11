@@ -273,7 +273,10 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@17 \
 The JVM fixture includes in-process snippet compilation for fast compiler tests. The separate
 [Android Studio analysis fixture](../kpaths-compiler-plugin-ide-fixture/README.md) tests editor
 highlighting using the Kotlin compiler bundled with a local IDE and a test-only plugin provider.
-It does not yet provide or verify a distributable IDE integration.
+The separate [KEFS fixture](../kpaths-kefs-ide-fixture/README.md) verifies local IDE-compatible
+artifact publication, KEFS highlighting, and the imported consumer's symbol resolution. Its
+compatibility matrix records the IDE builds that have been tested. These fixtures do not yet
+provide a publicly distributed artifact or automatic KEFS discovery for KPaths.
 
 This intentionally proves source resolution, object construction, cached direct read-only,
 reference-writable, and data-class copy-writable KeyPath members, direct whole-case CaseKeyPaths,

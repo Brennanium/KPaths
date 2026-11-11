@@ -24,6 +24,42 @@ third-party compiler plugin. It runs compiler front-end analysis, not generated 
 Verified with Android Studio 2026.2.2 (build 262.10968.63.2622.16730706), whose KEFS-resolved
 compiler version is `2.4.20-ij262-52`. Other versions must be tested separately.
 
+The tested IDE, compiler, and KEFS versions are listed in
+[`ide-compatibility.json`](ide-compatibility.json). Like the compiler matrix, this is a record of
+tested combinations, not a restriction on other IDEs. To build and verify the local IDE artifact
+and a standalone Gradle consumer, run from the repository root:
+
+```sh
+python3 scripts/verify-kefs-compatibility.py --ide-path "/path/to/Android Studio.app"
+```
+
+For an unlisted IDE build, also pass `--ide-kotlin-version` (from **KEFS: Copy Kotlin IDE Version**)
+and `--kefs-version`. Add `--ide-probe` to launch an isolated IDE twice and check the imported
+consumer with KEFS enabled and disabled. The script restores the fixture's KEFS settings afterward.
+It writes only to local build repositories; it does not publish a release. It needs a JDK 17 Gradle
+runtime and a JDK 25 toolchain for the currently tested IDE fixture.
+
+The local publication task runs the fixture's KEFS integration test first. The test compares the
+requested artifact version to the compiler version reported by KEFS, so an artifact is not published
+under a mismatched IDE version through this workflow. This verification assumes Gradle's normal
+task dependencies are not explicitly bypassed.
+
+## Consumer setup after publication
+
+Once an IDE-compatible KPaths artifact is published to Maven Central, an IDE user can install
+**Kotlin External FIR Support** and add a plugin bundle in **Settings → Tools → Kotlin External FIR
+Support → Artifacts** with:
+
+* Coordinates: `io.github.brennanium:kpaths-compiler-plugin-jvm`.
+* Version matching: `Exact`.
+* Repository: `Maven Central`.
+
+The library version must have an artifact compiled for the IDE's Kotlin compiler. KEFS's project
+settings can be shared using `.idea/kotlin-plugins.xml`; see the
+[KEFS guide](https://github.com/Mr3zee/kotlin-external-fir-support/blob/main/GUIDE.md#storing-settings).
+KPaths is not currently in KEFS's built-in defaults, and this repository has not published the
+IDE-compatible artifacts, so this is the planned consumer setup rather than a released workflow.
+
 From the KPaths root, with JDK 17 for Gradle and a JDK 25 toolchain available:
 
 ```sh
@@ -69,8 +105,8 @@ First publish the build artifacts locally:
 
 The IDE Kotlin version above applies to the tested Android Studio build. For another IDE, obtain
 its version using **KEFS: Copy Kotlin IDE Version**, adapt the IDE compiler sources if necessary,
-and pass the corresponding version. This experimental publication task does not independently
-verify that the supplied version matches the selected IDE.
+and pass the corresponding version. Before publishing, the fixture test verifies that KEFS reports
+the requested version for the selected IDE.
 
 Configure the enabled case, then launch the isolated sandbox and import the fixture:
 

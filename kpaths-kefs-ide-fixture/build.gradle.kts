@@ -16,7 +16,7 @@ dependencies {
   intellijPlatform {
     local(providers.gradleProperty("kpaths.idePath").orElse("/Applications/Android Studio.app"))
     bundledPlugin("org.jetbrains.kotlin")
-    plugin("com.github.mr3zee.kotlinPlugins:0.5.0-262")
+    plugin("com.github.mr3zee.kotlinPlugins:${providers.gradleProperty("kpaths.kefsVersion").orElse("0.5.0-262").get()}")
     testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
   }
   testImplementation(kotlin("test"))
@@ -107,6 +107,13 @@ tasks.test {
   systemProperty("kpaths.annotationsJar", annotationsJar.absolutePath)
   systemProperty("kpaths.ideCompilerPluginJar", ideCompilerPluginJar.flatMap { it.archiveFile }.get().asFile.absolutePath)
   systemProperty("kpaths.ideKotlinStdlib", ideKotlinStdlib.singleFile.absolutePath)
+  ideKotlinVersion.orNull?.let { systemProperty("kpaths.expectedIdeKotlinVersion", it) }
+}
+
+// A local IDE artifact must be tested against the selected IDE before it is published with
+// that IDE's compiler version. The test asks KEFS for the version rather than trusting a label.
+tasks.named("publishIdeCompilerPluginPublicationToKefsLocalRepository") {
+  dependsOn(tasks.test)
 }
 
 intellijPlatform { buildSearchableOptions = false; instrumentCode = false }

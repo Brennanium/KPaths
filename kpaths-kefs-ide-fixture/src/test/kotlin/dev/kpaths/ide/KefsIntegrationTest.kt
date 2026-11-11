@@ -22,6 +22,9 @@ class KefsIntegrationTest : BasePlatformTestCase() {
     fun enumValue(name: String, value: String): Any = cls(name).enumConstants.first { (it as Enum<*>).name == value }
     val versionService = checkNotNull(ApplicationManager.getApplication().getService(cls("KotlinVersionService")))
     val ideVersion = cls("KotlinVersionService").getMethod("getKotlinIdePluginVersion").invoke(versionService) as String
+    System.getProperty("kpaths.expectedIdeKotlinVersion")?.let { expected ->
+      assertEquals("The publication version must match the compiler version reported by KEFS", expected, ideVersion)
+    }
     val testVersion = "0.1.0-test${System.nanoTime()}"
     val contributorVersion = "0.2.0-test${System.nanoTime()}"
     val repoRoot = Files.createTempDirectory("kpaths-kefs-repo")

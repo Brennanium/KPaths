@@ -1,0 +1,10 @@
+{
+  "tested": [
+    {
+      "product": "Android Studio",
+      "build": "262.10968.63.2622.16730706",
+      "kotlinIdeVersion": "2.4.20-ij262-52",
+      "kefsVersion": "0.5.0-262"
+    }
+  ]
+}
