@@ -37,11 +37,15 @@ branch can be selected for the run.
 
 Each job downloads the pinned Android Studio installer, checks its SHA-256, validates the installed
 build against the matrix, builds the IDE artifact, runs the fixture and the standalone consumer
-build, and uploads the resulting local Maven repository as a GitHub Actions artifact for 14 days.
+build, checks the expected Maven coordinates, JAR, and `.md5` checksum, and uploads the resulting
+local Maven repository as a GitHub Actions artifact for 14 days. KEFS's remote resolution requires
+the JAR's `.md5` file: the [HTTPS resolution experiment](README.md#remote-maven-resolution-experiment)
+verified both the missing-checksum failure and successful resolution with the checksum present.
 This is a dry run: it does not publish to Pages or Maven Central, create a release, or persist the
 temporary version in the repository. A successful build on a developer's machine does not prove
-that the hosted runner has enough resources or supports all IDE test operations; the workflow still
-needs an actual Actions run.
+that the hosted runner has enough resources or supports all IDE test operations. The full draft
+workflow has passed on GitHub Actions for the Android Studio build currently in the matrix; that run
+predated the additional Maven validation step.
 
 ## Work before public hosting
 
@@ -53,6 +57,8 @@ one Pages artifact, with a durable source for all previously published versions.
 are temporary and are not that source. The release process also needs to merge matrix outputs,
 preserve Maven metadata correctly, verify the resulting repository and consumer setup, coordinate
 concurrent deployments, and define how historical releases gain support for new IDE versions.
+The assembly must retain the JAR checksum files and validate the combined repository, not only
+the individual matrix outputs.
 
 The current workflow intentionally stops before those steps; it is a first draft of the build and
 verification pipeline, not a public deployment pipeline.

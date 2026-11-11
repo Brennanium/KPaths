@@ -53,13 +53,13 @@ Those experiments do not expand the supported matrix or change the publication f
 
 ## Consumer setup after publication
 
-Once an IDE-compatible KPaths artifact is published to Maven Central, an IDE user can install
+Once an IDE-compatible KPaths artifact is published to the planned Maven repository, an IDE user can install
 **Kotlin External FIR Support** and add a plugin bundle in **Settings → Tools → Kotlin External FIR
 Support → Artifacts** with:
 
 * Coordinates: `io.github.brennanium:kpaths-compiler-plugin-jvm`.
 * Version matching: `Exact`.
-* Repository: `Maven Central`.
+* Repository: the KPaths IDE artifact repository URL, once published.
 
 The library version must have an artifact compiled for the IDE's Kotlin compiler. KEFS's project
 settings can be shared using `.idea/kotlin-plugins.xml`; see the

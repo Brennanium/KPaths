@@ -30,8 +30,8 @@ jobs:
       entries: ${{ steps.matrix.outputs.entries }}
     steps:
       - uses: actions/checkout@v6
-      - name: Test temporary version preparation
-        run: python3 -m unittest scripts/test_prepare_kefs_ci_version.py
+      - name: Test repository verification utilities
+        run: python3 -m unittest scripts/test_prepare_kefs_ci_version.py scripts/test_verify_kefs_maven_repository.py
       - id: matrix
         env:
           IDE_BUILD: ${{ inputs.ide_build || 'all' }}
@@ -96,6 +96,14 @@ jobs:
           args=()
           if [ "$IDE_PROBE" = true ]; then args+=(--ide-probe); fi
           python3 scripts/verify-kefs-compatibility.py --ide-path "$RUNNER_TEMP/studio/Android Studio.app" "${args[@]}"
+      - name: Verify Maven coordinates and KEFS checksum
+        env:
+          IDE_VERSION: ${{ matrix.ide.kotlinIdeVersion }}
+          TEST_VERSION: ${{ inputs.test_version || '0.2.0-ci.1' }}
+        run: >-
+          python3 scripts/verify-kefs-maven-repository.py
+          kpaths-kefs-ide-fixture/build/kefs-repository
+          --ide-version "$IDE_VERSION" --library-version "$TEST_VERSION"
       - name: Save the verified local Maven repository
         uses: actions/upload-artifact@v6
         with:
