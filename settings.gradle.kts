@@ -8,6 +8,13 @@ pluginManagement {
 dependencyResolutionManagement {
   repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
   repositories {
+    if (providers.gradleProperty("kpaths.testKotlinVersion").orNull?.contains("-dev-") == true) {
+      listOf("dev", "experimental", "bootstrap").forEach { channel ->
+        maven("https://packages.jetbrains.team/maven/p/kt/$channel/") {
+          content { includeGroupByRegex("org\\.jetbrains\\.kotlin(\\..*)?") }
+        }
+      }
+    }
     mavenCentral()
   }
 }

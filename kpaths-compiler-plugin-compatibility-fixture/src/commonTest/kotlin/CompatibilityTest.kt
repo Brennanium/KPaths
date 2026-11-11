@@ -15,7 +15,7 @@ sealed interface Event {
 
 class CompatibilityTest {
   @Test
-  fun generatedPathsWorkOnNative() {
+  fun generatedPathsWorkInConsumer() {
     val person = Person("before")
     assertEquals(Person("after"), Person.Paths.name.set(person, "after"))
     assertEquals(Person("before"), person)

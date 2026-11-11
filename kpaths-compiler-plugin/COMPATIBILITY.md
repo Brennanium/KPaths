@@ -14,21 +14,30 @@ case embedding, generated catalogs, generic paths, IR snapshots, and selected by
 The iOS simulator fixture tests generated writable and case paths using the same published compiler
 plugin and runtime libraries, and also asserts the resolved Kotlin version.
 
-To run the JVM matrix locally:
+To run the supported matrix locally:
 
 ```sh
 python3 scripts/verify-compiler-compatibility.py
 ```
 
-Pass one or more matrix versions to restrict the run. On Apple Silicon macOS, add `--native` to
-publish to a local test repository and run the iOS simulator tests too. A usable iOS simulator and
-JDK are required. Example:
+Pass any exact versions to test them, including versions outside the supported matrix. A quoted
+development selector resolves to the highest numbered build available for both the Kotlin compiler
+and Gradle plugin in JetBrains' development repositories:
 
 ```sh
-python3 scripts/verify-compiler-compatibility.py --native 2.4.20
+python3 scripts/verify-compiler-compatibility.py 2.4.20 '2.5.0-dev*'
 ```
 
-CI executes the JVM and iOS consumer tests for each listed version independently. The iOS fixture
+The script prints the exact resolved versions and runs the compiler snippet, diagnostic, snapshot,
+bytecode and Gradle consumer suites, followed by a separate JVM consumer compiled and run with each
+selected version. On Apple Silicon macOS with an available iOS simulator, it also runs the Native
+consumer for each version. Use `--native` to require that check, `--jvm-only` to skip it,
+`--resolve-only` to inspect selectors without running tests, and `--report-json <file>` to save
+the results. A JDK is required. Gradle caches and a local test repository are used for the builds.
+
+CI executes the JVM and iOS consumer tests for each listed version independently. The Verify workflow
+can also be started manually with a space- or comma-separated list of exact versions and development
+selectors; its summary records the resolved versions. The iOS fixture
 covers a focused runtime scenario; it is not a promise that every compiler-plugin feature has been
 exercised on every target. The IDE has a separate compiler and compatibility story: the experimental
 [KEFS fixture](../kpaths-kefs-ide-fixture/README.md) currently tests one Android Studio build and is
@@ -42,10 +51,14 @@ how KPaths itself was built. Add version-specific compatibility code when the te
 change; a version number alone does not establish compatibility. Pre-release compiler tests should
 remain experimental until they pass and should not automatically expand the supported list.
 
-The separate `gradle/kpaths-preview-kotlin-versions.txt` tracks development builds for early
-warning. Run `python3 scripts/verify-compiler-compatibility.py --preview` to exercise the JVM
-consumer and compiler contracts against them; the corresponding CI job is non-blocking. A passing
-preview probe does not imply Native or IDE support. A Kotlin 2.5 development build exposed changes to FIR
+The separate `gradle/kpaths-preview-kotlin-versions.txt` tracks development families for early
+warning. Run `python3 scripts/verify-compiler-compatibility.py --preview` to test the latest available
+builds; the corresponding CI job is non-blocking and runs the JVM checks. The local script includes
+Native when available. A passing JVM preview probe does not imply Native or IDE support. A Kotlin 2.5 development build exposed changes to FIR
 type-parameter construction and lookup; KPaths uses a shared classifier factory to avoid depending
 on the old implementation class. Development artifacts are resolved from JetBrains' test
 repositories and may disappear or change availability.
+
+The in-process test harness needs a KAPT artifact even though these tests do not run annotation
+processors. It uses the KPaths build's KAPT version while loading and checking the selected Kotlin
+compiler version; the matrix does not verify compatibility with third-party annotation processors.

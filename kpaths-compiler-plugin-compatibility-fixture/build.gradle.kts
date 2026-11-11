@@ -14,6 +14,7 @@ val actualKotlin = wrapper.getMethod("getKotlinPluginVersion", org.gradle.api.Pr
 check(actualKotlin == expectedKotlin) { "Expected Kotlin $expectedKotlin, resolved $actualKotlin" }
 
 kotlin {
+  jvm()
   iosSimulatorArm64()
   sourceSets.commonTest.dependencies {
     implementation(kotlin("test"))

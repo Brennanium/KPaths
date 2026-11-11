@@ -5,6 +5,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      versions:
+        description: Optional space- or comma-separated Kotlin versions/selectors, e.g. 2.4.0 2.5.0-dev*
+        type: string
+        required: false
 
 permissions:
   contents: read
@@ -17,17 +22,31 @@ jobs:
       kotlin: ${{ steps.versions.outputs.kotlin }}
     steps:
       - uses: actions/checkout@v6
+      - name: Test matrix orchestration
+        run: python3 -m unittest scripts/test_kotlin_version_resolver.py scripts/test_verify_compiler_compatibility.py
       - id: versions
+        env:
+          REQUESTED_VERSIONS: ${{ inputs.versions }}
         run: |
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
-          import re
+          import os
+          import sys
           from pathlib import Path
-          versions = [line.strip() for line in Path('gradle/kpaths-supported-kotlin-versions.txt').read_text().splitlines()
-                      if line.strip() and not line.lstrip().startswith('#')]
-          if (not versions or len(versions) != len(set(versions))
-                  or any(not re.fullmatch(r'\d+\.\d+\.\d+', version) for version in versions)):
-              raise SystemExit('The compiler compatibility matrix must contain distinct versions')
+          sys.path.insert(0, 'scripts')
+          from kotlin_version_resolver import resolve
+          selectors = os.environ['REQUESTED_VERSIONS'].replace(',', ' ').split()
+          if not selectors:
+              selectors = [line.strip() for line in Path('gradle/kpaths-supported-kotlin-versions.txt').read_text().splitlines()
+                           if line.strip() and not line.lstrip().startswith('#')]
+          if not selectors or len(selectors) != len(set(selectors)):
+              raise SystemExit('The compiler compatibility matrix must contain distinct selectors')
+          resolved = resolve(selectors)
+          versions = list(dict.fromkeys(version for _, version in resolved))
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('### Resolved Kotlin compatibility targets\n\n')
+              for selector, version in resolved:
+                  summary.write(f'- `{selector}` → `{version}`\n')
           print('kotlin=' + json.dumps(versions, separators=(',', ':')))
           PY
 
@@ -47,12 +66,7 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
       - name: Verify compiler plugin in downstream consumers
-        run: >-
-          ./gradlew
-          :kpaths-gradle-plugin:test
-          :kpaths-compiler-plugin-fixture:compilerPluginContractTest
-          -Pkpaths.testKotlinVersion=${{ matrix.kotlin }}
-          --no-configuration-cache
+        run: python3 scripts/verify-compiler-compatibility.py '${{ matrix.kotlin }}' --jvm-only
 
   compiler-compatibility-native:
     name: Compiler Native consumer / Kotlin ${{ matrix.kotlin }}
@@ -97,7 +111,14 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
       - name: Probe development compiler versions
-        run: python3 scripts/verify-compiler-compatibility.py --preview
+        run: python3 scripts/verify-compiler-compatibility.py --preview --jvm-only --report-json build/compiler-preview-report.json
+      - name: Save resolved preview results
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: compiler-preview-results
+          path: build/compiler-preview-report.json
+          if-no-files-found: warn
 
   jvm:
     name: JVM and documentation

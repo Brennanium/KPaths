@@ -54,6 +54,23 @@ dependencies {
   add("jvmTestImplementation", gradleTestKit())
 }
 
+// Compile the plugin and tests with the project compiler, but load the selected compiler in the
+// snippet-test JVM. kctfork loads KAPT classes even though these tests do not run annotation
+// processors; keep that harness-only dependency on the build version because some Kotlin dev
+// builds publish no matching KAPT artifact.
+providers.gradleProperty("kpaths.testKotlinVersion").orNull?.let { targetVersion ->
+  configurations.named("jvmTestRuntimeClasspath") {
+    resolutionStrategy.eachDependency {
+      if (requested.group == "org.jetbrains.kotlin") {
+        when (requested.name) {
+          "kotlin-compiler-embeddable" -> useVersion(targetVersion)
+          "kotlin-annotation-processing-embeddable" -> useVersion(libs.versions.kotlin.get())
+        }
+      }
+    }
+  }
+}
+
 val snapshotRecording = providers.gradleProperty("kpaths.snapshotRecording")
   .orElse(providers.environmentVariable("CI").map { if (it.isNotBlank() && !it.equals("false", ignoreCase = true)) "none" else "missing" })
   .orElse("missing")
