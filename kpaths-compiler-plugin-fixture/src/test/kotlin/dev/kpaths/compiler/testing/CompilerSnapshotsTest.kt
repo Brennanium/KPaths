@@ -11,6 +11,48 @@ import org.junit.jupiter.api.io.TempDir
 
 class CompilerSnapshotsTest {
   @Test
+  fun `version selectors support wildcards comparisons and bounded ranges`() {
+    val cases = listOf(
+      Triple("2.5.*", "2.5.0-dev-10106", true),
+      Triple("2.5.*", "2.5.4", true),
+      Triple("2.5.*", "2.6.0", false),
+      Triple(">=2.5.0", "2.5.0-dev-10106", false),
+      Triple(">=2.5.0", "2.5.0", true),
+      Triple("<2.5.0", "2.5.0-dev-10106", true),
+      Triple(">=2.4.20 <2.5.0", "2.4.21", true),
+      Triple(">=2.4.20 <2.5.0", "2.5.0", false),
+      Triple(">=2.5.0-dev-99", "2.5.0-dev-100", true),
+      Triple("<=2.4.21", "2.4.21", true),
+      Triple(">2.4.21", "2.4.21", false),
+    )
+    cases.forEach { (selector, version, matches) ->
+      assertEquals(if (matches) selector else null, selectCompilerVersion(setOf(selector), version), "$selector for $version")
+    }
+  }
+
+  @Test
+  fun `exact overrides win over ranges and overlapping ranges are rejected`() {
+    val versions = mapOf("2.5.*" to "wildcard", ">=2.5.0-dev-1" to "range", "2.5.0-dev-10106" to "exact")
+    assertEquals("exact", SnapshotExpectation("default", versions).forVersion("2.5.0-dev-10106"))
+    assertFailsWith<IllegalArgumentException> { SnapshotExpectation("default", versions).forVersion("2.5.0-dev-10107") }
+    assertFailsWith<IllegalArgumentException> { selectCompilerVersion(setOf("2.5.x"), "2.5.0") }
+  }
+
+  @Test
+  fun `compiler assertions use the selected version range independently for each phase`() {
+    val expected = mapOf(
+      CompilerSnapshotKind.FIR to SnapshotExpectation("default fir", mapOf("2.5.*" to "preview fir")),
+      CompilerSnapshotKind.IR to SnapshotExpectation("default ir", mapOf(">=2.5.0" to "released ir")),
+    )
+    assertCompilerSnapshots("source", "2.5.0-dev-10106", expected) { _, _, _ ->
+      mapOf(CompilerSnapshotKind.FIR to "preview fir", CompilerSnapshotKind.IR to "default ir")
+    }
+    assertCompilerSnapshots("source", "2.5.0", expected) { _, _, _ ->
+      mapOf(CompilerSnapshotKind.FIR to "preview fir", CompilerSnapshotKind.IR to "released ir")
+    }
+  }
+
+  @Test
   fun `missing recording can create a version override without replacing the shared expectation`() {
     val expectation = SnapshotExpectation("shared", mapOf("2.4.20" to "older"))
     assertTrue(shouldRecordSnapshot(expectation, "shared", "2.4.21", SnapshotRecording.MISSING, recordVersion = true))

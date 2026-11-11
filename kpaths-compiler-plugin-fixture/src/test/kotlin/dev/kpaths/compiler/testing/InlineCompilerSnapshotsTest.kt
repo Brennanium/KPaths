@@ -13,6 +13,60 @@ import org.junit.jupiter.api.io.TempDir
 
 class InlineCompilerSnapshotsTest {
   @Test
+  fun `ambiguous version ranges fail without modifying the test file`(@TempDir directory: Path) {
+    val file = directory.resolve("Ambiguous.kt")
+    val original = """
+      fun test() {
+        assertCompiler(
+          source = "source",
+          fir = SnapshotExpectation("shared", versions = mapOf("2.5.*" to "one", ">=2.5.0-dev-1" to "two")),
+        )
+      }
+    """.trimIndent()
+    Files.writeString(file, original)
+    assertFailsWith<IllegalArgumentException> {
+      InlineCompilerSnapshots.write(file, 2, mapOf(CompilerSnapshotKind.FIR to "updated"), "2.5.0-dev-10106", false)
+    }
+    assertEquals(original, Files.readString(file))
+  }
+
+  @Test
+  fun `recording updates the selected range without changing other overrides`(@TempDir directory: Path) {
+    val file = directory.resolve("Range.kt")
+    Files.writeString(file, """
+      fun test() {
+        assertCompiler(
+          source = "source",
+          fir = SnapshotExpectation("shared", versions = mapOf("2.5.*" to "old", "2.4.20" to "older")),
+        )
+      }
+    """.trimIndent())
+    InlineCompilerSnapshots.write(file, 2, mapOf(CompilerSnapshotKind.FIR to "updated"), "2.5.0-dev-10106", false)
+    val updated = Files.readString(file)
+    assertContains(updated, "\"2.5.*\" to \"\"\"")
+    assertContains(updated, "updated")
+    assertContains(updated, "\"2.4.20\" to \"older\"")
+    assertContains(updated, "\"shared\"")
+  }
+
+  @Test
+  fun `versioned recording adds exact override without replacing a matching range`(@TempDir directory: Path) {
+    val file = directory.resolve("Range.kt")
+    Files.writeString(file, """
+      fun test() {
+        assertCompiler(
+          source = "source",
+          fir = SnapshotExpectation("shared", versions = mapOf("2.5.*" to "range")),
+        )
+      }
+    """.trimIndent())
+    InlineCompilerSnapshots.write(file, 2, mapOf(CompilerSnapshotKind.FIR to "specific"), "2.5.0-dev-10106", true)
+    val updated = Files.readString(file)
+    assertContains(updated, "\"2.5.*\" to \"range\"")
+    assertContains(updated, "\"2.5.0-dev-10106\" to")
+    assertContains(updated, "specific")
+  }
+  @Test
   fun `multiple compiled source locations record safely in either order`(@TempDir directory: Path) {
     val original = """
       fun first() {

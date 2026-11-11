@@ -108,8 +108,18 @@ internal object InlineCompilerSnapshots {
           ?: expectationArgs.filter { it.getArgumentName() == null }.getOrNull(1)
         val versionMap = versionArg?.getArgumentExpression() as? KtCallExpression
         if (versionArg != null) require(versionMap?.calleeExpression?.text == "mapOf") { "Version overrides must use mapOf with literal keys." }
-        val entry = versionMap?.valueArguments?.map { it.getArgumentExpression() as? KtBinaryExpression ?: error("Version overrides must be literal pairs.") }
-          ?.firstOrNull { it.left?.text == "\"$version\"" && it.operationReference.text == "to" }
+        val entries = versionMap?.valueArguments?.map {
+          val pair = it.getArgumentExpression() as? KtBinaryExpression ?: error("Version overrides must be literal pairs.")
+          val key = pair.left as? KtStringTemplateExpression ?: error("Version selectors must be literal strings.")
+          require(pair.operationReference.text == "to" && key.text.matches(Regex("\"[^\"${'$'}\\\\]*\""))) {
+            "Version overrides must use literal selectors."
+          }
+          key.text.removeSurrounding("\"") to pair
+        }.orEmpty()
+        require(entries.map { it.first }.toSet().size == entries.size) { "Duplicate version selector in $name expectation." }
+        val selector = if (versioned) version.takeIf { candidate -> entries.any { it.first == candidate } }
+          else selectCompilerVersion(entries.map { it.first }.toSet(), version)
+        val entry = entries.firstOrNull { it.first == selector }?.second
         when {
           entry != null -> setExpression(entry.right ?: error("Missing version expectation."), value)
           versioned && versionMap != null -> {

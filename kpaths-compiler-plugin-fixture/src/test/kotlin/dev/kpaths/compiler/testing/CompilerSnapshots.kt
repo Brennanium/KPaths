@@ -12,13 +12,14 @@ internal data class CompilerSnapshotKind(val name: String) {
   }
 }
 
-/** An inline default and exact compiler-version overrides, with no implicit version ordering. */
+/** An inline default and compiler-version overrides, including explicit ranges. */
 internal data class SnapshotExpectation(
   val default: String,
   val versions: Map<String, String> = emptyMap(),
   val missing: Boolean = false,
 ) {
-  fun forVersion(compilerVersion: String): String = versions[compilerVersion] ?: default
+  fun forVersion(compilerVersion: String): String =
+    selectCompilerVersion(versions.keys, compilerVersion)?.let { versions.getValue(it) } ?: default
 }
 
 /**
