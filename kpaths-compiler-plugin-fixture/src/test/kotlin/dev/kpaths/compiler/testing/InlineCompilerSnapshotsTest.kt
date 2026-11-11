@@ -25,7 +25,7 @@ class InlineCompilerSnapshotsTest {
     """.trimIndent()
     Files.writeString(file, original)
     assertFailsWith<IllegalArgumentException> {
-      InlineCompilerSnapshots.write(file, 2, mapOf(CompilerSnapshotKind.FIR to "updated"), "2.5.0-dev-10106", false)
+      InlineCompilerSnapshots.write(file, 2, mapOf(CompilerSnapshotKind.FIR to "updated"), "2.5.0-dev-42", false)
     }
     assertEquals(original, Files.readString(file))
   }
@@ -41,7 +41,7 @@ class InlineCompilerSnapshotsTest {
         )
       }
     """.trimIndent())
-    InlineCompilerSnapshots.write(file, 2, mapOf(CompilerSnapshotKind.FIR to "updated"), "2.5.0-dev-10106", false)
+    InlineCompilerSnapshots.write(file, 2, mapOf(CompilerSnapshotKind.FIR to "updated"), "2.5.0-dev-42", false)
     val updated = Files.readString(file)
     assertContains(updated, "\"2.5.*\" to \"\"\"")
     assertContains(updated, "updated")
@@ -60,10 +60,10 @@ class InlineCompilerSnapshotsTest {
         )
       }
     """.trimIndent())
-    InlineCompilerSnapshots.write(file, 2, mapOf(CompilerSnapshotKind.FIR to "specific"), "2.5.0-dev-10106", true)
+    InlineCompilerSnapshots.write(file, 2, mapOf(CompilerSnapshotKind.FIR to "specific"), "2.5.0", true)
     val updated = Files.readString(file)
     assertContains(updated, "\"2.5.*\" to \"range\"")
-    assertContains(updated, "\"2.5.0-dev-10106\" to")
+    assertContains(updated, "\"2.5.0\" to")
     assertContains(updated, "specific")
   }
   @Test

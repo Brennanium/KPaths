@@ -23,7 +23,7 @@ SnapshotExpectation(
   versions = mapOf(
     "2.4.*" to "Kotlin 2.4 output",
     ">=2.5.0 <2.6.0" to "Kotlin 2.5 stable output",
-    "2.5.0-dev-10106" to "one development build's output",
+    "2.5.0" to "one release's output",
   ),
 )
 ```
@@ -32,7 +32,7 @@ Use `major.minor.*` for a whole version family, or combine `>=`, `>`, `<=`, and 
 with spaces. Exact versions take precedence; two matching non-exact selectors are an error.
 No matching selector uses the default. Version ordering compares numeric components
 numerically; a prerelease sorts before its final release. Consequently `2.5.*` includes
-`2.5.0-dev-10106`, while `>=2.5.0` starts at the final release. Qualifier components are
+an illustrative version like `2.5.0-dev-42`, while `>=2.5.0` starts at the final release. Qualifier components are
 compared lexically (and numeric components numerically), so use explicit bounds where
 ordering between different preview naming schemes matters.
 

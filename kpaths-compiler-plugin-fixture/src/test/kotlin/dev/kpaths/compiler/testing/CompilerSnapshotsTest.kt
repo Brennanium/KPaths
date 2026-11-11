@@ -13,12 +13,12 @@ class CompilerSnapshotsTest {
   @Test
   fun `version selectors support wildcards comparisons and bounded ranges`() {
     val cases = listOf(
-      Triple("2.5.*", "2.5.0-dev-10106", true),
+      Triple("2.5.*", "2.5.0-dev-42", true),
       Triple("2.5.*", "2.5.4", true),
       Triple("2.5.*", "2.6.0", false),
-      Triple(">=2.5.0", "2.5.0-dev-10106", false),
+      Triple(">=2.5.0", "2.5.0-dev-42", false),
       Triple(">=2.5.0", "2.5.0", true),
-      Triple("<2.5.0", "2.5.0-dev-10106", true),
+      Triple("<2.5.0", "2.5.0-dev-42", true),
       Triple(">=2.4.20 <2.5.0", "2.4.21", true),
       Triple(">=2.4.20 <2.5.0", "2.5.0", false),
       Triple(">=2.5.0-dev-99", "2.5.0-dev-100", true),
@@ -32,9 +32,9 @@ class CompilerSnapshotsTest {
 
   @Test
   fun `exact overrides win over ranges and overlapping ranges are rejected`() {
-    val versions = mapOf("2.5.*" to "wildcard", ">=2.5.0-dev-1" to "range", "2.5.0-dev-10106" to "exact")
-    assertEquals("exact", SnapshotExpectation("default", versions).forVersion("2.5.0-dev-10106"))
-    assertFailsWith<IllegalArgumentException> { SnapshotExpectation("default", versions).forVersion("2.5.0-dev-10107") }
+    val versions = mapOf("2.5.*" to "wildcard", ">=2.5.0-dev-1" to "range", "2.5.0" to "exact")
+    assertEquals("exact", SnapshotExpectation("default", versions).forVersion("2.5.0"))
+    assertFailsWith<IllegalArgumentException> { SnapshotExpectation("default", versions).forVersion("2.5.0-dev-43") }
     assertFailsWith<IllegalArgumentException> { selectCompilerVersion(setOf("2.5.x"), "2.5.0") }
   }
 
@@ -44,7 +44,7 @@ class CompilerSnapshotsTest {
       CompilerSnapshotKind.FIR to SnapshotExpectation("default fir", mapOf("2.5.*" to "preview fir")),
       CompilerSnapshotKind.IR to SnapshotExpectation("default ir", mapOf(">=2.5.0" to "released ir")),
     )
-    assertCompilerSnapshots("source", "2.5.0-dev-10106", expected) { _, _, _ ->
+    assertCompilerSnapshots("source", "2.5.0-dev-42", expected) { _, _, _ ->
       mapOf(CompilerSnapshotKind.FIR to "preview fir", CompilerSnapshotKind.IR to "default ir")
     }
     assertCompilerSnapshots("source", "2.5.0", expected) { _, _, _ ->
@@ -99,16 +99,18 @@ class CompilerSnapshotsTest {
   }
 
   @Test
-  fun `exact overrides apply per phase and default applies to other versions`() {
+  fun `version-family overrides apply per phase and default applies to other versions`() {
     val expected = mapOf(
-      CompilerSnapshotKind.FIR to SnapshotExpectation("shared FIR", mapOf("2.5.0-dev-1" to "preview FIR")),
+      CompilerSnapshotKind.FIR to SnapshotExpectation("shared FIR", mapOf("2.5.*" to "2.5 FIR")),
       CompilerSnapshotKind.IR to SnapshotExpectation("shared IR", mapOf("2.4.20" to "older IR")),
     )
     for ((version, fir, ir) in listOf(
       Triple("2.4.20", "shared FIR", "older IR"),
       Triple("2.4.21", "shared FIR", "shared IR"),
-      Triple("2.5.0-dev-1", "preview FIR", "shared IR"),
-      Triple("2.5.0-dev-10", "shared FIR", "shared IR"),
+      Triple("2.5.0-dev-1", "2.5 FIR", "shared IR"),
+      Triple("2.5.0-dev-10", "2.5 FIR", "shared IR"),
+      Triple("2.5.0", "2.5 FIR", "shared IR"),
+      Triple("2.6.0", "shared FIR", "shared IR"),
     )) {
       assertCompilerSnapshots("  source", version, expected) { source, actualVersion, captures ->
         assertEquals("source", source)

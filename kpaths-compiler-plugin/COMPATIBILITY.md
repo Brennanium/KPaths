@@ -43,7 +43,7 @@ remain experimental until they pass and should not automatically expand the supp
 The separate `gradle/kpaths-preview-kotlin-versions.txt` tracks development builds for early
 warning. Run `python3 scripts/verify-compiler-compatibility.py --preview` to exercise the JVM
 consumer and compiler contracts against them; the corresponding CI job is non-blocking. A passing
-preview probe does not imply Native or IDE support. Kotlin 2.5.0-dev-10106 exposed changes to FIR
+preview probe does not imply Native or IDE support. A Kotlin 2.5 development build exposed changes to FIR
 type-parameter construction and lookup; KPaths uses a shared classifier factory to avoid depending
 on the old implementation class. Development artifacts are resolved from JetBrains' test
 repositories and may disappear or change availability.
