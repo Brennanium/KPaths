@@ -1,0 +1,133 @@
+name: KEFS Maven maintenance
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview only; turn off to update the durable branch and request a Pages deployment
+        type: boolean
+        default: true
+      replace_version:
+        description: Full Maven version to replace (requires an Actions run ID)
+        type: string
+      replacement_run_id:
+        description: Successful artifact-build run containing kefs-assembled-maven
+        type: string
+      delete_version:
+        description: Full Maven version to remove, including its files and metadata entry
+        type: string
+      delete_file:
+        description: Repository-relative nonessential file to remove
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Validate request and scripts
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          REF: ${{ github.ref }}
+          REPLACE: ${{ inputs.replace_version }}
+          RUN_ID: ${{ inputs.replacement_run_id }}
+          DELETE_VERSION: ${{ inputs.delete_version }}
+          DELETE_FILE: ${{ inputs.delete_file }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          if [ "$DRY_RUN" != true ] && [ "$REF" != refs/heads/main ]; then echo 'Applying maintenance requires main.' >&2; exit 1; fi
+          if [ -z "$REPLACE$DELETE_VERSION$DELETE_FILE" ]; then echo 'Choose at least one maintenance operation.' >&2; exit 1; fi
+          if [ -n "$REPLACE" ] && [[ ! "$RUN_ID" =~ ^[0-9]+$ ]]; then echo 'Replacement needs a numeric build run ID.' >&2; exit 1; fi
+          if [ -z "$REPLACE" ] && [ -n "$RUN_ID" ]; then echo 'A build run ID needs a replacement version.' >&2; exit 1; fi
+          if [ -n "$RUN_ID" ]; then
+            result=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID" --jq '[.conclusion, .path] | @tsv')
+            expected=$(printf 'success\t.github/workflows/kefs-ide-artifacts.yml')
+            if [ "$result" != "$expected" ]; then echo 'Replacement must come from a successful KEFS artifact build.' >&2; exit 1; fi
+          fi
+          python3 -m unittest scripts/test_verify_kefs_maven_repository.py scripts/test_assemble_kefs_maven_repository.py scripts/test_fetch_kefs_maven.py scripts/test_publish_kefs_maven.py
+      - name: Download replacement build
+        if: inputs.replace_version != ''
+        uses: actions/download-artifact@v6
+        with:
+          name: kefs-assembled-maven
+          path: ${{ runner.temp }}/replacement-source
+          run-id: ${{ inputs.replacement_run_id }}
+          github-token: ${{ github.token }}
+      - name: Prepare and validate maintenance preview
+        env:
+          REPLACE: ${{ inputs.replace_version }}
+          DELETE_VERSION: ${{ inputs.delete_version }}
+          DELETE_FILE: ${{ inputs.delete_file }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/fetch-kefs-maven.sh "$RUNNER_TEMP/current"
+          test -d "$RUNNER_TEMP/current" || { echo 'The durable Maven repository does not exist yet.' >&2; exit 1; }
+          repositories=("$RUNNER_TEMP/current")
+          options=()
+          if [ -n "$REPLACE" ]; then
+            python3 scripts/assemble-kefs-maven-repository.py --output "$RUNNER_TEMP/candidate" --select-version "$REPLACE" "$RUNNER_TEMP/replacement-source"
+            repositories+=("$RUNNER_TEMP/candidate")
+            options+=(--replace-version "$REPLACE")
+          fi
+          if [ -n "$DELETE_VERSION" ]; then options+=(--delete-version "$DELETE_VERSION"); fi
+          if [ -n "$DELETE_FILE" ]; then options+=(--delete-file "$DELETE_FILE"); fi
+          python3 scripts/assemble-kefs-maven-repository.py --output "$RUNNER_TEMP/preview" "${options[@]}" "${repositories[@]}"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: kefs-maintenance-preview
+          path: ${{ runner.temp }}/preview/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Retain the selected replacement for the apply job
+        if: inputs.replace_version != ''
+        uses: actions/upload-artifact@v6
+        with:
+          name: kefs-maintenance-candidate
+          path: ${{ runner.temp }}/candidate/
+          if-no-files-found: error
+          retention-days: 14
+
+  apply:
+    if: ${{ !inputs.dry_run }}
+    needs: preview
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    concurrency:
+      group: kpaths-kefs-maven-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - name: Download selected replacement
+        if: inputs.replace_version != ''
+        uses: actions/download-artifact@v6
+        with:
+          name: kefs-maintenance-candidate
+          path: ${{ runner.temp }}/candidate
+      - name: Apply to latest repository state
+        env:
+          REPLACE: ${{ inputs.replace_version }}
+          DELETE_VERSION: ${{ inputs.delete_version }}
+          DELETE_FILE: ${{ inputs.delete_file }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          incoming=-
+          options=()
+          if [ -n "$REPLACE" ]; then incoming="$RUNNER_TEMP/candidate"; options+=(--replace-version "$REPLACE"); fi
+          if [ -n "$DELETE_VERSION" ]; then options+=(--delete-version "$DELETE_VERSION"); fi
+          if [ -n "$DELETE_FILE" ]; then options+=(--delete-file "$DELETE_FILE"); fi
+          bash scripts/publish-kefs-maven.sh "$incoming" "${options[@]}"
+      - name: Request combined Pages update
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run docs.yml --ref main

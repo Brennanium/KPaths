@@ -16,7 +16,12 @@ def verify(repository: Path, ide_version: str, library_version: str) -> None:
     for value in (ide_version, library_version):
         if not re.fullmatch(r"[A-Za-z0-9]+(?:[.\-][A-Za-z0-9]+)*", value):
             raise ValueError(f"Invalid Maven version: {value!r}")
-    version = f"{ide_version}-{library_version}"
+    verify_version(repository, f"{ide_version}-{library_version}")
+
+
+def verify_version(repository: Path, version: str) -> None:
+    if not re.fullmatch(r"[A-Za-z0-9]+(?:[.\-][A-Za-z0-9]+)*", version):
+        raise ValueError(f"Invalid Maven version: {version!r}")
     artifact_dir = repository / Path(*GROUP.split(".")) / ARTIFACT
     metadata = ET.parse(artifact_dir / "maven-metadata.xml").getroot()
     if metadata.findtext("groupId") != GROUP or metadata.findtext("artifactId") != ARTIFACT:

@@ -17,6 +17,10 @@ on:
       - "kpaths-reflection-jvm/src/**"
       - "kpaths-reflection-jvm/build.gradle.kts"
       - "mkdocs.yml"
+      - "scripts/assemble-kefs-maven-repository.py"
+      - "scripts/verify-kefs-maven-repository.py"
+      - "scripts/fetch-kefs-maven.sh"
+      - "scripts/build-release-doc-snapshots.sh"
   workflow_dispatch:
 
 permissions:
@@ -49,21 +53,15 @@ jobs:
         run: ./gradlew docsBuild -PdocumentationVersion=main
       - name: Build release documentation snapshots
         shell: bash
+        run: bash scripts/build-release-doc-snapshots.sh
+      - name: Add the durable KEFS Maven repository
+        shell: bash
         run: |
-          set -euo pipefail
-          while IFS= read -r version; do
-            release_root="$RUNNER_TEMP/kpaths-docs-$version"
-            git worktree add --detach "$release_root" "$version"
-            (
-              cd "$release_root"
-              ./gradlew docsBuild \
-                -I "$GITHUB_WORKSPACE/gradle/documentation.init.gradle.kts" \
-                -PdocumentationVersion="$version"
-            )
-            mkdir -p "build/docs/site/$version"
-            cp -a "$release_root/build/docs/site/." "build/docs/site/$version/"
-            git worktree remove --force "$release_root"
-          done < <(git tag --list --sort=version:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
+          bash scripts/fetch-kefs-maven.sh "$RUNNER_TEMP/kpaths-maven"
+          if [ -d "$RUNNER_TEMP/kpaths-maven" ]; then
+            python3 scripts/assemble-kefs-maven-repository.py \
+              --output build/docs/site/maven "$RUNNER_TEMP/kpaths-maven"
+          fi
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:

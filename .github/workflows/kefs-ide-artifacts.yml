@@ -19,6 +19,13 @@ on:
         description: Experimentally launch the imported consumer in the IDE
         type: boolean
         default: false
+      replace_version:
+        description: In a dry run, explicitly preview replacing this full Maven version
+        type: string
+      publish:
+        description: Publish a tagged release to the durable Maven branch and update Pages
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -30,8 +37,28 @@ jobs:
       entries: ${{ steps.matrix.outputs.entries }}
     steps:
       - uses: actions/checkout@v6
+      - name: Check release request
+        if: inputs.publish
+        env:
+          TEST_VERSION: ${{ inputs.test_version }}
+          IDE_BUILD: ${{ inputs.ide_build }}
+          REPLACE_VERSION: ${{ inputs.replace_version }}
+          REF_TYPE: ${{ github.ref_type }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          test "$REF_TYPE" = tag && test "$REF_NAME" = "$TEST_VERSION" || {
+            echo 'Publishing requires selecting the matching release tag.' >&2; exit 1;
+          }
+          [[ "$TEST_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || {
+            echo 'Publishing requires a stable release version.' >&2; exit 1;
+          }
+          test "$IDE_BUILD" = all || { echo 'Publishing requires the full IDE matrix.' >&2; exit 1; }
+          test -z "$REPLACE_VERSION" || { echo 'Use the maintenance workflow to replace a published version.' >&2; exit 1; }
+          test "$(sed -n 's/^VERSION_NAME=//p' gradle.properties)" = "$TEST_VERSION" || {
+            echo 'The tagged VERSION_NAME must match the requested release.' >&2; exit 1;
+          }
       - name: Test repository verification utilities
-        run: python3 -m unittest scripts/test_prepare_kefs_ci_version.py scripts/test_verify_kefs_maven_repository.py
+        run: python3 -m unittest scripts/test_prepare_kefs_ci_version.py scripts/test_verify_kefs_maven_repository.py scripts/test_assemble_kefs_maven_repository.py scripts/test_fetch_kefs_maven.py scripts/test_publish_kefs_maven.py
       - id: matrix
         env:
           IDE_BUILD: ${{ inputs.ide_build || 'all' }}
@@ -65,6 +92,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Prepare temporary version
+        if: ${{ !inputs.publish }}
         env:
           TEST_VERSION: ${{ inputs.test_version || '0.2.0-ci.1' }}
         run: python3 scripts/prepare-kefs-ci-version.py "$TEST_VERSION"
@@ -119,3 +147,76 @@ jobs:
             # This is a disposable runner and no later step needs the disk image.
             hdiutil detach -force "$RUNNER_TEMP/studio"
           fi
+
+  assemble:
+    name: Assemble and verify combined site
+    needs: [matrix, verify]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v6
+        with:
+          pattern: kefs-maven-*
+          path: ${{ runner.temp }}/kefs-inputs
+      - name: Assemble Maven repository with existing versions
+        env:
+          REPLACE_VERSION: ${{ inputs.replace_version }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash scripts/fetch-kefs-maven.sh "$RUNNER_TEMP/kefs-existing"
+          bash scripts/assemble-kefs-artifacts.sh "$RUNNER_TEMP/kefs-inputs" "$RUNNER_TEMP/kefs-assembled" "$RUNNER_TEMP/kefs-existing" "$REPLACE_VERSION"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: kefs-assembled-maven
+          path: ${{ runner.temp }}/kefs-assembled/
+          if-no-files-found: error
+          retention-days: 14
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Build documentation and add Maven repository
+        shell: bash
+        run: |
+          python3 -m pip install -r docs/requirements.txt
+          ./gradlew docsBuild -PdocumentationVersion=main
+          bash scripts/build-release-doc-snapshots.sh
+          test -f build/docs/site/index.html
+          python3 scripts/assemble-kefs-maven-repository.py --output build/docs/site/maven "$RUNNER_TEMP/kefs-assembled"
+      - uses: actions/upload-artifact@v6
+        with:
+          name: kefs-combined-site-preview
+          path: build/docs/site/
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish Maven repository and request Pages update
+    if: inputs.publish
+    needs: assemble
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: write
+    concurrency:
+      group: kpaths-kefs-maven-publish
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@v6
+        with:
+          name: kefs-assembled-maven
+          path: ${{ runner.temp }}/kefs-incoming
+      - name: Merge against the latest durable repository and push
+        shell: bash
+        run: bash scripts/publish-kefs-maven.sh "$RUNNER_TEMP/kefs-incoming"
+      - name: Request combined documentation and Maven deployment
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run docs.yml --ref main
