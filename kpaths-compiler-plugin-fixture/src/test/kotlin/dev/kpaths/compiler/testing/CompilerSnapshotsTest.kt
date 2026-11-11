@@ -3,8 +3,59 @@ package dev.kpaths.compiler.testing
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
+import kotlin.test.assertFalse
+import java.nio.file.Files
+import java.nio.file.Path
+import org.junit.jupiter.api.io.TempDir
 
 class CompilerSnapshotsTest {
+  @Test
+  fun `missing recording can create a version override without replacing the shared expectation`() {
+    val expectation = SnapshotExpectation("shared", mapOf("2.4.20" to "older"))
+    assertTrue(shouldRecordSnapshot(expectation, "shared", "2.4.21", SnapshotRecording.MISSING, recordVersion = true))
+    assertFalse(shouldRecordSnapshot(expectation, "older", "2.4.20", SnapshotRecording.MISSING, recordVersion = true))
+    assertFalse(shouldRecordSnapshot(expectation, "shared", "2.4.21", SnapshotRecording.MISSING, recordVersion = false))
+    assertTrue(shouldRecordSnapshot(expectation, "changed", "2.4.21", SnapshotRecording.FAILED, recordVersion = false))
+  }
+  @Test
+  fun `file snapshots record explicitly and select exact version overrides`(@TempDir directory: Path) {
+    fun checkSnapshot(version: String, output: String, mode: SnapshotRecording = SnapshotRecording.NONE, versioned: Boolean = false) =
+      assertCompilerSnapshotFiles("source", version, directory, "example", setOf(CompilerSnapshotKind.FIR), mode, versioned) { _, _, _ ->
+        mapOf(CompilerSnapshotKind.FIR to output)
+      }
+    assertFailsWith<IllegalStateException> { checkSnapshot("2.4.20", "shared", SnapshotRecording.MISSING) }
+    checkSnapshot("2.4.21", "shared")
+    assertFailsWith<AssertionError> { checkSnapshot("2.4.21", "changed") }
+    assertFailsWith<IllegalStateException> { checkSnapshot("2.4.21", "specific", SnapshotRecording.ALL, versioned = true) }
+    checkSnapshot("2.4.21", "specific")
+    checkSnapshot("2.4.20", "shared")
+    assertEquals("shared\n", Files.readString(directory.resolve("example.fir.txt")))
+    assertEquals("specific\n", Files.readString(directory.resolve("example.2.4.21.fir.txt")))
+  }
+
+  @Test
+  fun `recording missing snapshots does not overwrite existing files`(@TempDir directory: Path) {
+    Files.writeString(directory.resolve("example.ir.txt"), "original\n")
+    assertFailsWith<AssertionError> {
+      assertCompilerSnapshotFiles("source", "2.4.21", directory, "example", setOf(CompilerSnapshotKind.IR), SnapshotRecording.MISSING) { _, _, _ ->
+        mapOf(CompilerSnapshotKind.IR to "changed")
+      }
+    }
+    assertEquals("original\n", Files.readString(directory.resolve("example.ir.txt")))
+  }
+
+  @Test
+  fun `recording never writes an incomplete set of captures`(@TempDir directory: Path) {
+    assertFailsWith<IllegalStateException> {
+      assertCompilerSnapshotFiles(
+        "source", "2.4.21", directory, "example", setOf(CompilerSnapshotKind.FIR, CompilerSnapshotKind.IR),
+        SnapshotRecording.ALL,
+      ) { _, _, _ -> mapOf(CompilerSnapshotKind.FIR to "only FIR") }
+    }
+    assertEquals(false, Files.exists(directory.resolve("example.fir.txt")))
+  }
+
   @Test
   fun `exact overrides apply per phase and default applies to other versions`() {
     val expected = mapOf(

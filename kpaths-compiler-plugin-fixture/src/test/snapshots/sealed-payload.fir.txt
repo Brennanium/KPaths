@@ -1,0 +1,9 @@
+KPaths resolved FIR callables
+
+fixture/Event.Paths.Idle.unit
+public final val unit: R|dev/kpaths/core/CaseKeyPath<fixture/Event, kotlin/Unit>|
+    public get(): R|dev/kpaths/core/CaseKeyPath<fixture/Event, kotlin/Unit>|
+
+fixture/Event.Paths.Message.text
+public final val text: R|dev/kpaths/core/CaseKeyPath<fixture/Event, kotlin/String>|
+    public get(): R|dev/kpaths/core/CaseKeyPath<fixture/Event, kotlin/String>|

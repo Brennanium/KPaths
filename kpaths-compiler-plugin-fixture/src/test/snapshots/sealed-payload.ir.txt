@@ -1,0 +1,49 @@
+KPaths post-generation IR
+
+class fixture.Event.Paths
+  extends dev.kpaths.core.CasePathCatalogBase<fixture.Event>
+  val Idle: fixture.Event.Paths.Idle
+  val Message: fixture.Event.Paths.Message
+  val allCasePaths: kotlin.collections.List<dev.kpaths.core.PartialCaseKeyPath<fixture.Event>>
+  fun __kpaths_buildAllCasePaths(): kotlin.collections.List<dev.kpaths.core.PartialCaseKeyPath<fixture.Event>>
+
+class fixture.Event.Paths.Idle
+  extends dev.kpaths.core.CaseKeyPathBase<fixture.Event, fixture.Event.Idle>
+  val __kpaths_id: dev.kpaths.core.PathId
+  val __kpaths_valueType: dev.kpaths.core.TypeId
+  val unit: dev.kpaths.core.CaseKeyPath<fixture.Event, kotlin.Unit>
+  fun embed(value: fixture.Event.Idle): fixture.Event
+  fun match(root: fixture.Event): dev.kpaths.core.CaseMatch<fixture.Event.Idle>
+
+class fixture.Event.Paths.Idle.__KPaths_unit_CasePath
+  extends dev.kpaths.core.CaseKeyPathBase<fixture.Event, kotlin.Unit>
+  val __kpaths_id: dev.kpaths.core.PathId
+  val __kpaths_valueType: dev.kpaths.core.TypeId
+  fun embed(value: kotlin.Unit): fixture.Event
+  fun match(root: fixture.Event): dev.kpaths.core.CaseMatch<kotlin.Unit>
+
+class fixture.Event.Paths.Message
+  extends dev.kpaths.core.CaseKeyPathBase<fixture.Event, fixture.Event.Message>
+  val __kpaths_id: dev.kpaths.core.PathId
+  val __kpaths_valueType: dev.kpaths.core.TypeId
+  val text: dev.kpaths.core.CaseKeyPath<fixture.Event, kotlin.String>
+  fun embed(value: fixture.Event.Message): fixture.Event
+  fun match(root: fixture.Event): dev.kpaths.core.CaseMatch<fixture.Event.Message>
+
+class fixture.Event.Paths.Message.__KPaths_text_CasePath
+  extends dev.kpaths.core.CaseKeyPathBase<fixture.Event, kotlin.String>
+  val __kpaths_id: dev.kpaths.core.PathId
+  val __kpaths_valueType: dev.kpaths.core.TypeId
+  fun embed(value: kotlin.String): fixture.Event
+  fun match(root: fixture.Event): dev.kpaths.core.CaseMatch<kotlin.String>
+
+class fixture.Event.Paths.MessagePaths
+  extends kotlin.Any
+  val text: dev.kpaths.core.KeyPath<fixture.Event.Message, kotlin.String>
+
+class fixture.Event.Paths.MessagePaths.__KPaths_text_Path
+  extends dev.kpaths.core.KeyPathBase<fixture.Event.Message, kotlin.String>
+  val __kpaths_id: dev.kpaths.core.PathId
+  val __kpaths_valueType: dev.kpaths.core.TypeId
+  fun get(root: fixture.Event.Message): kotlin.String
+  fun get(root: kotlin.Any): kotlin.Any

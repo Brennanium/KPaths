@@ -1,0 +1,5 @@
+KPaths resolved FIR callables
+
+fixture/Status.Paths.Offline
+public final val Offline: R|dev/kpaths/core/CaseKeyPath<fixture/Status, kotlin/Unit>|
+    public get(): R|dev/kpaths/core/CaseKeyPath<fixture/Status, kotlin/Unit>|

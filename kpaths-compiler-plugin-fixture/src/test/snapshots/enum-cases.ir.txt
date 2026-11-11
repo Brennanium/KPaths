@@ -1,0 +1,23 @@
+KPaths post-generation IR
+
+class fixture.Status.Paths
+  extends dev.kpaths.core.CasePathCatalogBase<fixture.Status>
+  val Offline: dev.kpaths.core.CaseKeyPath<fixture.Status, kotlin.Unit>
+  val Online: dev.kpaths.core.CaseKeyPath<fixture.Status, kotlin.Unit>
+  val allCasePaths: kotlin.collections.List<dev.kpaths.core.PartialCaseKeyPath<fixture.Status>>
+  val entries: dev.kpaths.core.KeyPath<fixture.Status, kotlin.enums.EnumEntries<fixture.Status>>
+  fun __kpaths_buildAllCasePaths(): kotlin.collections.List<dev.kpaths.core.PartialCaseKeyPath<fixture.Status>>
+
+class fixture.Status.Paths.__KPaths_Offline_CasePath
+  extends dev.kpaths.core.CaseKeyPathBase<fixture.Status, kotlin.Unit>
+  val __kpaths_id: dev.kpaths.core.PathId
+  val __kpaths_valueType: dev.kpaths.core.TypeId
+  fun embed(value: kotlin.Unit): fixture.Status
+  fun match(root: fixture.Status): dev.kpaths.core.CaseMatch<kotlin.Unit>
+
+class fixture.Status.Paths.__KPaths_Online_CasePath
+  extends dev.kpaths.core.CaseKeyPathBase<fixture.Status, kotlin.Unit>
+  val __kpaths_id: dev.kpaths.core.PathId
+  val __kpaths_valueType: dev.kpaths.core.TypeId
+  fun embed(value: kotlin.Unit): fixture.Status
+  fun match(root: fixture.Status): dev.kpaths.core.CaseMatch<kotlin.Unit>

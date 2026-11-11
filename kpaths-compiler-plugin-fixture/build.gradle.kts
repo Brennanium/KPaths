@@ -54,12 +54,19 @@ dependencies {
   add("jvmTestImplementation", gradleTestKit())
 }
 
+val snapshotRecording = providers.gradleProperty("kpaths.snapshotRecording")
+  .orElse(providers.environmentVariable("CI").map { if (it.isNotBlank() && !it.equals("false", ignoreCase = true)) "none" else "missing" })
+  .orElse("missing")
+
 tasks.named<Test>("jvmTest") {
+  systemProperty("idea.home.path", rootProject.projectDir.absolutePath)
   useJUnitPlatform {
     excludeTags("compiler-plugin-contract")
   }
   systemProperty("kpaths.projectDir", rootProject.projectDir.absolutePath)
   systemProperty("kpaths.testKotlinVersion", providers.gradleProperty("kpaths.testKotlinVersion").orElse(libs.versions.kotlin).get())
+  systemProperty("kpaths.snapshotRecording", snapshotRecording.get())
+  systemProperty("kpaths.snapshotRecordVersion", providers.gradleProperty("kpaths.snapshotRecordVersion").orElse("false").get())
 }
 
 val pathsPluginJar = project(":kpaths-compiler-plugin").tasks.named("jvmJar")
@@ -75,9 +82,11 @@ val contributorPluginFile = project(":kpaths-compiler-plugin-contributor")
 
 val jvmTest = tasks.named<Test>("jvmTest")
 tasks.register<Test>("compilerPluginContractTest") {
+  systemProperty("idea.home.path", rootProject.projectDir.absolutePath)
   group = "verification"
   description = "Runs downstream compiler-plugin API acceptance contracts."
   dependsOn("compileTestKotlinJvm", pathsPluginJar, contributorPluginJar)
+  inputs.dir(layout.projectDirectory.dir("src/test/snapshots"))
   testClassesDirs = jvmTest.get().testClassesDirs
   classpath = jvmTest.get().classpath
   useJUnitPlatform {
@@ -85,6 +94,8 @@ tasks.register<Test>("compilerPluginContractTest") {
   }
   systemProperty("kpaths.projectDir", rootProject.projectDir.absolutePath)
   systemProperty("kpaths.testKotlinVersion", providers.gradleProperty("kpaths.testKotlinVersion").orElse(libs.versions.kotlin).get())
+  systemProperty("kpaths.snapshotRecording", snapshotRecording.get())
+  systemProperty("kpaths.snapshotRecordVersion", providers.gradleProperty("kpaths.snapshotRecordVersion").orElse("false").get())
 }
 
 tasks.withType<KotlinCompilationTask<*>>().configureEach {

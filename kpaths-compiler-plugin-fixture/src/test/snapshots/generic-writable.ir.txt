@@ -1,0 +1,20 @@
+KPaths post-generation IR
+
+class fixture.Box.Paths
+  extends kotlin.Any
+  fun invoke(): fixture.Box.Paths.__kpaths_Catalog<T>
+  fun of(): fixture.Box.Paths.__kpaths_Catalog<T>
+  fun of(TType: kotlin.reflect.KClass<T>): fixture.Box.Paths.__kpaths_Catalog<T>
+  fun of(TTypeId: dev.kpaths.core.TypeId): fixture.Box.Paths.__kpaths_Catalog<T>
+
+class fixture.Box.Paths.__kpaths_Catalog
+  extends kotlin.Any
+  val value: dev.kpaths.core.WritableKeyPath<fixture.Box<T>, T>
+
+class fixture.Box.Paths.__kpaths_Catalog.__KPaths_value_Path
+  extends dev.kpaths.core.WritableKeyPathBase<fixture.Box<T>, T>
+  val __kpaths_id: dev.kpaths.core.PathId
+  val __kpaths_valueType: dev.kpaths.core.TypeId
+  fun get(root: fixture.Box<T>): T
+  fun get(root: kotlin.Any): kotlin.Any
+  fun set(root: fixture.Box<T>, value: T): fixture.Box<T>
