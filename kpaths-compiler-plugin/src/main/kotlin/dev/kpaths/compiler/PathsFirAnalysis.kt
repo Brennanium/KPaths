@@ -24,6 +24,9 @@ import org.jetbrains.kotlin.fir.declarations.FirResolvePhase
 import org.jetbrains.kotlin.fir.declarations.declaredProperties
 import org.jetbrains.kotlin.fir.expressions.FirAnnotation
 import org.jetbrains.kotlin.fir.expressions.FirLiteralExpression
+import org.jetbrains.kotlin.fir.expressions.FirAnnotationCall
+import org.jetbrains.kotlin.fir.expressions.FirNamedArgumentExpression
+import org.jetbrains.kotlin.fir.expressions.FirExpression
 import org.jetbrains.kotlin.fir.extensions.predicateBasedProvider
 import org.jetbrains.kotlin.fir.resolve.providers.symbolProvider
 import org.jetbrains.kotlin.fir.symbols.SymbolInternals
@@ -33,6 +36,7 @@ import org.jetbrains.kotlin.fir.types.ConeClassLikeType
 import org.jetbrains.kotlin.fir.types.FirResolvedTypeRef
 import org.jetbrains.kotlin.name.FqName
 import org.jetbrains.kotlin.name.Name
+import org.jetbrains.kotlin.text
 
 /** Session-scoped FIR queries shared by declaration-generation callbacks. */
 @OptIn(DirectDeclarationsAccess::class, ExperimentalKPathsCompilerApi::class, SymbolInternals::class)
@@ -57,7 +61,7 @@ internal class PathsFirAnalysis(private val session: FirSession) {
   fun FirClassSymbol<*>.generationOptions(): KPathsGenerationOptions? {
     session.kpaths.optionsFor(this)?.let { return it }
     fir.annotations.firstOrNull { it.classIdOrNull() == pathableAnnotationClassId }?.let { annotation ->
-      return KPathsGenerationOptions(copyWritableVals = annotation.booleanArgument("copyWritableVals"))
+      return KPathsGenerationOptions(copyWritableVals = annotation.booleanArgument("copyWritableVals", 1))
     }
     if (!session.predicateBasedProvider.matches(metaPathablePredicate, this)) return null
     val optIn = fir.annotations.firstNotNullOfOrNull { annotation ->
@@ -70,8 +74,29 @@ internal class PathsFirAnalysis(private val session: FirSession) {
       }
     }
     return KPathsGenerationOptions(
-      copyWritableVals = optIn?.booleanArgument("copyWritableVals") ?: false,
+      copyWritableVals = optIn?.booleanArgument("copyWritableVals", 0) ?: false,
     )
+  }
+
+  /** A nonliteral may be unresolved when FIR first asks us to generate path signatures. */
+  fun FirClassSymbol<*>.hasUnsupportedCopyWritableArgument(): Boolean {
+    if (session.kpaths.optionsFor(this) != null) return false
+    val direct = fir.annotations.firstOrNull { it.classIdOrNull() == pathableAnnotationClassId }
+    if (direct != null) return direct.kPathsArgument("copyWritableVals", 1)?.let { !it.isSourceBooleanLiteral() } ?: false
+    if (!session.predicateBasedProvider.matches(metaPathablePredicate, this)) return false
+    return fir.annotations.any { annotation ->
+      val annotationClass = annotation.classIdOrNull()
+        ?.let(session.symbolProvider::getClassLikeSymbolByClassId) as? FirClassSymbol<*>
+      val meta = annotationClass?.fir?.annotations?.firstOrNull { it.classIdOrNull() == kpathsPathableAnnotationClassId }
+      meta?.kPathsArgument("copyWritableVals", 0)?.let { !it.isSourceBooleanLiteral() } ?: false
+    }
+  }
+
+  private fun FirExpression.isSourceBooleanLiteral(): Boolean {
+    if (this !is FirLiteralExpression || value !is Boolean) return false
+    // Later FIR may fold a constant reference into a literal while retaining its original source.
+    val original = source?.text?.toString()?.trim() ?: return true
+    return original == "true" || original == "false"
   }
 
   fun FirClassSymbol<*>.primaryConstructorPropertyNames(): Set<Name> =
@@ -141,8 +166,19 @@ internal class PathsFirAnalysis(private val session: FirSession) {
   private fun FirAnnotation.classIdOrNull() =
     ((annotationTypeRef as? FirResolvedTypeRef)?.coneType as? ConeClassLikeType)?.lookupTag?.classId
 
-  private fun FirAnnotation.booleanArgument(name: String): Boolean =
-    (argumentMapping.mapping[Name.identifier(name)] as? FirLiteralExpression)?.value as? Boolean ?: false
+  internal fun FirAnnotation.kPathsArgument(name: String, position: Int): FirExpression? {
+    val mapped = argumentMapping.mapping[Name.identifier(name)]
+    if (mapped != null) return mapped
+    // Generated members can be requested before annotation argument mapping is resolved.
+    val arguments = (this as? FirAnnotationCall)?.argumentList?.arguments.orEmpty()
+    val named = arguments.filterIsInstance<FirNamedArgumentExpression>()
+      .firstOrNull { it.name.asString() == name }?.expression
+    val positional = arguments.takeWhile { it !is FirNamedArgumentExpression }.getOrNull(position)
+    return named ?: positional
+  }
+
+  private fun FirAnnotation.booleanArgument(name: String, position: Int): Boolean =
+    (kPathsArgument(name, position) as? FirLiteralExpression)?.value as? Boolean ?: false
 
   fun FirClassSymbol<*>.isGeneratedPaths(): Boolean =
     (origin as? FirDeclarationOrigin.Plugin)?.key == PathsDeclarationKey

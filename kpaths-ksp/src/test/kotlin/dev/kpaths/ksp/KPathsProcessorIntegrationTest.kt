@@ -9,6 +9,18 @@ import org.junit.jupiter.api.io.TempDir
 
 class KPathsProcessorIntegrationTest {
   @Test
+  fun `copy writable values accept a constant annotation argument`(@TempDir fixtureDirectory: Path) {
+    compileFixture(fixtureDirectory, "CopyWritableConstant.kt", """
+      package fixture
+      import dev.kpaths.annotations.Pathable
+      import dev.kpaths.core.WritableKeyPath
+      const val ENABLE_COPY_WRITES = true
+      @Pathable(copyWritableVals = ENABLE_COPY_WRITES) data class Note(val body: String)
+      val body: WritableKeyPath<Note, String> = NotePaths.body
+    """.trimIndent(), expectFailure = false)
+  }
+
+  @Test
   fun `declarative adapter reports invalid factory from dependency metadata`(@TempDir fixtureDirectory: Path) {
     val output = compileFixture(fixtureDirectory, "InvalidBinaryAdapter.kt", """
       package fixture

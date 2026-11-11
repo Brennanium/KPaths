@@ -14,6 +14,100 @@ import org.objectweb.asm.Opcodes
 
 class CompilerSnippetTest {
   @Test
+  fun `copy writable annotation applies to inferred path values`() {
+    val result = compileSnippet("InferredCopyWritable.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      @Pathable(copyWritableVals = true) data class Note(val body: String)
+      val body = Note.Paths.body
+      fun update(note: Note): Note = body.set(note, "new")
+      fun check(): Boolean {
+        val original = Note("old")
+        return update(original) == Note("new") && original.body == "old"
+      }
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.InferredCopyWritableKt").getMethod("check").invoke(null))
+  }
+
+  @Test
+  fun `copy writable inferred generic and case property paths update copies`() {
+    val result = compileSnippet("InferredCopyWritableCatalogs.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      @Pathable(copyWritableVals = true) data class Box<T>(val value: T)
+      @Pathable(copyWritableVals = true) sealed interface State {
+        data class Ready(val value: String) : State
+      }
+      val value = Box.Paths<String>().value
+      val readyValue = State.Paths.ReadyPaths.value
+      fun check(): Boolean = value.set(Box("old"), "new") == Box("new") &&
+        readyValue.set(State.Ready("old"), "new") == State.Ready("new")
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.InferredCopyWritableCatalogsKt").getMethod("check").invoke(null))
+  }
+
+  @Test
+  fun `copy writable annotation supports positional arguments`() {
+    val result = compileSnippet("CopyWritableArguments.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      @Pathable("", true) data class Positional(val value: String)
+      @Pathable(copyWritableVals = (true)) data class Parenthesized(val value: String)
+      val positional = Positional.Paths.value
+      val parenthesized = Parenthesized.Paths.value
+      fun check() = positional.set(Positional("old"), "new").value == "new" &&
+        parenthesized.set(Parenthesized("old"), "new").value == "new"
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.CopyWritableArgumentsKt").getMethod("check").invoke(null))
+  }
+
+  @Test
+  fun `copy writable constant in a meta annotation is diagnosed`() {
+    val result = compileSnippet("MetaCopyWritableConstant.kt" to """
+      package example
+      import dev.kpaths.annotations.KPathsPathable
+      const val ENABLE_COPY_WRITES = true
+      @KPathsPathable(copyWritableVals = ENABLE_COPY_WRITES)
+      @Target(AnnotationTarget.CLASS) annotation class Catalogued
+      @Catalogued data class Note(val body: String)
+      val path = Note.Paths.body
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages, "requires a literal true or false for copyWritableVals")
+  }
+
+  @Test
+  fun `copy writable meta annotation applies to inferred paths`() {
+    val result = compileSnippet("InferredMetaCopyWritable.kt" to """
+      package example
+      import dev.kpaths.annotations.KPathsPathable
+      @KPathsPathable(copyWritableVals = true)
+      @Target(AnnotationTarget.CLASS) annotation class Catalogued
+      @Catalogued data class Note(val body: String)
+      val body = Note.Paths.body
+      fun check(): Boolean = body.set(Note("old"), "new") == Note("new")
+    """)
+    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertEquals(true, result.classLoader.loadClass("example.InferredMetaCopyWritableKt").getMethod("check").invoke(null))
+  }
+
+  @Test
+  fun `copy writable constant reference is diagnosed rather than silently ignored`() {
+    val result = compileSnippet("CopyWritableConstant.kt" to """
+      package example
+      import dev.kpaths.annotations.Pathable
+      const val ENABLE_COPY_WRITES = true
+      @Pathable(copyWritableVals = ENABLE_COPY_WRITES) data class Note(val body: String)
+      val path = Note.Paths.body
+    """)
+    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertContains(result.messages, "requires a literal true or false for copyWritableVals")
+  }
+
+  @Test
   fun `externally synthesized properties diagnose invalid declarative factories`() {
     val result = compileSnippetWithContributor("InvalidSynthetic.kt" to """
       package dev.kpaths.compiler.fixture

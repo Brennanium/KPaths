@@ -69,6 +69,11 @@ val nativeReaderPath: BinaryReaderPath<NativeReaderDocument<String?>, String?> =
 @Pathable
 data class NativePerson(val name: String)
 
+@Pathable(copyWritableVals = true)
+data class NativeCopyNote(val body: String)
+
+val nativeInferredCopyPath = NativeCopyNote.Paths.body
+
 @Pathable
 data class NativeBox<T>(var value: T)
 

@@ -10,6 +10,13 @@ import kotlin.test.assertEquals
 
 class NativeGeneratedPathsTest {
   @Test
+  fun inferredCopyWritablePathUpdatesANewValue() {
+    val original = NativeCopyNote("old")
+    assertEquals(NativeCopyNote("new"), nativeInferredCopyPath.set(original, "new"))
+    assertEquals(NativeCopyNote("old"), original)
+  }
+
+  @Test
   fun generatedDraftPathsUseTrackingSettersAndCopyOriginalValues() {
     val original = TrackedRecord("Original", RecordAddress("First"))
     val copied = nativeOriginalNamePath.set(original, "Copy")

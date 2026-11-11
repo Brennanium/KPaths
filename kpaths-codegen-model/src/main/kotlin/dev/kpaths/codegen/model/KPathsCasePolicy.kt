@@ -49,6 +49,10 @@ public fun isKPathsGenericVariantOfConcreteRoot(rootHasTypeParameters: Boolean, 
 
 /** Shared, frontend-independent wording for KPaths generation diagnostics. */
 public object KPathsDiagnostics {
+  public fun nonliteralCopyWritableVals(): String =
+    "The compiler plugin requires a literal true or false for copyWritableVals because its " +
+      "value is needed before constant references can be resolved. Replace the expression with a literal."
+
   public fun ambiguousCompanion(): String =
     "An unnamed `companion object` must be the final member of an @Pathable declaration. " +
       "Move it to the end of the class body, or use a named companion or `companion object {}`."

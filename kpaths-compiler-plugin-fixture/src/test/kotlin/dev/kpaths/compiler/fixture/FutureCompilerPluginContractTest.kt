@@ -46,22 +46,23 @@ class FutureCompilerPluginContractTest {
         KPaths resolved FIR callables
 
         fixture/Note.Paths.body
-        public final val body: R|dev/kpaths/core/KeyPath<fixture/Note, kotlin/String>|
-            public get(): R|dev/kpaths/core/KeyPath<fixture/Note, kotlin/String>|
+        public final val body: R|dev/kpaths/core/WritableKeyPath<fixture/Note, kotlin/String>|
+            public get(): R|dev/kpaths/core/WritableKeyPath<fixture/Note, kotlin/String>|
         """),
       ir = SnapshotExpectation("""
         KPaths post-generation IR
 
         class fixture.Note.Paths
           extends kotlin.Any
-          val body: dev.kpaths.core.KeyPath<fixture.Note, kotlin.String>
+          val body: dev.kpaths.core.WritableKeyPath<fixture.Note, kotlin.String>
 
         class fixture.Note.Paths.__KPaths_body_Path
-          extends dev.kpaths.core.KeyPathBase<fixture.Note, kotlin.String>
+          extends dev.kpaths.core.WritableKeyPathBase<fixture.Note, kotlin.String>
           val __kpaths_id: dev.kpaths.core.PathId
           val __kpaths_valueType: dev.kpaths.core.TypeId
           fun get(root: fixture.Note): kotlin.String
           fun get(root: kotlin.Any): kotlin.Any
+          fun set(root: fixture.Note, value: kotlin.String): fixture.Note
         """),
     )
   }

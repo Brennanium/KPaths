@@ -80,6 +80,7 @@ internal object PathsDiagnostics : KtDiagnosticsContainer() {
   val AMBIGUOUS_COMPANION by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
   val INVALID_PATHS_ADAPTER by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
   val INVALID_GENERATED_PATHS_ADAPTER by error1<KtElement, String>(SourceElementPositioningStrategies.DEFAULT)
+  val NONLITERAL_COPY_WRITABLE_VALS by error1<KtElement, String>(SourceElementPositioningStrategies.DECLARATION_NAME)
 
   override fun getRendererFactory(): BaseDiagnosticRendererFactory = Renderers
 
@@ -97,6 +98,7 @@ internal object PathsDiagnostics : KtDiagnosticsContainer() {
       it.put(AMBIGUOUS_COMPANION, "{0}", CommonRenderers.STRING)
       it.put(INVALID_PATHS_ADAPTER, "{0}", CommonRenderers.STRING)
       it.put(INVALID_GENERATED_PATHS_ADAPTER, "{0}", CommonRenderers.STRING)
+      it.put(NONLITERAL_COPY_WRITABLE_VALS, "{0}", CommonRenderers.STRING)
     }
   }
 }
@@ -161,6 +163,10 @@ internal class PathsDiagnosticCheckers(private val pluginSession: FirSession) : 
       } || pluginSession.kpaths.optionsFor(declaration.symbol) != null ||
         pluginSession.predicateBasedProvider.matches(metaPathablePredicate, declaration.symbol)
       if (!isPathable) return
+      if (with(PathsFirAnalysis(pluginSession)) { declaration.symbol.hasUnsupportedCopyWritableArgument() }) {
+        reporter.reportOn(declaration.source, PathsDiagnostics.NONLITERAL_COPY_WRITABLE_VALS,
+          "[KPaths] ${KPathsDiagnostics.nonliteralCopyWritableVals()}")
+      }
       val companion = declaration.declarations.filterIsInstance<FirRegularClass>()
         .firstOrNull { it.status.isCompanion }
       val rootSource = declaration.source

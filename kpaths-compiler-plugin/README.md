@@ -3,6 +3,8 @@
 This module is a deliberately scoped K2 compiler-plugin implementation. It is not yet a
 published KPaths module and has no production API.
 
+See the [KSP parity audit](PARITY.md) for covered behavior, known differences, and release decisions.
+
 It proves that a `FirDeclarationGenerationExtension` can discover a source-visible `@Pathable`
 declaration through FIR's predicate index and synthesize a *real* nested `Paths` object:
 
@@ -289,6 +291,10 @@ the canonical associated-value paths for object cases and cases with one to thre
 Cases without a supported canonical payload are omitted, so `case` can fail for those cases;
 the plugin warns when it generates an incomplete catalog. Broader diagnostics and conformance
 coverage remain future work.
+In compiler-plugin mode, source annotations must spell `copyWritableVals` with a literal `true` or
+`false`, rather than a `const val` reference. FIR can request generated signatures before constant
+references are resolved; the plugin reports an error instead of silently producing a read-only path.
+KSP mode continues to support constant annotation arguments.
 `@PathsAdapter` establishes the binary metadata contract and factory lookup. Explicit catalog
 requests can supply compiler-side adapters; automatic integration-wide registration of those
 lower-level IR adapters and broader adapter validation remain future work.
