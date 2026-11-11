@@ -1,0 +1,111 @@
+name: KEFS IDE artifacts (draft)
+
+on:
+  push:
+    branches: ['ci/kefs-artifacts/**']
+  workflow_dispatch:
+    inputs:
+      test_version:
+        description: KPaths version to use in this disposable CI build
+        type: string
+        default: 0.2.0-ci.1
+        required: true
+      ide_build:
+        description: IDE build from the matrix, or all
+        type: string
+        default: all
+        required: true
+      ide_probe:
+        description: Experimentally launch the imported consumer in the IDE
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      entries: ${{ steps.matrix.outputs.entries }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Test temporary version preparation
+        run: python3 -m unittest scripts/test_prepare_kefs_ci_version.py
+      - id: matrix
+        env:
+          IDE_BUILD: ${{ inputs.ide_build || 'all' }}
+        run: |
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os, re
+          from pathlib import Path
+          entries = json.loads(Path('kpaths-kefs-ide-fixture/ide-compatibility.json').read_text())['tested']
+          builds = [entry['build'] for entry in entries]
+          if not builds or len(builds) != len(set(builds)):
+              raise SystemExit('IDE matrix must contain distinct builds')
+          entries = [entry for entry in entries if os.environ['IDE_BUILD'] in ('all', entry['build'])]
+          if not entries:
+              raise SystemExit('No IDE build matched the requested filter')
+          for entry in entries:
+              ci = entry['ci']
+              if not re.fullmatch(r'[0-9a-f]{64}', ci['sha256']) or not ci['downloadUrl'].startswith('https://'):
+                  raise SystemExit('Each IDE needs a valid HTTPS download and SHA-256')
+          print('entries=' + json.dumps(entries, separators=(',', ':')))
+          PY
+
+  verify:
+    name: ${{ matrix.ide.product }} ${{ matrix.ide.build }}
+    needs: matrix
+    runs-on: ${{ matrix.ide.ci.runner }}
+    timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        ide: ${{ fromJSON(needs.matrix.outputs.entries) }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Prepare temporary version
+        env:
+          TEST_VERSION: ${{ inputs.test_version || '0.2.0-ci.1' }}
+        run: python3 scripts/prepare-kefs-ci-version.py "$TEST_VERSION"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Record IDE test JDK
+        run: echo "KPATHS_JDK25=$JAVA_HOME" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Download and verify Android Studio
+        env:
+          IDE_URL: ${{ matrix.ide.ci.downloadUrl }}
+          IDE_SHA256: ${{ matrix.ide.ci.sha256 }}
+        run: |
+          curl --fail --location --retry 3 "$IDE_URL" --output "$RUNNER_TEMP/studio.dmg"
+          echo "$IDE_SHA256  $RUNNER_TEMP/studio.dmg" | shasum -a 256 -c
+          mkdir -p "$RUNNER_TEMP/studio"
+          hdiutil attach -readonly -nobrowse -mountpoint "$RUNNER_TEMP/studio" "$RUNNER_TEMP/studio.dmg"
+      - name: Build and verify the IDE artifact
+        env:
+          IDE_PROBE: ${{ inputs.ide_probe }}
+        run: |
+          export GRADLE_OPTS="-Dorg.gradle.java.installations.paths=$KPATHS_JDK25"
+          args=()
+          if [ "$IDE_PROBE" = true ]; then args+=(--ide-probe); fi
+          python3 scripts/verify-kefs-compatibility.py --ide-path "$RUNNER_TEMP/studio/Android Studio.app" "${args[@]}"
+      - name: Save the verified local Maven repository
+        uses: actions/upload-artifact@v6
+        with:
+          name: kefs-maven-${{ matrix.ide.build }}
+          path: kpaths-kefs-ide-fixture/build/kefs-repository/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Unmount Android Studio
+        if: always()
+        run: |
+          if mount | grep -Fq " on $RUNNER_TEMP/studio "; then
+            hdiutil detach "$RUNNER_TEMP/studio"
+          fi

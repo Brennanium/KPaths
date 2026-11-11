@@ -1,5 +1,8 @@
 # KEFS integration experiment
 
+For the proposed release repository and the non-publishing CI draft, see
+[IDE artifact release strategy](ide-artifact-release-strategy.md).
+
 This standalone test project installs Kotlin External FIR Support (KEFS) 0.5.0-262 into an
 isolated Android Studio test sandbox. It does not install or change the plugin in the user's IDE.
 

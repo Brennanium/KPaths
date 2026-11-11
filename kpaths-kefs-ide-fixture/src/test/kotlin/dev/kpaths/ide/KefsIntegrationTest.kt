@@ -3,6 +3,7 @@ package dev.kpaths.ide
 import com.intellij.ide.plugins.PluginManagerCore
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.extensions.PluginId
+import com.intellij.openapi.vfs.newvfs.impl.VfsRootAccess
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.testFramework.PsiTestUtil
 import com.intellij.testFramework.PlatformTestUtil
@@ -77,9 +78,10 @@ class KefsIntegrationTest : BasePlatformTestCase() {
     assertFalse("KEFS must substitute the contributor IDE build", contributorRequested == resolvedContributor)
     assertEquals("KEFS must resolve the IDE-compatible KPaths artifact", -1L, Files.mismatch(ideArtifact, resolvedKPaths))
     assertEquals("KEFS must resolve the IDE-compatible contributor artifact", -1L, Files.mismatch(ideContributor, resolvedContributor))
-    PsiTestUtil.addLibrary(myFixture.module, checkNotNull(System.getProperty("kpaths.ideKotlinStdlib")))
-    PsiTestUtil.addLibrary(myFixture.module, checkNotNull(System.getProperty("kpaths.coreJar")))
-    PsiTestUtil.addLibrary(myFixture.module, checkNotNull(System.getProperty("kpaths.annotationsJar")))
+    val libraries = listOf("kpaths.ideKotlinStdlib", "kpaths.coreJar", "kpaths.annotationsJar")
+      .map { checkNotNull(System.getProperty(it)) }
+    VfsRootAccess.allowRootAccess(testRootDisposable, *libraries.toTypedArray())
+    libraries.forEach { PsiTestUtil.addLibrary(myFixture.module, it) }
     KotlinCommonCompilerArgumentsHolder.getInstance(project).update { pluginClasspaths = arrayOf(requested.toString(), contributorRequested.toString()) }
     val scenario = System.getProperty("kpaths.kefsScenario", "full")
     val code = when (scenario) {

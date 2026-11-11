@@ -4,7 +4,12 @@
       "product": "Android Studio",
       "build": "262.10968.63.2622.16730706",
       "kotlinIdeVersion": "2.4.20-ij262-52",
-      "kefsVersion": "0.5.0-262"
+      "kefsVersion": "0.5.0-262",
+      "ci": {
+        "runner": "macos-15",
+        "downloadUrl": "https://edgedl.me.gvt1.com/android/studio/install/2026.2.2.8/android-studio-rabbit2-mac_arm.dmg",
+        "sha256": "a0d0672b06119cd304867c157c252496883625efbaa21dee2d8637879c327713"
+      }
     }
   ]
 }
