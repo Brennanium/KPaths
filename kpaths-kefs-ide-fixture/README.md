@@ -44,6 +44,10 @@ requested artifact version to the compiler version reported by KEFS, so an artif
 under a mismatched IDE version through this workflow. This verification assumes Gradle's normal
 task dependencies are not explicitly bypassed.
 
+The separate [artifact reuse research](range-compatibility-research.md) records experiments with
+two IDE compiler builds, an older IDE's case-inlay failure, and KEFS's internal DevKit detection.
+Those experiments do not expand the supported matrix or change the publication format.
+
 ## Consumer setup after publication
 
 Once an IDE-compatible KPaths artifact is published to Maven Central, an IDE user can install

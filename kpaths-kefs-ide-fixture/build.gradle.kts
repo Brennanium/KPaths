@@ -1,4 +1,5 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.util.Properties
 
 plugins {
@@ -53,6 +54,12 @@ val ideCompilerPlugin = sourceSets.create("ideCompilerPlugin") {
 }
 tasks.named<KotlinCompile>("compileIdeCompilerPluginKotlin") {
   compilerOptions.freeCompilerArgs.add("-opt-in=org.jetbrains.kotlin.compiler.plugin.ExperimentalCompilerApi")
+  providers.gradleProperty("kpaths.idePluginJvmTarget").orNull?.let {
+    compilerOptions.jvmTarget.set(JvmTarget.fromTarget(it))
+  }
+}
+tasks.named<JavaCompile>("compileIdeCompilerPluginJava") {
+  providers.gradleProperty("kpaths.idePluginJvmTarget").orNull?.let { options.release.set(it.toInt()) }
 }
 val ideCompilerPluginJar = tasks.register<Jar>("ideCompilerPluginJar") {
   archiveFileName = "kpaths-ide-compiler-plugin.jar"
@@ -92,6 +99,9 @@ tasks.withType<PublishToMavenRepository>().configureEach {
 }
 
 tasks.test {
+  if (!providers.gradleProperty("kpaths.rangeTaggedCandidateJar").isPresent) {
+    exclude("**/KefsRangeTaggedJarTest.class")
+  }
   forkEvery = 1
   dependsOn(ideCompilerPluginJar)
   inputs.file(ideCompilerPluginJar.flatMap { it.archiveFile })
@@ -106,6 +116,19 @@ tasks.test {
   systemProperty("kpaths.coreJar", coreJar.absolutePath)
   systemProperty("kpaths.annotationsJar", annotationsJar.absolutePath)
   systemProperty("kpaths.ideCompilerPluginJar", ideCompilerPluginJar.flatMap { it.archiveFile }.get().asFile.absolutePath)
+  providers.gradleProperty("kpaths.ideCandidateJar").orNull?.let {
+    inputs.file(file(it))
+    systemProperty("kpaths.ideCandidateJar", file(it).absolutePath)
+  }
+  providers.gradleProperty("kpaths.rangeTaggedCandidateJar").orNull?.let {
+    inputs.file(file(it))
+    systemProperty("kpaths.rangeTaggedCandidateJar", file(it).absolutePath)
+  }
+  providers.gradleProperty("kpaths.untaggedCandidateJar").orNull?.let {
+    inputs.file(file(it))
+    systemProperty("kpaths.untaggedCandidateJar", file(it).absolutePath)
+  }
+  systemProperty("kpaths.kefsScenario", providers.gradleProperty("kpaths.kefsScenario").orElse("full").get())
   systemProperty("kpaths.ideKotlinStdlib", ideKotlinStdlib.singleFile.absolutePath)
   ideKotlinVersion.orNull?.let { systemProperty("kpaths.expectedIdeKotlinVersion", it) }
 }
@@ -114,6 +137,14 @@ tasks.test {
 // that IDE's compiler version. The test asks KEFS for the version rather than trusting a label.
 tasks.named("publishIdeCompilerPluginPublicationToKefsLocalRepository") {
   dependsOn(tasks.test)
+  doFirst {
+    require(!providers.gradleProperty("kpaths.ideCandidateJar").isPresent &&
+      !providers.gradleProperty("kpaths.rangeTaggedCandidateJar").isPresent &&
+      !providers.gradleProperty("kpaths.untaggedCandidateJar").isPresent &&
+      providers.gradleProperty("kpaths.kefsScenario").orElse("full").get() == "full") {
+      "Experimental candidate or partial-scenario tests cannot certify a published IDE artifact."
+    }
+  }
 }
 
 intellijPlatform { buildSearchableOptions = false; instrumentCode = false }

@@ -34,7 +34,8 @@ class KefsIntegrationTest : BasePlatformTestCase() {
     Files.copy(Path.of(checkNotNull(System.getProperty("kpaths.buildCompilerPluginJar"))), requested, StandardCopyOption.REPLACE_EXISTING)
     val ideArtifact = artifactDir.resolve("$ideVersion-$testVersion/kpaths-compiler-plugin-jvm-$ideVersion-$testVersion.jar")
     Files.createDirectories(ideArtifact.parent)
-    Files.copy(Path.of(checkNotNull(System.getProperty("kpaths.ideCompilerPluginJar"))), ideArtifact, StandardCopyOption.REPLACE_EXISTING)
+    val candidate = Path.of(System.getProperty("kpaths.ideCandidateJar") ?: checkNotNull(System.getProperty("kpaths.ideCompilerPluginJar")))
+    Files.copy(candidate, ideArtifact, StandardCopyOption.REPLACE_EXISTING)
     Files.writeString(artifactDir.resolve("maven-metadata.xml"), """
       <metadata><groupId>io.github.brennanium</groupId><artifactId>kpaths-compiler-plugin-jvm</artifactId>
       <versioning><versions><version>$ideVersion-$testVersion</version></versions></versioning></metadata>
@@ -80,7 +81,23 @@ class KefsIntegrationTest : BasePlatformTestCase() {
     PsiTestUtil.addLibrary(myFixture.module, checkNotNull(System.getProperty("kpaths.coreJar")))
     PsiTestUtil.addLibrary(myFixture.module, checkNotNull(System.getProperty("kpaths.annotationsJar")))
     KotlinCommonCompilerArgumentsHolder.getInstance(project).update { pluginClasspaths = arrayOf(requested.toString(), contributorRequested.toString()) }
-    myFixture.configureByText("Consumer.kt", """
+    val scenario = System.getProperty("kpaths.kefsScenario", "full")
+    val code = when (scenario) {
+      "properties" -> """
+        package dev.kpaths.compiler.fixture
+        import dev.kpaths.annotations.Pathable
+        import dev.kpaths.core.*
+        @Pathable data class Person(var name: String)
+        val name: WritableKeyPath<Person, String> = Person.Paths.name
+      """
+      "cases" -> """
+        package dev.kpaths.compiler.fixture
+        import dev.kpaths.annotations.Pathable
+        import dev.kpaths.core.*
+        @Pathable sealed interface Event { data class Message(val text: String) : Event }
+        val text: CaseKeyPath<Event, String> = Event.Paths.Message.text
+      """
+      "full" -> """
       package dev.kpaths.compiler.fixture
       import dev.kpaths.annotations.Pathable
       import dev.kpaths.core.*
@@ -92,7 +109,10 @@ class KefsIntegrationTest : BasePlatformTestCase() {
       class DraftAddress
       val draftName: ReferenceWritableKeyPath<TrackedRecord.Draft, String> = TrackedRecord.Draft.Paths.name
       val address: ReferenceWritableKeyPath<TrackedRecord.Draft, DraftAddress> = TrackedRecord.Draft.Paths.address
-    """.trimIndent())
+      """
+      else -> error("Unknown KEFS test scenario: $scenario")
+    }
+    myFixture.configureByText("Consumer.kt", code.trimIndent())
     val errors = myFixture.doHighlighting().filter { it.severity == HighlightSeverity.ERROR }.map { it.description }
       .filterNot { it.contains("MISSING_DEPENDENCY") }
     assertEmpty(errors)
