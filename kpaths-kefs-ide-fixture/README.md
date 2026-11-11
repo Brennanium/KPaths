@@ -131,3 +131,34 @@ repeating with `configure-consumer.py disabled` and `-Pkpaths.consumerExpected=d
 `PASS (disabled)`. `WAITING` and `TIMEOUT` indicate that the expected result was not established.
 The run task clears the previous report at startup. The probe runs only in this fixture sandbox and
 does not change the user's installed IDE or its settings.
+
+## Remote Maven resolution experiment
+
+An opt-in fixture checks the real KEFS URL repository lookup against a separately published HTTPS
+Maven repository, using exact library-version matching and comparing the resolved JAR byte-for-byte
+with the expected IDE artifact. On Android Studio 2026.2.2 with KEFS 0.5.0-262, this succeeded
+against a [temporary GitHub-hosted repository](https://github.com/Brennanium/KPaths/tree/ci/kefs-remote-lookup-2cec72baeb)
+with library version `0.2.0-remote2cec72baeb` and IDE compiler version `2.4.20-ij262-52`.
+Its metadata included decoy library and IDE versions. This is an experiment, not a released KPaths
+version or a supported repository for consumers.
+
+The initial test publication omitted the JAR checksum: KEFS found the correct version but
+refused the download because its `.md5` file was missing. Gradle's Maven publication produces this
+file; retain it when assembling and hosting the IDE repository. The published test was updated with
+checksums before the successful retry. The fixture checks remote resolution, not an imported IDE
+project or automatic KEFS configuration.
+
+To repeat the test, publish a **fresh unique version** of an IDE-compatible JAR and Maven metadata
+to an HTTPS repository, and pass the repository URL, version, and original local JAR for comparison:
+
+```sh
+./gradlew -p kpaths-kefs-ide-fixture test --tests '*KefsRemoteRepositoryTest' \
+  -Pkpaths.idePath="/path/to/Android Studio.app" \
+  -Pkpaths.ideKotlinVersion=2.4.20-ij262-52 -Pkpaths.kefsVersion=0.5.0-262 \
+  -Pkpaths.remoteRepositoryUrl=https://example.com/test-maven \
+  -Pkpaths.remoteTestVersion=0.2.0-remote-unique \
+  -Pkpaths.remoteExpectedJar=/path/to/the-original-ide-plugin.jar
+```
+
+KEFS caches resolved artifacts, so changing the version for each experiment is necessary to prove a
+fresh remote fetch. The fixture is excluded from ordinary test runs unless a remote URL is supplied.

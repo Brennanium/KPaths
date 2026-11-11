@@ -102,6 +102,15 @@ tasks.test {
   if (!providers.gradleProperty("kpaths.rangeTaggedCandidateJar").isPresent) {
     exclude("**/KefsRangeTaggedJarTest.class")
   }
+  if (!providers.gradleProperty("kpaths.remoteRepositoryUrl").isPresent) {
+    exclude("**/KefsRemoteRepositoryTest.class")
+  } else {
+    // Remote availability is part of this opt-in experiment; do not reuse a Gradle test result.
+    outputs.upToDateWhen { false }
+  }
+  listOf("remoteRepositoryUrl", "remoteTestVersion", "remoteExpectedJar").forEach { name ->
+    providers.gradleProperty("kpaths.$name").orNull?.let { systemProperty("kpaths.$name", it) }
+  }
   forkEvery = 1
   dependsOn(ideCompilerPluginJar)
   inputs.file(ideCompilerPluginJar.flatMap { it.archiveFile })
