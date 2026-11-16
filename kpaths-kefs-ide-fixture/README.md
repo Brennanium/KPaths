@@ -43,6 +43,8 @@ disk image, verifies its SHA-256 checksum, and mounts it read-only. `--ide-path`
 installed copy and verifies that it matches the requested release. It selects a compatible stable
 KEFS Marketplace release and reads KEFS's bundled mapping to resolve Android Studio's Kotlin
 compiler. The fixture independently checks that KEFS reports the same compiler version.
+For a recorded IDE build, the runner uses the tested KEFS version; `--latest-kefs` instead probes
+the newest compatible Marketplace version. Unlisted builds use the newest compatible version.
 
 The default run includes the imported consumer probe with KEFS enabled and disabled; use
 `--skip-ide-probe` for the faster highlighting fixture only. Use `--report-json <file>` to save

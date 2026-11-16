@@ -1,0 +1,111 @@
+name: IDE compatibility
+
+on:
+  pull_request:
+    paths-ignore: ['**/*.md']
+  push:
+    branches: [main, 'ci/ide-compatibility/**']
+    paths-ignore: ['**/*.md']
+  workflow_dispatch:
+    inputs:
+      versions:
+        description: Space- or comma-separated Android Studio versions, builds, or latest-stable
+        type: string
+        required: false
+  schedule:
+    - cron: '23 9 * * 2'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ide-compatibility-${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  matrix:
+    name: Select IDE versions
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.select.outputs.versions }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Test IDE matrix and runner helpers
+        run: python3 -m unittest scripts/test_ide_compatibility_matrix.py scripts/test_verify_android_studio_version.py scripts/test_verify_kefs_compatibility.py
+      - name: Select IDE matrix
+        id: select
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REQUESTED_VERSIONS: ${{ inputs.versions }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$EVENT_NAME" = schedule ]; then REQUESTED_VERSIONS=latest-stable; fi
+          versions=$(python3 scripts/ide_compatibility_matrix.py --event "$EVENT_NAME" --versions "$REQUESTED_VERSIONS")
+          echo "versions=$versions" >> "$GITHUB_OUTPUT"
+          echo "### Android Studio test selectors" >> "$GITHUB_STEP_SUMMARY"
+          echo "\`$versions\`" >> "$GITHUB_STEP_SUMMARY"
+
+  ide:
+    name: Android Studio ${{ matrix.version }}
+    needs: matrix
+    runs-on: macos-15
+    timeout-minutes: 90
+    continue-on-error: ${{ github.event_name == 'schedule' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        version: ${{ fromJSON(needs.matrix.outputs.versions) }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Record IDE toolchain
+        run: echo "KPATHS_JDK25=$JAVA_HOME" >> "$GITHUB_ENV"
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Test IDE and imported consumer
+        env:
+          IDE_SELECTOR: ${{ matrix.version }}
+          EVENT_NAME: ${{ github.event_name }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          export GRADLE_OPTS="-Dorg.gradle.java.installations.paths=$KPATHS_JDK25"
+          mkdir -p build/ide-compatibility
+          args=()
+          if [ "$EVENT_NAME" = schedule ]; then args+=(--latest-kefs); fi
+          python3 scripts/verify-android-studio-version.py "$IDE_SELECTOR" \
+            --report-json build/ide-compatibility/result.json \
+            "${args[@]}" \
+            2>&1 | tee build/ide-compatibility/runner.log
+      - name: Summarize resolved versions
+        if: always()
+        shell: bash
+        run: |
+          if [ -f build/ide-compatibility/result.json ]; then
+            echo '### IDE compatibility result' >> "$GITHUB_STEP_SUMMARY"
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat build/ide-compatibility/result.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo 'No IDE result was written; see the job log.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Save IDE test reports
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: ide-compatibility-${{ matrix.version }}
+          path: |
+            build/ide-compatibility/
+            kpaths-kefs-ide-fixture/build/consumer-probe*.txt
+            kpaths-kefs-ide-fixture/build/consumer-probe*.log
+            kpaths-kefs-ide-fixture/build/reports/tests/
+            kpaths-kefs-ide-fixture/.intellijPlatform/sandbox/**/log_runIde/
+          if-no-files-found: warn
+          retention-days: 14
