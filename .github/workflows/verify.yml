@@ -23,7 +23,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Test matrix orchestration
-        run: python3 -m unittest scripts/test_kotlin_version_resolver.py scripts/test_verify_compiler_compatibility.py
+        run: python3 -m unittest scripts/test_kotlin_version_resolver.py scripts/test_verify_compiler_compatibility.py scripts/test_verify_android_studio_version.py scripts/test_verify_kefs_compatibility.py
       - id: versions
         env:
           REQUESTED_VERSIONS: ${{ inputs.versions }}

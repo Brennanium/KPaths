@@ -1,6 +1,7 @@
 package dev.kpaths.ide
 
 import com.intellij.openapi.application.ReadAction
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
@@ -58,10 +59,14 @@ class ConsumerProbe : ProjectActivity {
       }
       if (controlsPass && generatedPass) {
         Files.writeString(Path.of(report), "PASS ($expected)\n$last")
+        // This activity runs only in the isolated runIde probe. Exit that IDE so Gradle can
+        // finish before the runner changes the project configuration for the next launch.
+        ApplicationManager.getApplication().invokeLater { ApplicationManager.getApplication().exit(true, true, false) }
         return
       }
       Files.writeString(Path.of(report), "WAITING ($expected)\n$last")
     }
     Files.writeString(Path.of(report), "TIMEOUT\n$last")
+    ApplicationManager.getApplication().invokeLater { ApplicationManager.getApplication().exit(true, true, false) }
   }
 }

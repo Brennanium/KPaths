@@ -18,7 +18,7 @@ class KefsMatrixTests(unittest.TestCase):
         self.ide = root / "Studio.app"
         info = self.ide / "Contents/Resources/product-info.json"
         info.parent.mkdir(parents=True)
-        info.write_text(json.dumps({"name": "Android Studio", "buildNumber": "262.1"}))
+        info.write_text(json.dumps({"name": "Android Studio", "buildNumber": "262.1", "productCode": "AI"}))
         self.matrix = root / "matrix.json"
         self.matrix.write_text(json.dumps({"tested": [{"product": "Android Studio", "build": "262.1", "kotlinIdeVersion": "2.4.20-ij262-52", "kefsVersion": "0.5.0-262"}]}))
 
@@ -39,6 +39,35 @@ class KefsMatrixTests(unittest.TestCase):
         self.assertEqual(module.select_ide(self.ide, self.matrix, "2.5.0-ij999-1", "0.6.0"),
                          ("Android Studio 262.1 (not yet in the tested matrix)", "2.5.0-ij999-1", "0.6.0"))
 
+    def test_known_ide_can_test_a_new_explicit_combination(self):
+        self.assertEqual(module.select_ide(self.ide, self.matrix, None, "0.6.0", allow_untested=True),
+                         ("Android Studio 262.1 (untested KEFS/compiler combination)", "2.4.20-ij262-52", "0.6.0"))
+
+    def test_orphan_cleanup_only_targets_this_sandbox_probe(self):
+        report = Path('/tmp/kpaths-probe.txt')
+        processes = ('101 java -Didea.plugin.in.sandbox.mode=true -Dkpaths.consumerProbe=/tmp/kpaths-probe.txt -Dkpaths.consumerExpected=enabled\n'
+                     '102 java -Dkpaths.consumerProbe=/tmp/kpaths-probe.txt -Dkpaths.consumerExpected=enabled\n'
+                     '103 java -Didea.plugin.in.sandbox.mode=true -Dkpaths.consumerProbe=/tmp/kpaths-probe.txt -Dkpaths.consumerExpected=disabled\n')
+        with mock.patch.object(module.subprocess, 'run', return_value=mock.Mock(stdout=processes)), \
+             mock.patch.object(module.time, 'sleep'), \
+             mock.patch.object(module.os, 'kill', side_effect=[None, ProcessLookupError]) as kill:
+            module.stop_fixture_ides(report, 'enabled')
+        self.assertEqual(kill.call_args_list, [mock.call(101, module.signal.SIGTERM), mock.call(101, 0)])
+
+    def test_project_trust_is_limited_to_fixture_sandbox(self):
+        fixture = Path(self.tmp.name) / 'fixture'
+        module.trust_fixture_project(self.ide, fixture)
+        config = fixture / '.intellijPlatform/sandbox/kpaths-kefs-ide-fixture/AI-AI-262.1/config_runIde/options/trusted-paths.xml'
+        self.assertIn(str(fixture / 'consumer'), config.read_text())
+        module.trust_fixture_project(self.ide, fixture)
+        self.assertEqual(config.read_text().count(str(fixture / 'consumer')), 1)
+
+    def test_fatal_ide_startup_dialog_is_reported(self):
+        log = Path(self.tmp.name) / 'idea.log'
+        self.assertFalse(module.startup_failure(log))
+        log.write_text('Booting IDE\n**Start Failed**\nInternal error\n')
+        self.assertTrue(module.startup_failure(log))
+
     def test_duplicate_matrix_entries_are_rejected(self):
         entry = json.loads(self.matrix.read_text())["tested"][0]
         self.matrix.write_text(json.dumps({"tested": [entry, entry]}))
@@ -58,7 +87,8 @@ class KefsMatrixTests(unittest.TestCase):
 
         with mock.patch.object(module, "ROOT", root), \
              mock.patch.object(module.subprocess, "run", side_effect=configure), \
-             mock.patch.object(module.subprocess, "Popen", return_value=process):
+             mock.patch.object(module.subprocess, "Popen", return_value=process), \
+             mock.patch.object(module, "stop_fixture_ides"):
             with self.assertRaisesRegex(RuntimeError, "exited early"):
                 module.verify_imported_consumer(self.ide, "0.5.0-262")
         self.assertEqual(settings.read_bytes(), b"original settings")

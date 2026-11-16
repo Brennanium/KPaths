@@ -33,6 +33,32 @@ tested combinations, not a restriction on other IDEs. To build and verify the lo
 and a standalone Gradle consumer, run from the repository root:
 
 ```sh
+python3 scripts/verify-android-studio-version.py 2026.2.2.8
+```
+
+On Apple Silicon macOS, this resolves the full release version or build using JetBrains' Android
+Studio release feed. `latest-stable` selects the latest stable release or patch. The runner uses a
+matching `/Applications/Android Studio.app` when available; otherwise it downloads the official
+disk image, verifies its SHA-256 checksum, and mounts it read-only. `--ide-path` selects a different
+installed copy and verifies that it matches the requested release. It selects a compatible stable
+KEFS Marketplace release and reads KEFS's bundled mapping to resolve Android Studio's Kotlin
+compiler. The fixture independently checks that KEFS reports the same compiler version.
+
+The default run includes the imported consumer probe with KEFS enabled and disabled; use
+`--skip-ide-probe` for the faster highlighting fixture only. Use `--report-json <file>` to save
+the resolved versions and outcome. A missing KEFS release or compiler mapping is reported as an
+error; a successful test does not automatically add the IDE to the supported matrix. The runner
+needs network access, JDK 17 and a JDK 25 toolchain, and an Android Studio environment capable of
+importing the test project. The isolated IDE may prompt for SDK configuration on a new machine.
+The runner reports a fatal Android Studio startup dialog as a failed check and records its log at
+`build/consumer-probe-enabled.log` or `build/consumer-probe-disabled.log` in this fixture. In local
+tests, Rabbit 2 Patch 1 sometimes failed during Android Studio's analytics initialization before
+the project opened; the highlighting fixture still passed. A failed imported-project check is not
+evidence that the IDE is supported.
+
+Alternatively, to select a known installation and versions directly:
+
+```sh
 python3 scripts/verify-kefs-compatibility.py --ide-path "/path/to/Android Studio.app"
 ```
 
