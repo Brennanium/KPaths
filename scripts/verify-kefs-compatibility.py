@@ -80,6 +80,60 @@ def startup_failure(log: Path) -> bool:
         return b'**Start Failed**' in source.read()
 
 
+class AnalyticsStartupError(RuntimeError):
+    """Android Studio's intermittent analytics initialization failure during startup."""
+
+
+def run_consumer_mode(ide: Path, kefs: str, fixture: Path, report: Path, mode: str, log: Path) -> None:
+    report.unlink(missing_ok=True)
+    command = [
+        str(ROOT / "gradlew"), "--no-daemon", "-p", str(fixture), "runIde",
+        f"--args={fixture / 'consumer'}", f"-Pkpaths.idePath={ide}", f"-Pkpaths.kefsVersion={kefs}", f"-Pkpaths.consumerExpected={mode}",
+    ]
+    with log.open("w") as output:
+        process = subprocess.Popen(command, cwd=ROOT, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
+        try:
+            # Includes Gradle startup, cold IDE import/indexing, and probe shutdown.
+            deadline = time.monotonic() + 720
+            while time.monotonic() < deadline:
+                if report.exists():
+                    result = report.read_text()
+                    if result.startswith(f"PASS ({mode})"):
+                        try:
+                            exit_code = process.wait(timeout=45)
+                        except subprocess.TimeoutExpired:
+                            raise RuntimeError(f"IDE passed but did not exit; see {log}")
+                        if exit_code != 0:
+                            raise RuntimeError(f"IDE exited with status {exit_code} after passing; see {log}")
+                        print(f"Imported consumer: PASS ({mode})", flush=True)
+                        return
+                    if result.startswith("TIMEOUT"):
+                        raise RuntimeError(f"IDE consumer probe timed out; see {log} and {report}")
+                if startup_failure(log):
+                    if "call to AnalyticsSettings before initialization" in log.read_text(errors="replace"):
+                        raise AnalyticsStartupError(f"Android Studio analytics initialization failed; see {log}")
+                    raise RuntimeError(f"Android Studio reported a fatal startup error; see {log}")
+                if process.poll() is not None:
+                    raise RuntimeError(f"IDE consumer probe exited early; see {log}")
+                time.sleep(2)
+            raise RuntimeError(f"IDE consumer probe timed out; see {log} and {report}")
+        finally:
+            if process.poll() is None:
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    process.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.wait()
+            stop_fixture_ides(report, mode)
+
+
 def verify_imported_consumer(ide: Path, kefs: str) -> None:
     fixture = ROOT / "kpaths-kefs-ide-fixture"
     settings = fixture / "consumer/.idea/kotlin-plugins.xml"
@@ -89,53 +143,15 @@ def verify_imported_consumer(ide: Path, kefs: str) -> None:
         trust_fixture_project(ide, fixture)
         for mode in ("enabled", "disabled"):
             subprocess.run([sys.executable, str(fixture / "configure-consumer.py"), mode], cwd=ROOT, check=True)
-            report.unlink(missing_ok=True)
             log = fixture / f"build/consumer-probe-{mode}.log"
             log.parent.mkdir(parents=True, exist_ok=True)
-            command = [
-                str(ROOT / "gradlew"), "--no-daemon", "-p", str(fixture), "runIde",
-                f"--args={fixture / 'consumer'}", f"-Pkpaths.idePath={ide}", f"-Pkpaths.kefsVersion={kefs}", f"-Pkpaths.consumerExpected={mode}",
-            ]
-            with log.open("w") as output:
-                process = subprocess.Popen(command, cwd=ROOT, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
-                try:
-                    deadline = time.monotonic() + 240
-                    while time.monotonic() < deadline:
-                        if report.exists():
-                            result = report.read_text()
-                            if result.startswith(f"PASS ({mode})"):
-                                try:
-                                    exit_code = process.wait(timeout=45)
-                                except subprocess.TimeoutExpired:
-                                    raise RuntimeError(f"IDE passed but did not exit; see {log}")
-                                if exit_code != 0:
-                                    raise RuntimeError(f"IDE exited with status {exit_code} after passing; see {log}")
-                                print(f"Imported consumer: PASS ({mode})", flush=True)
-                                break
-                            if result.startswith("TIMEOUT"):
-                                raise RuntimeError(f"IDE consumer probe timed out; see {log} and {report}")
-                        if process.poll() is not None:
-                            raise RuntimeError(f"IDE consumer probe exited early; see {log}")
-                        if startup_failure(log):
-                            raise RuntimeError(f"Android Studio reported a fatal startup error; see {log}")
-                        time.sleep(2)
-                    else:
-                        raise RuntimeError(f"IDE consumer probe timed out; see {log} and {report}")
-                finally:
-                    if process.poll() is None:
-                        try:
-                            os.killpg(process.pid, signal.SIGTERM)
-                        except ProcessLookupError:
-                            pass
-                        try:
-                            process.wait(timeout=15)
-                        except subprocess.TimeoutExpired:
-                            try:
-                                os.killpg(process.pid, signal.SIGKILL)
-                            except ProcessLookupError:
-                                pass
-                            process.wait()
-                    stop_fixture_ides(report, mode)
+            try:
+                run_consumer_mode(ide, kefs, fixture, report, mode, log)
+            except AnalyticsStartupError:
+                saved = log.with_name(f"consumer-probe-{mode}-startup-retry.log")
+                log.replace(saved)
+                print(f"Android Studio analytics startup failed; retrying once (first log: {saved}).", flush=True)
+                run_consumer_mode(ide, kefs, fixture, report, mode, log)
     finally:
         if previous is None:
             settings.unlink(missing_ok=True)

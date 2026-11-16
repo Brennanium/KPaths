@@ -16,11 +16,14 @@ import java.nio.file.Path
 class ConsumerProbe : ProjectActivity {
   override suspend fun execute(project: Project) {
     val report = System.getProperty("kpaths.consumerProbe") ?: return
-    if (project.name != "kpaths-kefs-consumer") return
+    val projectPath = project.basePath ?: return
+    val expectedProject = System.getProperty("kpaths.consumerProject") ?: return
+    if (Path.of(projectPath).toRealPath() != Path.of(expectedProject).toRealPath()) return
     val expected = System.getProperty("kpaths.consumerExpected", "enabled")
     require(expected in setOf("enabled", "disabled"))
     val source = Path.of(project.basePath!!, "src/main/kotlin/Example.kt")
-    val deadline = System.currentTimeMillis() + 120_000
+    // A cold hosted runner must complete Gradle import and indexing before references resolve.
+    val deadline = System.currentTimeMillis() + 600_000
     var last = "waiting for project"
     while (System.currentTimeMillis() < deadline && !project.isDisposed) {
       delay(2_000)

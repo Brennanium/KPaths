@@ -68,6 +68,32 @@ class KefsMatrixTests(unittest.TestCase):
         log.write_text('Booting IDE\n**Start Failed**\nInternal error\n')
         self.assertTrue(module.startup_failure(log))
 
+    def test_retries_only_the_known_analytics_startup_failure(self):
+        root = Path(self.tmp.name)
+        calls = []
+        def run_mode(_ide, _kefs, _fixture, _report, mode, log):
+            calls.append(mode)
+            if calls == ['enabled']:
+                log.write_text('analytics initialization failed')
+                raise module.AnalyticsStartupError('startup')
+        with mock.patch.object(module, 'ROOT', root), \
+             mock.patch.object(module, 'trust_fixture_project'), \
+             mock.patch.object(module.subprocess, 'run'), \
+             mock.patch.object(module, 'run_consumer_mode', side_effect=run_mode):
+            module.verify_imported_consumer(self.ide, '0.5.0')
+        self.assertEqual(calls, ['enabled', 'enabled', 'disabled'])
+        saved = root / 'kpaths-kefs-ide-fixture/build/consumer-probe-enabled-startup-retry.log'
+        self.assertEqual(saved.read_text(), 'analytics initialization failed')
+
+    def test_other_probe_failures_are_not_retried(self):
+        with mock.patch.object(module, 'ROOT', Path(self.tmp.name)), \
+             mock.patch.object(module, 'trust_fixture_project'), \
+             mock.patch.object(module.subprocess, 'run'), \
+             mock.patch.object(module, 'run_consumer_mode', side_effect=RuntimeError('resolution failed')) as run:
+            with self.assertRaisesRegex(RuntimeError, 'resolution failed'):
+                module.verify_imported_consumer(self.ide, '0.5.0')
+        self.assertEqual(run.call_count, 1)
+
     def test_duplicate_matrix_entries_are_rejected(self):
         entry = json.loads(self.matrix.read_text())["tested"][0]
         self.matrix.write_text(json.dumps({"tested": [entry, entry]}))
