@@ -99,7 +99,8 @@ def verify_imported_consumer(ide: Path, kefs: str) -> None:
             with log.open("w") as output:
                 process = subprocess.Popen(command, cwd=ROOT, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
                 try:
-                    deadline = time.monotonic() + 240
+                    # Includes Gradle startup, cold IDE import/indexing, and probe shutdown.
+                    deadline = time.monotonic() + 720
                     while time.monotonic() < deadline:
                         if report.exists():
                             result = report.read_text()

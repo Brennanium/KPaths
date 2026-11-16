@@ -182,7 +182,32 @@ tasks.test {
 // Only the sandbox launched for this fixture enables the consumer analysis probe.
 tasks.runIde {
   val report = layout.buildDirectory.file("consumer-probe.txt")
-  doFirst { report.get().asFile.delete() }
+  val probePreferences = layout.buildDirectory.dir("ide-probe-preferences")
+  doFirst {
+    report.get().asFile.delete()
+    // Hermetic first-run settings, following Metro's Android Studio integration fixture. The
+    // synthetic identity and disabled publishing keep this isolated from a developer's settings.
+    val preferences = probePreferences.get().asFile
+    val common = preferences.resolve("common/consentOptions")
+    val android = preferences.resolve("android")
+    common.mkdirs()
+    android.mkdirs()
+    common.resolve("accepted").writeText("rsch.send.usage.stat:1.0:0:${System.currentTimeMillis()}")
+    android.resolve("analytics.settings").writeText(
+      """{"userId":"00000000-0000-0000-0000-000000000000","hasOptedIn":true,"debugDisablePublishing":true,"saltSkew":-1,"lastOptinPromptVersion":"9999.9999"}""",
+    )
+  }
   systemProperty("kpaths.consumerProbe", report.get().asFile.absolutePath)
+  systemProperty("kpaths.consumerProject", rootProject.file("consumer").absolutePath)
   systemProperty("kpaths.consumerExpected", providers.gradleProperty("kpaths.consumerExpected").orElse("enabled").get())
+  systemProperty("idea.common.data.path", probePreferences.get().dir("common").asFile.absolutePath)
+  systemProperty("ANDROID_PREFS_ROOT", probePreferences.get().dir("android").asFile.absolutePath)
+  systemProperty("jb.consents.confirmation.enabled", "false")
+  systemProperty("idea.initially.ask.config", "never")
+  systemProperty("disable.android.first.run", "true")
+  systemProperty("jb.privacy.policy.text", "<!--999.999-->")
+  systemProperty("disable.android.analytics.consent.dialog", "true")
+  systemProperty("google.login.enable.startup.sign.in.dialog", "false")
+  systemProperty("ide.show.tips.on.startup.default.value", "false")
+  systemProperty("git.showDialogsOnUnversionedFiles", "false")
 }
