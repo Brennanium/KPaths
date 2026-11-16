@@ -1,4 +1,5 @@
 import importlib.util
+import io
 import json
 import tempfile
 import unittest
@@ -67,6 +68,67 @@ class KefsMatrixTests(unittest.TestCase):
         self.assertFalse(module.startup_failure(log))
         log.write_text('Booting IDE\n**Start Failed**\nInternal error\n')
         self.assertTrue(module.startup_failure(log))
+
+    def test_retries_only_the_known_analytics_startup_failure(self):
+        root = Path(self.tmp.name)
+        calls = []
+        def run_mode(_ide, _kefs, _fixture, _report, mode, log):
+            calls.append(mode)
+            if calls == ['enabled']:
+                log.write_text('analytics initialization failed')
+                raise module.AnalyticsStartupError('startup')
+        with mock.patch.object(module, 'ROOT', root), \
+             mock.patch.object(module, 'trust_fixture_project'), \
+             mock.patch.object(module.subprocess, 'run'), \
+             mock.patch.object(module, 'run_consumer_mode', side_effect=run_mode):
+            module.verify_imported_consumer(self.ide, '0.5.0')
+        self.assertEqual(calls, ['enabled', 'enabled', 'disabled'])
+        saved = root / 'kpaths-kefs-ide-fixture/build/consumer-probe-enabled-startup-retry.log'
+        self.assertEqual(saved.read_text(), 'analytics initialization failed')
+
+    def test_other_probe_failures_are_not_retried(self):
+        with mock.patch.object(module, 'ROOT', Path(self.tmp.name)), \
+             mock.patch.object(module, 'trust_fixture_project'), \
+             mock.patch.object(module.subprocess, 'run'), \
+             mock.patch.object(module, 'run_consumer_mode', side_effect=RuntimeError('resolution failed')) as run:
+            with self.assertRaisesRegex(RuntimeError, 'resolution failed'):
+                module.verify_imported_consumer(self.ide, '0.5.0')
+        self.assertEqual(run.call_count, 1)
+
+    def test_only_the_descriptor_filesystem_race_is_retried(self):
+        failed = mock.Mock(stdout=io.StringIO('Unable to read descriptor [plugin.xml]\nClosedFileSystemException\n'))
+        failed.wait.return_value = 1
+        succeeded = mock.Mock(stdout=io.StringIO('BUILD SUCCESSFUL\n'))
+        succeeded.wait.return_value = 0
+        with mock.patch.object(module.subprocess, 'Popen', side_effect=[failed, succeeded]) as start:
+            module.publish_ide_artifact(['gradle'])
+        self.assertEqual(start.call_count, 2)
+        self.assertEqual(start.call_args_list[1].args[0], ['gradle', '--no-daemon', '--refresh-dependencies'])
+        other = mock.Mock(stdout=io.StringIO('Test assertion failed\n'))
+        other.wait.return_value = 1
+        with mock.patch.object(module.subprocess, 'Popen', return_value=other) as start:
+            with self.assertRaises(module.subprocess.CalledProcessError):
+                module.publish_ide_artifact(['gradle'])
+        self.assertEqual(start.call_count, 1)
+
+    def test_descriptor_retry_preserves_and_rebuilds_only_selected_ide_index(self):
+        root = Path(self.tmp.name)
+        directory = root / 'kpaths-kefs-ide-fixture/.intellijPlatform/ides/layoutIndex'
+        directory.mkdir(parents=True)
+        selected = directory / 'AI-262.1-hash.json'
+        other = directory / 'AI-261.2-hash.json'
+        selected.write_text('incomplete')
+        other.write_text('other')
+        failed = mock.Mock(stdout=io.StringIO('Unable to read descriptor [plugin.xml]\nClosedFileSystemException\n'))
+        failed.wait.return_value = 1
+        succeeded = mock.Mock(stdout=io.StringIO('ok\n'))
+        succeeded.wait.return_value = 0
+        with mock.patch.object(module, 'ROOT', root), \
+             mock.patch.object(module.subprocess, 'Popen', side_effect=[failed, succeeded]):
+            module.publish_ide_artifact(['gradle', f'-Pkpaths.idePath={self.ide}'])
+        self.assertFalse(selected.exists())
+        self.assertEqual(other.read_text(), 'other')
+        self.assertEqual(next(directory.glob('AI-262.1-hash.json.failed-*')).read_text(), 'incomplete')
 
     def test_duplicate_matrix_entries_are_rejected(self):
         entry = json.loads(self.matrix.read_text())["tested"][0]
