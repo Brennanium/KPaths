@@ -182,7 +182,47 @@ tasks.test {
 // Only the sandbox launched for this fixture enables the consumer analysis probe.
 tasks.runIde {
   val report = layout.buildDirectory.file("consumer-probe.txt")
-  doFirst { report.get().asFile.delete() }
+  val mode = providers.gradleProperty("kpaths.consumerExpected").orElse("enabled")
+  val attempt = providers.gradleProperty("kpaths.consumerAttempt").orElse("1")
+  val runId = providers.gradleProperty("kpaths.consumerRunId").orElse("manual")
+  val probeDirectory = layout.buildDirectory.dir("ide-probe/${runId.get()}/${mode.get()}-${attempt.get()}")
+  val probePreferences = probeDirectory.map { it.dir("preferences") }
+  doFirst {
+    report.get().asFile.delete()
+    // Hermetic first-run settings, following Metro's Android Studio integration fixture. The
+    // synthetic identity and disabled publishing keep this isolated from a developer's settings.
+    val preferences = probePreferences.get().asFile
+    val common = preferences.resolve("common/consentOptions")
+    val android = preferences.resolve("android")
+    val androidSettings = android.resolve(".android")
+    // The Gradle plugin omits sandbox JVM arguments for directories that don't exist.
+    probeDirectory.get().dir("system").asFile.mkdirs()
+    probeDirectory.get().dir("log").asFile.mkdirs()
+    common.mkdirs()
+    androidSettings.mkdirs()
+    common.resolve("accepted").writeText("rsch.send.usage.stat:1.0:0:${System.currentTimeMillis()}")
+    val analytics = """{"userId":"00000000-0000-0000-0000-000000000000","hasOptedIn":true,"debugDisablePublishing":true,"saltSkew":-1,"lastOptinPromptVersion":"9999.9999"}"""
+    // Different Android Studio builds resolve ANDROID_PREFS_ROOT at either level.
+    android.resolve("analytics.settings").writeText(analytics)
+    androidSettings.resolve("analytics.settings").writeText(analytics)
+  }
   systemProperty("kpaths.consumerProbe", report.get().asFile.absolutePath)
-  systemProperty("kpaths.consumerExpected", providers.gradleProperty("kpaths.consumerExpected").orElse("enabled").get())
+  systemProperty("kpaths.consumerProject", rootProject.file("consumer").absolutePath)
+  systemProperty("kpaths.consumerSandbox", probeDirectory.get().asFile.absolutePath)
+  systemProperty("kpaths.consumerExpected", mode.get())
+  // RunIde's sandbox argument provider owns these paths; ordinary systemProperty calls
+  // are overwritten by that provider, so set its directory properties directly.
+  sandboxConfigDirectory.set(probeDirectory.map { it.dir("config") })
+  sandboxSystemDirectory.set(probeDirectory.map { it.dir("system") })
+  sandboxLogDirectory.set(probeDirectory.map { it.dir("log") })
+  systemProperty("idea.common.data.path", probePreferences.get().dir("common").asFile.absolutePath)
+  systemProperty("ANDROID_PREFS_ROOT", probePreferences.get().dir("android").asFile.absolutePath)
+  systemProperty("jb.consents.confirmation.enabled", "false")
+  systemProperty("idea.initially.ask.config", "never")
+  systemProperty("disable.android.first.run", "true")
+  systemProperty("jb.privacy.policy.text", "<!--999.999-->")
+  systemProperty("disable.android.analytics.consent.dialog", "true")
+  systemProperty("google.login.enable.startup.sign.in.dialog", "false")
+  systemProperty("ide.show.tips.on.startup.default.value", "false")
+  systemProperty("git.showDialogsOnUnversionedFiles", "false")
 }

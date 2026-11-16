@@ -2,6 +2,7 @@ package dev.kpaths.ide
 
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.application.PathManager
 import com.intellij.openapi.project.DumbService
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
@@ -16,11 +17,23 @@ import java.nio.file.Path
 class ConsumerProbe : ProjectActivity {
   override suspend fun execute(project: Project) {
     val report = System.getProperty("kpaths.consumerProbe") ?: return
-    if (project.name != "kpaths-kefs-consumer") return
+    val projectPath = project.basePath ?: return
+    val expectedProject = System.getProperty("kpaths.consumerProject") ?: return
+    if (Path.of(projectPath).toRealPath() != Path.of(expectedProject).toRealPath()) return
+    val sandbox = Path.of(System.getProperty("kpaths.consumerSandbox") ?: return).toAbsolutePath().normalize()
+    val actual = listOf(PathManager.getConfigPath(), PathManager.getSystemPath(), PathManager.getLogPath())
+      .map { Path.of(it).toAbsolutePath().normalize() }
+    val expectedPaths = listOf("config", "system", "log").map { sandbox.resolve(it) }
+    if (actual != expectedPaths) {
+      Files.writeString(Path.of(report), "ERROR: sandbox paths differ: expected=$expectedPaths actual=$actual")
+      ApplicationManager.getApplication().invokeLater { ApplicationManager.getApplication().exit(true, true, false) }
+      return
+    }
     val expected = System.getProperty("kpaths.consumerExpected", "enabled")
     require(expected in setOf("enabled", "disabled"))
     val source = Path.of(project.basePath!!, "src/main/kotlin/Example.kt")
-    val deadline = System.currentTimeMillis() + 120_000
+    // A cold hosted runner must complete Gradle import and indexing before references resolve.
+    val deadline = System.currentTimeMillis() + 600_000
     var last = "waiting for project"
     while (System.currentTimeMillis() < deadline && !project.isDisposed) {
       delay(2_000)

@@ -16,15 +16,9 @@ ROOT = Path(__file__).resolve().parent.parent
 MATRIX = ROOT / "kpaths-kefs-ide-fixture/ide-compatibility.json"
 
 
-def trust_fixture_project(ide: Path, fixture: Path) -> None:
+def trust_fixture_project(fixture: Path, run_id: str, mode: str, attempt: int) -> None:
     """Trust only this test project in the Gradle-created, isolated IDE configuration."""
-    candidates = (ide / "Contents/Resources/product-info.json", ide / "product-info.json")
-    info_path = next((path for path in candidates if path.is_file()), None)
-    if info_path is None:
-        raise ValueError(f"No product-info.json found in {ide}")
-    info = json.loads(info_path.read_text())
-    code, build = info["productCode"], info["buildNumber"]
-    config = fixture / ".intellijPlatform/sandbox/kpaths-kefs-ide-fixture" / f"{code}-{code}-{build}" / "config_runIde/options/trusted-paths.xml"
+    config = fixture / f"build/ide-probe/{run_id}/{mode}-{attempt}/config/options/trusted-paths.xml"
     config.parent.mkdir(parents=True, exist_ok=True)
     project = ET.parse(config).getroot() if config.exists() else ET.Element("application")
     component = project.find("component[@name='Trusted.Paths']")
@@ -80,62 +74,122 @@ def startup_failure(log: Path) -> bool:
         return b'**Start Failed**' in source.read()
 
 
+def publish_ide_artifact(command: list[str]) -> None:
+    """Retry the known IntelliJ Gradle plugin descriptor filesystem race once."""
+    for attempt in range(2):
+        # Use a fresh single-use daemon and invalidate failed dependency lookups on retry;
+        # repeating in the original daemon retains the failed bundled-plugin resolution.
+        invocation = command if attempt == 0 else [*command, "--no-daemon", "--refresh-dependencies"]
+        process = subprocess.Popen(invocation, cwd=ROOT, stdout=subprocess.PIPE,
+                                   stderr=subprocess.STDOUT, text=True, bufsize=1)
+        closed_fs = False
+        missing_descriptor = False
+        assert process.stdout is not None
+        with process.stdout:
+            for line in process.stdout:
+                print(line, end='', flush=True)
+                closed_fs |= 'ClosedFileSystemException' in line
+                missing_descriptor |= 'Unable to read descriptor [plugin.xml]' in line
+        result = process.wait()
+        if result == 0:
+            return
+        if attempt == 0 and closed_fs and missing_descriptor:
+            # A failed scan can persist an incomplete index. Preserve only this IDE's
+            # generated index for diagnosis and let the next invocation rebuild it.
+            ide_arg = next((arg.split('=', 1)[1] for arg in command if arg.startswith('-Pkpaths.idePath=')), None)
+            if ide_arg:
+                ide = Path(ide_arg)
+                candidates = (ide / 'Contents/Resources/product-info.json', ide / 'product-info.json')
+                info_path = next((path for path in candidates if path.is_file()), None)
+                if info_path:
+                    info = json.loads(info_path.read_text())
+                    prefix = f"{info['productCode']}-{info['buildNumber']}-"
+                    directory = ROOT / 'kpaths-kefs-ide-fixture/.intellijPlatform/ides/layoutIndex'
+                    for index in directory.glob('*.json'):
+                        if index.name.startswith(prefix):
+                            saved = index.with_name(index.name + f'.failed-{time.time_ns()}')
+                            index.replace(saved)
+                            print(f'Preserved incomplete IDE layout index: {saved}', flush=True)
+            print('IntelliJ plugin descriptor filesystem closed unexpectedly; retrying once.', flush=True)
+            continue
+        raise subprocess.CalledProcessError(result, invocation)
+
+
+class AnalyticsStartupError(RuntimeError):
+    """Android Studio's intermittent analytics initialization failure during startup."""
+
+
+def run_consumer_mode(ide: Path, kefs: str, fixture: Path, report: Path, mode: str, log: Path, attempt: int, run_id: str) -> None:
+    report.unlink(missing_ok=True)
+    trust_fixture_project(fixture, run_id, mode, attempt)
+    command = [
+        str(ROOT / "gradlew"), "--no-daemon", "-p", str(fixture), "runIde",
+        f"--args={fixture / 'consumer'}", f"-Pkpaths.idePath={ide}", f"-Pkpaths.kefsVersion={kefs}", f"-Pkpaths.consumerExpected={mode}", f"-Pkpaths.consumerAttempt={attempt}", f"-Pkpaths.consumerRunId={run_id}",
+    ]
+    with log.open("w") as output:
+        process = subprocess.Popen(command, cwd=ROOT, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
+        try:
+            # Includes Gradle startup, cold IDE import/indexing, and probe shutdown.
+            deadline = time.monotonic() + 720
+            while time.monotonic() < deadline:
+                if report.exists():
+                    result = report.read_text()
+                    if result.startswith("ERROR:"):
+                        raise RuntimeError(f"{result.strip()}; see {log}")
+                    if result.startswith(f"PASS ({mode})"):
+                        try:
+                            exit_code = process.wait(timeout=45)
+                        except subprocess.TimeoutExpired:
+                            raise RuntimeError(f"IDE passed but did not exit; see {log}")
+                        if exit_code != 0:
+                            raise RuntimeError(f"IDE exited with status {exit_code} after passing; see {log}")
+                        print(f"Imported consumer: PASS ({mode})", flush=True)
+                        return
+                    if result.startswith("TIMEOUT"):
+                        raise RuntimeError(f"IDE consumer probe timed out; see {log} and {report}")
+                if startup_failure(log):
+                    if "call to AnalyticsSettings before initialization" in log.read_text(errors="replace"):
+                        raise AnalyticsStartupError(f"Android Studio analytics initialization failed; see {log}")
+                    raise RuntimeError(f"Android Studio reported a fatal startup error; see {log}")
+                if process.poll() is not None:
+                    raise RuntimeError(f"IDE consumer probe exited early; see {log}")
+                time.sleep(2)
+            raise RuntimeError(f"IDE consumer probe timed out; see {log} and {report}")
+        finally:
+            if process.poll() is None:
+                try:
+                    os.killpg(process.pid, signal.SIGTERM)
+                except ProcessLookupError:
+                    pass
+                try:
+                    process.wait(timeout=15)
+                except subprocess.TimeoutExpired:
+                    try:
+                        os.killpg(process.pid, signal.SIGKILL)
+                    except ProcessLookupError:
+                        pass
+                    process.wait()
+            stop_fixture_ides(report, mode)
+
+
 def verify_imported_consumer(ide: Path, kefs: str) -> None:
     fixture = ROOT / "kpaths-kefs-ide-fixture"
     settings = fixture / "consumer/.idea/kotlin-plugins.xml"
     previous = settings.read_bytes() if settings.exists() else None
     report = fixture / "build/consumer-probe.txt"
+    run_id = str(time.time_ns())
     try:
-        trust_fixture_project(ide, fixture)
         for mode in ("enabled", "disabled"):
             subprocess.run([sys.executable, str(fixture / "configure-consumer.py"), mode], cwd=ROOT, check=True)
-            report.unlink(missing_ok=True)
             log = fixture / f"build/consumer-probe-{mode}.log"
             log.parent.mkdir(parents=True, exist_ok=True)
-            command = [
-                str(ROOT / "gradlew"), "--no-daemon", "-p", str(fixture), "runIde",
-                f"--args={fixture / 'consumer'}", f"-Pkpaths.idePath={ide}", f"-Pkpaths.kefsVersion={kefs}", f"-Pkpaths.consumerExpected={mode}",
-            ]
-            with log.open("w") as output:
-                process = subprocess.Popen(command, cwd=ROOT, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
-                try:
-                    deadline = time.monotonic() + 240
-                    while time.monotonic() < deadline:
-                        if report.exists():
-                            result = report.read_text()
-                            if result.startswith(f"PASS ({mode})"):
-                                try:
-                                    exit_code = process.wait(timeout=45)
-                                except subprocess.TimeoutExpired:
-                                    raise RuntimeError(f"IDE passed but did not exit; see {log}")
-                                if exit_code != 0:
-                                    raise RuntimeError(f"IDE exited with status {exit_code} after passing; see {log}")
-                                print(f"Imported consumer: PASS ({mode})", flush=True)
-                                break
-                            if result.startswith("TIMEOUT"):
-                                raise RuntimeError(f"IDE consumer probe timed out; see {log} and {report}")
-                        if process.poll() is not None:
-                            raise RuntimeError(f"IDE consumer probe exited early; see {log}")
-                        if startup_failure(log):
-                            raise RuntimeError(f"Android Studio reported a fatal startup error; see {log}")
-                        time.sleep(2)
-                    else:
-                        raise RuntimeError(f"IDE consumer probe timed out; see {log} and {report}")
-                finally:
-                    if process.poll() is None:
-                        try:
-                            os.killpg(process.pid, signal.SIGTERM)
-                        except ProcessLookupError:
-                            pass
-                        try:
-                            process.wait(timeout=15)
-                        except subprocess.TimeoutExpired:
-                            try:
-                                os.killpg(process.pid, signal.SIGKILL)
-                            except ProcessLookupError:
-                                pass
-                            process.wait()
-                    stop_fixture_ides(report, mode)
+            try:
+                run_consumer_mode(ide, kefs, fixture, report, mode, log, 1, run_id)
+            except AnalyticsStartupError:
+                saved = log.with_name(f"consumer-probe-{mode}-startup-retry.log")
+                log.replace(saved)
+                print(f"Android Studio analytics startup failed; retrying once (first log: {saved}).", flush=True)
+                run_consumer_mode(ide, kefs, fixture, report, mode, log, 2, run_id)
     finally:
         if previous is None:
             settings.unlink(missing_ok=True)
@@ -198,11 +252,11 @@ def main() -> None:
         ":kpaths-compiler-plugin:jvmJar", ":kpaths-compiler-plugin-contributor:jvmJar",
         ":kpaths-core:jvmJar", ":kpaths-annotations:jvmJar",
     ], cwd=ROOT, check=True)
-    subprocess.run([
+    publish_ide_artifact([
         wrapper, "-p", "kpaths-kefs-ide-fixture",
         "publishIdeCompilerPluginPublicationToKefsLocalRepository",
         f"-Pkpaths.idePath={ide}", f"-Pkpaths.ideKotlinVersion={version}", f"-Pkpaths.kefsVersion={kefs}",
-    ], cwd=ROOT, check=True)
+    ])
     subprocess.run([
         wrapper, "-p", "kpaths-kefs-ide-fixture/consumer", "build",
     ], cwd=ROOT, check=True)
