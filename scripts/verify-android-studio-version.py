@@ -59,12 +59,14 @@ def compatible(build, since, until):
     return bound(since, False) <= parts <= bound(until, True)
 
 
-def kefs_update(build, updates):
+def kefs_update(build, updates, preferred=None):
     candidates = [item for item in updates if item.get('approve') and item.get('listed') and
                   not item.get('hidden') and not item.get('channel') and
                   compatible(build, item.get('since'), item.get('until'))]
+    if preferred:
+        candidates = [item for item in candidates if item.get('version') == preferred]
     if not candidates:
-        raise ValueError(f'No stable KEFS Marketplace update declares compatibility with IDE build {build}')
+        raise ValueError(f'No stable KEFS Marketplace update {preferred or ""} declares compatibility with IDE build {build}')
     return max(candidates, key=lambda x: (int(x.get('cdate', 0)), x['id']))
 
 
@@ -127,6 +129,7 @@ def main(argv=None):
     parser.add_argument('version', help='Full Android Studio version/build, or latest-stable')
     parser.add_argument('--ide-path', type=Path, help='Use this installed Android Studio if its build matches')
     parser.add_argument('--skip-ide-probe', action='store_true', help='Skip imported IDE consumer checks')
+    parser.add_argument('--latest-kefs', action='store_true', help='Probe the newest compatible KEFS instead of a recorded tested version')
     parser.add_argument('--report-json', type=Path, help='Write resolved versions and test result')
     args = parser.parse_args(argv)
     if platform.system() != 'Darwin' or platform.machine() != 'arm64':
@@ -151,10 +154,17 @@ def main(argv=None):
             ide = mount / 'Android Studio.app'
             if installed_build(ide) != release['build']:
                 raise ValueError('Downloaded IDE build does not match the release feed')
-        update = kefs_update(release['build'], json.loads(get_bytes(UPDATES)))
+        tested = json.loads((ROOT / 'kpaths-kefs-ide-fixture/ide-compatibility.json').read_text())['tested']
+        matching = [entry for entry in tested if entry['product'] == 'Android Studio' and entry['build'] == release['build']]
+        if len(matching) > 1:
+            raise ValueError(f"Duplicate tested IDE build {release['build']}")
+        preferred = matching[0]['kefsVersion'] if matching and not args.latest_kefs else None
+        update = kefs_update(release['build'], json.loads(get_bytes(UPDATES)), preferred)
         kefs = update['version']
         plugin_zip = get_bytes(MARKETPLACE + update['file'].lstrip('/'))
         kotlin = compiler_version(ide, release['build'], plugin_zip)
+        if preferred and kotlin != matching[0]['kotlinIdeVersion']:
+            raise ValueError(f"KEFS resolved {kotlin}; the tested matrix records {matching[0]['kotlinIdeVersion']}")
         report.update({'idePath': str(ide), 'kefsVersion': kefs, 'ideKotlinVersion': kotlin,
                        'importedConsumer': 'skipped' if args.skip_ide_probe else 'requested'})
         print(f'Resolved KEFS {kefs}; IDE Kotlin compiler {kotlin}', flush=True)

@@ -36,6 +36,9 @@ class AndroidStudioVersionTests(unittest.TestCase):
                    dict(id=2, version='good', cdate='2', approve=True, listed=True, since='262.0', until='262.*'),
                    dict(id=3, version='preview', cdate='3', approve=True, listed=True, channel='EAP', since='262.0', until='262.*')]
         self.assertEqual(studio.kefs_update('262.10968.63.2622.1', updates)['version'], 'good')
+        self.assertEqual(studio.kefs_update('262.10968.63.2622.1', updates, 'good')['version'], 'good')
+        with self.assertRaisesRegex(ValueError, 'No stable KEFS'):
+            studio.kefs_update('262.10968.63.2622.1', updates, 'old')
         with self.assertRaisesRegex(ValueError, 'No stable KEFS'):
             studio.kefs_update('263.1', updates)
 

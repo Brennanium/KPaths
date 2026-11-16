@@ -22,6 +22,19 @@ is not yet a built-in KEFS provider. The final setup and repository URL remain t
 
 ## Try the CI draft
 
+The separate [IDE compatibility workflow](../.github/workflows/ide-compatibility.yml) runs imported
+consumer and KEFS checks for the tested Android Studio matrix. Pull requests select the newest
+configured Studio for each IntelliJ platform branch; pushes to `main` run the whole matrix. A
+manual run accepts space- or comma-separated complete Studio versions, build numbers, or
+`latest-stable`. A separate weekly probe tests the latest stable Studio and compatible KEFS;
+its report records the resolved versions and a failure remains visible in Actions without blocking
+pull requests. Each run uploads the result and IDE logs. This is a
+compatibility check and does not publish artifacts or add builds to the supported matrix.
+
+Until this workflow is present on the default branch, a push to a temporary branch under
+`ci/ide-compatibility/` can exercise its default matrix. After it is on the default branch, the
+Actions UI and `gh workflow run` can also dispatch arbitrary selectors against another branch.
+
 The [KEFS IDE artifacts workflow](../.github/workflows/kefs-ide-artifacts.yml) runs when a branch
 under `ci/kefs-artifacts/` is pushed, using its default inputs. This provides a way to test the
 workflow before merging it to the default branch. It can also be triggered manually: GitHub only
