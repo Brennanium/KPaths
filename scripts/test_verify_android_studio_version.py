@@ -121,6 +121,62 @@ class AndroidStudioVersionTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'Unsafe archive link'):
                 studio.extract_linux_archive(archive, Path(directory) / 'out')
 
+    def test_project_driver_receives_selected_ide_and_reports_result(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ide = root / 'studio'
+            ide.mkdir()
+            driver = root / 'custom-driver'
+            driver.write_text('driver')
+            report = root / 'report.json'
+            release = {'name': 'Android Studio', 'version': '1.2.3.4', 'build': '262.1'}
+            with mock.patch.object(studio.platform, 'system', return_value='Linux'), \
+                 mock.patch.object(studio.platform, 'machine', return_value='x86_64'), \
+                 mock.patch.object(studio, 'get_bytes', return_value=b'feed'), \
+                 mock.patch.object(studio, 'release_for', return_value=release), \
+                 mock.patch.object(studio, 'installed_build', return_value='262.1'), \
+                 mock.patch.object(studio.subprocess, 'run') as run:
+                self.assertEqual(studio.main(['1.2.3.4', '--ide-path', str(ide), '--driver', str(driver), '--report-json', str(report)]), 0)
+            run.assert_called_once_with([str(driver.resolve()), '--ide-path', str(ide.resolve())], cwd=driver.resolve().parent, check=True)
+            result = json.loads(report.read_text())
+            self.assertEqual(result['result'], 'passed')
+            self.assertEqual(result['driver'], str(driver.resolve()))
+
+    def test_project_driver_failure_is_not_reported_as_success(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            ide = root / 'studio'
+            ide.mkdir()
+            driver = root / 'driver'
+            driver.write_text('driver')
+            report = root / 'report.json'
+            release = {'name': 'Android Studio', 'version': '1.2.3.4', 'build': '262.1'}
+            with mock.patch.object(studio.platform, 'system', return_value='Linux'), \
+                 mock.patch.object(studio.platform, 'machine', return_value='x86_64'), \
+                 mock.patch.object(studio, 'get_bytes', return_value=b'feed'), \
+                 mock.patch.object(studio, 'release_for', return_value=release), \
+                 mock.patch.object(studio, 'installed_build', return_value='262.1'), \
+                 mock.patch.object(studio.subprocess, 'run', side_effect=studio.subprocess.CalledProcessError(1, 'driver')):
+                self.assertEqual(studio.main(['1.2.3.4', '--ide-path', str(ide), '--driver', str(driver), '--report-json', str(report)]), 1)
+            self.assertEqual(json.loads(report.read_text())['result'], 'failed')
+
+    def test_project_driver_runs_as_a_real_executable(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            ide = root / 'studio'
+            ide.mkdir()
+            driver = root / 'driver'
+            driver.write_text('#!/bin/sh\nset -eu\nprintf "%s\\n" "$@" > received-arguments\n')
+            driver.chmod(0o755)
+            release = {'name': 'Android Studio', 'version': '1.2.3.4', 'build': '262.1'}
+            with mock.patch.object(studio.platform, 'system', return_value='Linux'), \
+                 mock.patch.object(studio.platform, 'machine', return_value='x86_64'), \
+                 mock.patch.object(studio, 'get_bytes', return_value=b'feed'), \
+                 mock.patch.object(studio, 'release_for', return_value=release), \
+                 mock.patch.object(studio, 'installed_build', return_value='262.1'):
+                self.assertEqual(studio.main(['1.2.3.4', '--ide-path', str(ide), '--driver', str(driver)]), 0)
+            self.assertEqual((root / 'received-arguments').read_text().splitlines(), ['--ide-path', str(ide)])
+
 
 if __name__ == '__main__':
     unittest.main()

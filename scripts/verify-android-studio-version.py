@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Resolve an Android Studio release and run the complete local KEFS consumer checks."""
+"""Resolve Android Studio and run an IDE compatibility driver."""
 from __future__ import annotations
 
 import argparse
@@ -160,8 +160,11 @@ def main(argv=None):
     parser.add_argument('--ide-path', type=Path, help='Use this installed Android Studio if its build matches')
     parser.add_argument('--skip-ide-probe', action='store_true', help='Skip imported IDE consumer checks')
     parser.add_argument('--latest-kefs', action='store_true', help='Probe the newest compatible KEFS instead of a recorded tested version')
+    parser.add_argument('--driver', type=Path, help='Run a project-provided executable with --ide-path instead of the KPaths KEFS driver')
     parser.add_argument('--report-json', type=Path, help='Write resolved versions and test result')
     args = parser.parse_args(argv)
+    if args.driver and (args.latest_kefs or args.skip_ide_probe):
+        parser.error('--latest-kefs and --skip-ide-probe are specific to the KPaths KEFS driver')
     system, machine = platform.system(), platform.machine()
     if (system, machine) not in (('Darwin', 'arm64'), ('Linux', 'x86_64')):
         parser.error('Automatic Android Studio installation requires Apple Silicon macOS or x86_64 Linux')
@@ -190,6 +193,14 @@ def main(argv=None):
                 ide = extract_linux_archive(dmg, Path(extraction.name))
             if installed_build(ide) != release['build']:
                 raise ValueError('Downloaded IDE build does not match the release feed')
+        if args.driver:
+            driver = args.driver.expanduser().resolve(strict=True)
+            report.update({'idePath': str(ide), 'driver': str(driver)})
+            print(f'Running project IDE driver: {driver}', flush=True)
+            subprocess.run([str(driver), '--ide-path', str(ide)], cwd=driver.parent, check=True)
+            report['result'] = 'passed'
+            print('Project IDE driver passed.', flush=True)
+            return 0
         tested = json.loads((ROOT / 'kpaths-kefs-ide-fixture/ide-compatibility.json').read_text())['tested']
         matching = [entry for entry in tested if entry['product'] == 'Android Studio' and entry['build'] == release['build']]
         if len(matching) > 1:

@@ -1,7 +1,8 @@
-# Compiler and IDE compatibility checks
+# Kotlin Plugin Matrix
 
-These scripts exercise KPaths against Kotlin compiler and Android Studio versions. They are
-currently specific to this repository; extracting reusable compatibility tools is future work.
+Kotlin Plugin Matrix is the working name for compatibility tooling that exercises compiler plugins
+against Kotlin compiler and IDE versions. These scripts currently exercise KPaths specifically;
+extracting reusable compatibility tools is future work.
 The compiler snapshot assertions are a separate test facility: they check compiler output and
 diagnostics for a source snippet, while these scripts run a project's tests across versions and IDEs.
 
@@ -11,6 +12,13 @@ KEFS fixture and imported-consumer checks. See the [IDE fixture README](../kpath
 for requirements and options. The IDE checks currently support Apple Silicon macOS and x86-64 Linux;
 The IDE CI matrix is configured for both platforms; the Ubuntu integration is being verified.
 The macOS jobs for iOS simulator tests are separate.
+
+The Android Studio selector also accepts `--driver /path/to/executable`. After preparing the
+selected IDE it invokes that executable from its parent directory with `--ide-path <path>`; the
+driver's exit status determines the result. A project can use this to build and test its own IDE
+plugin instead of using the default KPaths KEFS fixture. The driver is responsible for its plugin
+installation, consumer fixture, and assertions. This is an experimental integration boundary; it has
+not yet been verified against a separately built IDE plugin.
 
 ## Inspiration
 
