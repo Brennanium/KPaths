@@ -30,6 +30,8 @@ class AndroidStudioVersionTests(unittest.TestCase):
         self.assertEqual(studio.release_for('latest-stable', feed)['version'], '2026.2.2.9')
         self.assertEqual(studio.release_for('2026.2.3.1', feed)['build'], '262.1.3')
         self.assertTrue(studio.release_for('2026.2.3.1', feed, 'Linux')['url'].endswith('-linux.tar.gz'))
+        release_feed = '<content>' + item('2026.2.2.9', 'Patch', '262.1.2') + item('2026.3.1.1', 'Release', '263.1.1') + '</content>'
+        self.assertEqual(studio.release_for('latest-stable', release_feed)['version'], '2026.3.1.1')
         with self.assertRaisesRegex(ValueError, 'Expected one'):
             studio.release_for('2026.2.2', feed)
 

@@ -31,7 +31,7 @@ def get_bytes(url):
 def release_for(selector, xml, system='Darwin'):
     items = ET.fromstring(xml).findall('item')
     if selector == 'latest-stable':
-        items = [item for item in items if item.findtext('channel') in ('Stable', 'Patch')]
+        items = [item for item in items if item.findtext('channel') in ('Stable', 'Release', 'Patch')]
         if not items:
             raise ValueError('The Android Studio feed contains no stable releases')
         item = max(items, key=lambda x: tuple(map(int, x.findtext('version').split('.'))))
