@@ -41,3 +41,17 @@ class MatrixCliTests(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertEqual((root / 'versions').read_text().splitlines(), ['2.4.20', '2.4.21'])
             self.assertEqual([x['result'] for x in json.loads(report.read_text())['results']], ['passed', 'failed'])
+
+    def test_custom_compiler_driver_succeeds_and_deduplicates_versions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            driver = root / 'driver'
+            driver.write_text('#!/bin/sh\nset -eu\nprintf "%s\\n" "$2" >> versions\n')
+            driver.chmod(0o755)
+            report = root / 'report.json'
+            result = subprocess.run([sys.executable, str(script), 'compiler', '2.4.20', '2.4.20',
+                                     '--driver', str(driver), '--report-json', str(report)],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0)
+            self.assertEqual((root / 'versions').read_text().splitlines(), ['2.4.20'])
+            self.assertEqual(json.loads(report.read_text())['results'][0]['result'], 'passed')
