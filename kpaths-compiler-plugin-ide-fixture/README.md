@@ -11,6 +11,11 @@ an installable KPaths IDE integration and does not verify Kotlin External FIR Su
 import, or Marketplace distribution. Most fixture tests use minimal core API stubs; a separate highlighting test uses the actual core
 and annotations JARs. Runtime and cross-module behavior are tested by the other compiler-plugin fixtures.
 
+The fixture's `EditorFixtureTestCase` hosts inline Kotlin source for `assertEditor`, while suite
+setup supplies the compiler plugin and runtime or stubs. Assertions query real highlighting and
+reference resolution. See the [editor testing experiment](../editor-testing/README.md) for scope
+and limitations.
+
 With JDK 17 for Gradle and JDK 25 available as a toolchain:
 
 ```sh

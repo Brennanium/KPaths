@@ -1,12 +1,14 @@
 package dev.kpaths.ide
 
-import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.testFramework.PsiTestUtil
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinCommonCompilerArgumentsHolder
-import dev.kpaths.testing.editor.assertEditor
+import dev.kpaths.testing.editor.intellij.EditorFixtureTestCase
 import dev.kpaths.testing.editor.ReferenceObservation
+import dev.kpaths.testing.editor.intellij.IntellijEditorObservations
 
-class KPathsHighlightingTest : BasePlatformTestCase() {
+class KPathsHighlightingTest : EditorFixtureTestCase() {
+  override val ignoreMissingDependency: Boolean = true
+
   override fun setUp() {
     super.setUp()
     PsiTestUtil.addLibrary(myFixture.module, checkNotNull(System.getProperty("kpaths.ideKotlinStdlib")))
@@ -44,14 +46,13 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
 
   fun testGenericPathsResolve() {
     installKPathsStubs()
-    myFixture.configureByText("GenericBox.kt", """
+    assertEditor(fileName = "GenericBox.kt", source = """
       import dev.kpaths.annotations.Pathable
       import dev.kpaths.core.WritableKeyPath
       @Pathable data class Box<T : CharSequence>(var value: T)
       val value: WritableKeyPath<Box<String>, String> = Box.Paths<String>().value
       val classValue: WritableKeyPath<Box<String>, String> = Box.Paths.of(String::class).value
-    """.trimIndent())
-    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+    """) {
       reference("Box.Paths<String>().value").resolves()
       reference("Box.Paths.of(String::class).value").resolves()
     }
@@ -59,7 +60,7 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
 
   fun testGenericSealedWholeCasePathsResolve() {
     installKPathsStubs()
-    myFixture.configureByText("GenericEvent.kt", """
+    assertEditor(fileName = "GenericEvent.kt", source = """
       import dev.kpaths.annotations.Pathable
       import dev.kpaths.core.CaseKeyPath
       import dev.kpaths.core.KeyPath
@@ -73,8 +74,7 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
       val property: KeyPath<Event.Value<String>, String> = Event.Paths<String>().ValuePaths.value
       val unit: CaseKeyPath<Event<String>, Unit> = Event.Paths<String>().Idle.unit
       val all = Event.Paths<String>().allCasePaths
-    """.trimIndent())
-    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+    """) {
       reference("Event.Paths<String>().Value.value").resolves()
       reference("Event.Paths<String>().Idle.unit").resolves()
     }
@@ -82,7 +82,7 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
 
   fun testGeneratedPathsResolve() {
     installKPathsStubs()
-    myFixture.configureByText("Person.kt", """
+    assertEditor(fileName = "Person.kt", source = """
       import dev.kpaths.annotations.Pathable
       import dev.kpaths.core.KeyPath
       import dev.kpaths.core.CasePathable
@@ -95,8 +95,7 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
         data class Open(val id: String, val animated: Boolean) : Request
       }
       val open: CaseKeyPath<Request, Pair<String, Boolean>> = Request.Paths.Open.payload
-    """.trimIndent())
-    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+    """) {
       reference("Person.Paths.name").resolves()
       reference("Request.Paths.Open.payload").resolves()
     }
@@ -104,7 +103,7 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
 
   fun testRenamedPropertyPathResolves() {
     installKPathsStubs()
-    myFixture.configureByText("Person.kt", """
+    assertEditor(fileName = "Person.kt", source = """
       import dev.kpaths.annotations.Pathable
       import dev.kpaths.annotations.PathName
       @Pathable data class Person(@PathName("display") val name: String)
@@ -114,8 +113,7 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
       const val FIELD_NAME = "shown"
       @Pathable data class Constant(@PathName(FIELD_NAME) val name: String)
       val constant = Constant.Paths.shown
-    """.trimIndent())
-    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+    """) {
       reference("Person.Paths.display").resolves()
       reference("Named.Paths.alias").resolves()
       reference("Constant.Paths.shown").resolves()
@@ -124,22 +122,21 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
 
   fun testRenamedCasePathResolves() {
     installKPathsStubs()
-    myFixture.configureByText("Event.kt", """
+    assertEditor(fileName = "Event.kt", source = """
       import dev.kpaths.annotations.Pathable
       import dev.kpaths.annotations.CaseName
       @Pathable sealed interface Event {
         @CaseName("MessageCase") data class Message(val text: String) : Event
       }
       val message = Event.Paths.MessageCase.text
-    """.trimIndent())
-    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+    """) {
       reference("Event.Paths.MessageCase.text").resolves()
     }
   }
 
   fun testCasePropertyCatalogAndBoundFactoryResolve() {
     installKPathsStubs()
-    myFixture.configureByText("BoundEvent.kt", """
+    assertEditor(fileName = "BoundEvent.kt", source = """
       import dev.kpaths.annotations.Pathable
       import dev.kpaths.core.CaseKeyPath
       import dev.kpaths.core.KeyPath
@@ -148,8 +145,7 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
       }
       val property: KeyPath<Event.Message, String> = Event.Paths.MessagePaths.text
       val bound: CaseKeyPath<Event, String> = Event.Paths.Message.textFor(id = 1)
-    """.trimIndent())
-    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+    """) {
       reference("Event.Paths.MessagePaths.text").resolves()
       reference("Event.Paths.Message.textFor(id = 1)").resolves()
     }
@@ -157,28 +153,26 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
 
   fun testIncompleteCatalogIsHighlightedAsWarning() {
     installKPathsStubs()
-    myFixture.configureByText("Event.kt", """
+    assertEditor(fileName = "Event.kt", source = """
       import dev.kpaths.annotations.Pathable
       @Pathable sealed interface Event {
         data object Idle : Event
         data class Many(val a: Int, val b: Int, val c: Int, val d: Int) : Event
       }
-    """.trimIndent())
-    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+    """) {
       diagnostics { warning("generated case catalog omits 'Many'") }
     }
   }
 
   fun testGeneratedMemberCollisionIsHighlightedAsError() {
     installKPathsStubs()
-    myFixture.configureByText("Connection.kt", """
+    assertEditor(fileName = "Connection.kt", source = """
       import dev.kpaths.annotations.Pathable
       @Pathable sealed class Connection {
         abstract val Connected: String
         data class Connected(override val Connected: String) : Connection()
       }
-    """.trimIndent())
-    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+    """) {
       diagnostics {
         error("'Connected' would name both")
         // Kotlin also diagnoses the colliding class and property declarations.
@@ -190,34 +184,32 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
 
   fun testNestedCatalogCollisionIsHighlightedAsError() {
     installKPathsStubs()
-    myFixture.configureByText("Person.kt", """
+    assertEditor(fileName = "Person.kt", source = """
       import dev.kpaths.annotations.Pathable
       @Pathable data class Person(val name: String) {
         object Paths
       }
-    """.trimIndent())
-    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+    """) {
       diagnostics { error("Cannot generate 'Person.Paths'") }
     }
   }
 
   fun testInaccessibleSetterIsHighlightedAsError() {
     installKPathsStubs()
-    myFixture.configureByText("Item.kt", """
+    assertEditor(fileName = "Item.kt", source = """
       import dev.kpaths.annotations.Pathable
       @Pathable data class Item(val id: Int) {
         var count: Int = 0
           private set
       }
-    """.trimIndent())
-    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+    """) {
       diagnostics { error("Data-class property 'count'") }
     }
   }
 
   fun testOnlyNestedSealedCasesResolve() {
     installKPathsStubs()
-    myFixture.configureByText("Feature.kt", """
+    assertEditor(fileName = "Feature.kt", source = """
       import dev.kpaths.annotations.Pathable
       class Feature {
         @Pathable sealed interface Event {
@@ -226,11 +218,10 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
         }
       }
       val case = Feature.Event.Paths.Idle
-    """.trimIndent())
-    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+    """) {
       reference("Feature.Event.Paths.Idle").resolves()
     }
-    myFixture.configureByText("InvalidFeature.kt", """
+    assertEditor(fileName = "InvalidFeature.kt", source = """
       import dev.kpaths.annotations.Pathable
       class OtherFeature {
         @Pathable sealed interface Event {
@@ -239,8 +230,7 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
         }
       }
       val invalid = OtherFeature.Event.Paths.Metadata
-    """.trimIndent())
-    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+    """) {
       diagnostics { error("Metadata") }
       reference("OtherFeature.Event.Paths.Metadata").isUnresolved()
     }
@@ -248,29 +238,27 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
 
   fun testGenericAliasSealedCaseResolves() {
     installKPathsStubs()
-    myFixture.configureByText("GenericAlias.kt", """
+    assertEditor(fileName = "GenericAlias.kt", source = """
       import dev.kpaths.annotations.Pathable
       typealias Alias<T> = Event
       @Pathable sealed interface Event {
         data object Idle : Alias<String>
       }
       val case = Event.Paths.Idle
-    """.trimIndent())
-    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+    """) {
       reference("Event.Paths.Idle").resolves()
     }
   }
 
   fun testInvalidKotlinProducesErrors() {
-    myFixture.configureByText("Broken.kt", "val broken: Int = \"not an integer\"")
-    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+    assertEditor(fileName = "Broken.kt", source = "val broken: Int = \"not an integer\"") {
       diagnostics { error("Int") }
     }
   }
 
   fun testReferenceObservationRejectsMissingAndAmbiguousExpressions() {
     myFixture.configureByText("References.kt", "val first = 1\nval second = 1")
-    val observations = FixtureEditorObservations(myFixture)
+    val observations = IntellijEditorObservations(myFixture)
     assertTrue(observations.reference("missing") is ReferenceObservation.Unavailable)
     val duplicate = observations.reference("1") as ReferenceObservation.Unavailable
     assertEquals("expression is ambiguous", duplicate.reason)

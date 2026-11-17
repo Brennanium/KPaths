@@ -1,4 +1,4 @@
-package dev.kpaths.ide
+package dev.kpaths.testing.editor.intellij
 
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.testFramework.fixtures.CodeInsightTestFixture
@@ -8,7 +8,7 @@ import dev.kpaths.testing.editor.EditorObservations
 import dev.kpaths.testing.editor.ReferenceObservation
 
 /** Adapts IntelliJ's focused test fixture to the editor assertion layer. */
-internal class FixtureEditorObservations(
+internal class IntellijEditorObservations(
   private val fixture: CodeInsightTestFixture,
   // Opt in only for the light fixture's known stub-classpath diagnostic.
   private val ignoreMissingDependency: Boolean = false,

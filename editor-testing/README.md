@@ -5,12 +5,23 @@ start an IDE, import a project, or configure compiler plugins. The Kotlin Plugin
 version selection and orchestration; an IDE test fixture or future IDE-side adapter captures the
 editor observations. The two communicate through the test runner or a future result protocol.
 
+An `EditorSourceHost` connects inline source to a prepared editor and exposes observations to the
+assertion layer. In the KPaths lightweight IntelliJ fixture, a test base supplies that host:
+
 ```kotlin
-assertEditor(observations) {
+assertEditor(source = """
+  import dev.kpaths.annotations.Pathable
+  @Pathable data class Person(val name: String)
+  val name = Person.Paths.name
+""") {
   reference("Person.Paths.name").resolves()
-  diagnostics { warning("catalog omits") }
 }
 ```
+
+The fixture provides the compiler plugin and dependencies in its suite setup. It uses IntelliJ's
+light test project; each assertion does not start a new IDE or import a Gradle project. The base
+class and IntelliJ adapter currently live in the KPaths IDE fixture, not a published integration.
+The lower-level `assertEditor(observations)` remains available to other adapters.
 
 Unexpected error diagnostics fail even when no diagnostic block is provided. Expected diagnostics
 are matched once each by severity and message substring, optionally with a location. Unrelated
