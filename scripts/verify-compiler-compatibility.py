@@ -8,8 +8,9 @@ import sys
 from pathlib import Path
 
 from kotlin_version_resolver import resolve
+from matrix_project_root import project_root
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = project_root()
 
 
 def read_matrix(path):
@@ -43,6 +44,8 @@ def main(argv=None):
     parser.add_argument("--resolve-only", action="store_true", help="Print concrete versions without compiling")
     parser.add_argument("--report-json", type=Path, help="Write a machine-readable result summary")
     args = parser.parse_args(argv)
+    if not (ROOT / 'kpaths-compiler-plugin').is_dir():
+        parser.error('The built-in compiler checks require a KPaths checkout; use --driver for another project')
     try:
         matrix = ROOT / ("gradle/kpaths-preview-kotlin-versions.txt" if args.preview
                          else "gradle/kpaths-supported-kotlin-versions.txt")

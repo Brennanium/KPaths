@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run compiler or IDE compatibility checks locally or in any CI environment."""
 import argparse
+from importlib import metadata
 import subprocess
 import sys
 from pathlib import Path
@@ -13,8 +14,13 @@ SCRIPTS = {
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__, epilog=(
+    parser = argparse.ArgumentParser(prog='kotlin-plugin-matrix', description=__doc__, epilog=(
         'Use "compiler --help" or "ide --help" for command-specific options.'))
+    try:
+        version = metadata.version('kotlin-plugin-matrix')
+    except metadata.PackageNotFoundError:
+        version = 'development (source checkout)'
+    parser.add_argument('--version', action='version', version=f'%(prog)s {version}')
     parser.add_argument('command', choices=SCRIPTS, help='Compatibility checks to run')
     values = list(sys.argv[1:] if argv is None else argv)
     if not values or values[0] not in SCRIPTS:
