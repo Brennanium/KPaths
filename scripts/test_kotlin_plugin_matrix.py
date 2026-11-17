@@ -1,6 +1,8 @@
 import importlib.util
 import subprocess
 import sys
+import json
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -25,3 +27,17 @@ class MatrixCliTests(unittest.TestCase):
                                 capture_output=True, text=True, check=True)
         self.assertIn('--ide-path', result.stdout)
         self.assertIn('--driver', result.stdout)
+
+    def test_custom_compiler_driver_runs_each_version_and_reports_failures(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            driver = root / 'driver'
+            driver.write_text('#!/bin/sh\nset -eu\nprintf "%s\\n" "$2" >> versions\n[ "$2" != 2.4.21 ]\n')
+            driver.chmod(0o755)
+            report = root / 'report.json'
+            result = subprocess.run([sys.executable, str(script), 'compiler', '2.4.20', '2.4.21',
+                                     '--driver', str(driver), '--report-json', str(report)],
+                                    capture_output=True, text=True)
+            self.assertEqual(result.returncode, 1)
+            self.assertEqual((root / 'versions').read_text().splitlines(), ['2.4.20', '2.4.21'])
+            self.assertEqual([x['result'] for x in json.loads(report.read_text())['results']], ['passed', 'failed'])

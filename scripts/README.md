@@ -36,6 +36,12 @@ not yet been verified against a separately built IDE plugin. The example
 `scripts/verify-local-ide-provider.sh` runs KPaths' existing non-KEFS IDE fixture through this
 boundary. That fixture uses a test-only provider; it does not install or test a packaged IDE plugin.
 
+For a different compiler plugin project, `compiler <versions...> --driver /path/to/executable`
+invokes its driver once per resolved version with `--kotlin-version <version>`. The driver owns the
+project's build and behavioral tests. The runner records each exit status and continues through the
+remaining versions after a failure; `--report-json` saves the results. Without `--driver`, the
+compiler command runs the KPaths-specific compatibility checks described below.
+
 ## Inspiration
 
 - [Metro](https://github.com/ZacSweers/metro) demonstrates compiler and IDE compatibility matrices,
