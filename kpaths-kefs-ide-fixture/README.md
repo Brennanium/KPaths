@@ -54,9 +54,10 @@ error; a successful test does not automatically add the IDE to the supported mat
 needs network access, JDK 17 and a JDK 25 toolchain, and an Android Studio environment capable of
 importing the test project. The isolated IDE may prompt for SDK configuration on a new machine.
 Linux also needs a graphical display; on headless CI, run the command with `xvfb-run -a`.
-The imported probe uses `assertEditor` for reference-resolution checks and explicitly disables
-diagnostic checks because this probe does not yet capture editor diagnostics. Use the CLI's
-`--suite all` option to run both this probe and the separate focused highlighting fixture.
+The imported probe uses `assertEditor` to check reference resolution and unexpected errors after
+IDE highlighting in the enabled scenario. The disabled-plugin control deliberately has unresolved
+references and checks those separately. Use the CLI's `--suite all` option to run both this probe
+and the separate focused highlighting fixture.
 Each probe attempt uses its own IDE configuration, system cache, and log directory under
 `build/ide-probe/`, so restarting the IDE cannot reuse another attempt's state.
 The runner reports a fatal Android Studio startup dialog as a failed check and records its log at

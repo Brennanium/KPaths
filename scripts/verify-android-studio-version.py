@@ -244,7 +244,7 @@ def main(argv=None):
         report['suites']['kefs'] = 'passed'
         if not args.skip_ide_probe:
             report['importedConsumer'] = 'passed'
-            report['importedConsumerChecks'] = ['references']
+            report['importedConsumerChecks'] = ['references', 'enabled-diagnostics']
         if args.suite == 'all':
             current_suite = 'focused'
             subprocess.run([str(ROOT / 'scripts/verify-local-ide-provider.sh'), '--ide-path', str(ide)], cwd=ROOT, check=True)

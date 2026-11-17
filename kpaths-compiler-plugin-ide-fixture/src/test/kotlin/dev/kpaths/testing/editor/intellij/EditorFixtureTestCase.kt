@@ -11,9 +11,14 @@ abstract class EditorFixtureTestCase : BasePlatformTestCase() {
   protected fun assertEditor(
     source: String,
     fileName: String = "Test.kt",
+    additionalSources: Map<String, String> = emptyMap(),
     block: EditorExpectations.() -> Unit,
   ) {
     val host = EditorSourceHost { name, text ->
+      require(name !in additionalSources) { "The editor file must not also be an additional source: $name" }
+      additionalSources.forEach { (path, content) ->
+        myFixture.addFileToProject(path, content.trimIndent())
+      }
       myFixture.configureByText(name, text)
       IntellijEditorObservations(myFixture, ignoreMissingDependency)
     }

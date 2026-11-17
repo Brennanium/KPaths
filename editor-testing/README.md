@@ -18,6 +18,18 @@ assertEditor(source = """
 }
 ```
 
+Supporting files can be included in the same lightweight test project:
+
+```kotlin
+assertEditor(
+  fileName = "Consumer.kt",
+  source = "val label: String = model.name",
+  additionalSources = mapOf("Model.kt" to "data class Model(val name: String)\nval model = Model(\"hello\")"),
+) {
+  reference("model.name").resolves()
+}
+```
+
 The fixture provides the compiler plugin and dependencies in its suite setup. It uses IntelliJ's
 light test project; each assertion does not start a new IDE or import a Gradle project. The base
 class and IntelliJ adapter currently live in the KPaths IDE fixture, not a published integration.
@@ -37,9 +49,11 @@ diagnostic expectations in the same assertion. It does not record snapshots yet.
 The KPaths Android Studio light fixture supplies the first adapter and exercises both real
 highlighting and reference resolution. It explicitly filters the light fixture's existing
 `MISSING_DEPENDENCY` stub-classpath diagnostic; the assertion module does not filter diagnostics.
-The imported-project probe uses the same reference assertions with diagnostic checking explicitly
-disabled: it does not yet capture editor diagnostics. Exact location support, completion, inlays,
-and inline recording remain future work.
+The imported-project probe checks reference resolution and unexpected errors after highlighting in
+the enabled scenario. Its disabled-plugin control deliberately produces unresolved references, so
+that scenario checks references separately. Both adapters report diagnostic locations as
+`File.kt:line:column`, using one-based line and column numbers. Completion, inlays, inline
+recording, and hosting arbitrary inline source in an imported project remain future work.
 
 `assertCompiler` currently lives in the compiler fixture. Both assertion layers now share the
 basic snapshot strategy and comparison module. Generic snapshot expectations, version selection,

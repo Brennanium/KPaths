@@ -1,5 +1,9 @@
 package dev.kpaths.ide
 
+import com.intellij.codeInsight.daemon.impl.DaemonCodeAnalyzerEx
+import com.intellij.lang.annotation.HighlightSeverity
+import com.intellij.openapi.fileEditor.FileEditorManager
+import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.application.ReadAction
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.application.PathManager
@@ -8,6 +12,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiManager
+import dev.kpaths.testing.editor.DiagnosticSeverity
 import dev.kpaths.testing.editor.EditorDiagnostic
 import dev.kpaths.testing.editor.EditorObservations
 import dev.kpaths.testing.editor.ReferenceObservation
@@ -35,6 +40,14 @@ class ConsumerProbe : ProjectActivity {
     val expected = System.getProperty("kpaths.consumerExpected", "enabled")
     require(expected in setOf("enabled", "disabled"))
     val source = Path.of(project.basePath!!, "src/main/kotlin/Example.kt")
+    // Opening the file starts the IDE's normal highlighting passes. A reference resolving
+    // alone does not imply that those passes have finished.
+    val sourceFile = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(source)
+    ApplicationManager.getApplication().invokeLater {
+      if (!project.isDisposed && sourceFile != null) {
+        FileEditorManager.getInstance(project).openFile(sourceFile, true)
+      }
+    }
     // A cold hosted runner must complete Gradle import and indexing before references resolve.
     val deadline = System.currentTimeMillis() + 600_000
     var last = "waiting for project"
@@ -46,6 +59,23 @@ class ConsumerProbe : ProjectActivity {
           val file = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(source)
             ?: return@compute "missing source"
           val psi = PsiManager.getInstance(project).findFile(file) ?: return@compute "missing PSI"
+          val document = FileDocumentManager.getInstance().getDocument(file) ?: return@compute "missing document"
+          if (expected == "enabled" && !DaemonCodeAnalyzerEx.getInstanceEx(project).isErrorAnalyzingFinished(psi)) {
+            return@compute "waiting for editor highlighting"
+          }
+          val diagnostics = mutableListOf<EditorDiagnostic>()
+          if (expected == "enabled") {
+            DaemonCodeAnalyzerEx.processHighlights(document, project, HighlightSeverity.WARNING, 0, document.textLength) { highlight ->
+              val offset = highlight.actualStartOffset.coerceIn(0, document.textLength)
+              val line = document.getLineNumber(offset)
+              diagnostics += EditorDiagnostic(
+                severity = if (highlight.severity == HighlightSeverity.ERROR) DiagnosticSeverity.ERROR else DiagnosticSeverity.WARNING,
+                message = highlight.description ?: "<no description>",
+                location = "${psi.name}:${line + 1}:${offset - document.getLineStartOffset(line) + 1}",
+              )
+              true
+            }
+          }
           val code = psi.text
           val queries = linkedMapOf(
             "Person annotation" to ("@Pathable\ndata class Person" to "Pathable"),
@@ -57,7 +87,7 @@ class ConsumerProbe : ProjectActivity {
             "Event.Paths.Message.text" to ("Event.Paths.Message.text" to "text"),
           )
           val observations = object : EditorObservations {
-            override fun diagnostics(): List<EditorDiagnostic> = error("Imported probe does not capture diagnostics")
+            override fun diagnostics(): List<EditorDiagnostic> = diagnostics
             override fun reference(expression: String): ReferenceObservation {
               val (anchor, name) = queries[expression] ?: return ReferenceObservation.Unavailable("unknown query")
               val start = code.indexOf(anchor)

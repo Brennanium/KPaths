@@ -28,6 +28,11 @@ internal class IntellijEditorObservations(
           else -> DiagnosticSeverity.INFO
         },
         message = it.description ?: "<no description>",
+        location = fixture.editor.document.let { document ->
+          val offset = it.actualStartOffset.coerceIn(0, document.textLength)
+          val line = document.getLineNumber(offset)
+          "${fixture.file.name}:${line + 1}:${offset - document.getLineStartOffset(line) + 1}"
+        },
       )
     }
 

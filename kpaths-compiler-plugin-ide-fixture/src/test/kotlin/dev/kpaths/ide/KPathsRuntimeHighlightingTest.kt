@@ -34,11 +34,27 @@ class KPathsRuntimeHighlightingTest : EditorFixtureTestCase() {
     }
   }
 
+  fun testInlineSourceResolvesAdditionalProjectFiles() {
+    assertEditor(
+      fileName = "Consumer.kt",
+      source = "val label: String = model.name",
+      additionalSources = mapOf("Model.kt" to "data class Model(val name: String)\nval model = Model(\"hello\")"),
+    ) {
+      reference("model.name").resolves()
+    }
+  }
+
   fun testInlineSourceRejectsUnexpectedErrors() {
     val failure = assertFailsWith<AssertionError> {
       assertEditor(source = "val count: Int = \"not a number\"") {}
     }
     assertContains(failure.message.orEmpty(), "Unexpected ERROR")
+  }
+
+  fun testInlineSourceChecksDiagnosticLocation() {
+    assertEditor(fileName = "Problem.kt", source = "val count: Int = \"not a number\"") {
+      diagnostics { error("Int", location = "Problem.kt:1:16") }
+    }
   }
 
   fun testInlineSourceChecksExpectedDiagnostics() {
