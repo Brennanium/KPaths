@@ -6,6 +6,7 @@ from xml.etree import ElementTree as ET
 
 parser = argparse.ArgumentParser()
 parser.add_argument("mode", choices=("enabled", "disabled"))
+parser.add_argument("--project", type=Path, help="Disposable consumer project (defaults to the fixture)")
 args = parser.parse_args()
 root = Path(__file__).resolve().parent
 project = ET.Element("project", version="4")
@@ -18,7 +19,7 @@ settings = {
 for name, (key, value) in settings.items():
     mapping = ET.SubElement(ET.SubElement(component, "option", name=name), "map")
     ET.SubElement(mapping, "entry", key=key, value=value)
-output = root / "consumer/.idea/kotlin-plugins.xml"
+output = (args.project or root / "consumer") / ".idea/kotlin-plugins.xml"
 output.parent.mkdir(parents=True, exist_ok=True)
 ET.indent(project, space="  ")
 ET.ElementTree(project).write(output, encoding="unicode", xml_declaration=True)

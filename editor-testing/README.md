@@ -53,7 +53,9 @@ The imported-project probe checks reference resolution and unexpected errors aft
 the enabled scenario. Its disabled-plugin control deliberately produces unresolved references, so
 that scenario checks references separately. Both adapters report diagnostic locations as
 `File.kt:line:column`, using one-based line and column numbers. Completion, inlays, inline
-recording, and hosting arbitrary inline source in an imported project remain future work.
+recording, and a general `assertEditor` API that hosts arbitrary inline source in an imported
+project remain future work. The KPaths imported probe now creates a disposable project from a source
+map, but its reference and diagnostic expectations are still KPaths-specific.
 
 `assertCompiler` currently lives in the compiler fixture. Both assertion layers now share the
 basic snapshot strategy and comparison module. Generic snapshot expectations, version selection,

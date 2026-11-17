@@ -8,7 +8,7 @@ class MatrixBuildPy(build_py):
     modules = {
         '__init__', 'matrix_entrypoint', 'matrix_project_root', 'kotlin-plugin-matrix',
         'kotlin_version_resolver', 'run-compiler-matrix', 'verify-compiler-compatibility',
-        'verify-android-studio-version', 'verify-kefs-compatibility', 'ide_sandbox',
+        'verify-android-studio-version', 'verify-kefs-compatibility', 'ide_sandbox', 'imported_ide_project',
     }
 
     def find_package_modules(self, package, package_dir):

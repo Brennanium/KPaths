@@ -186,6 +186,8 @@ tasks.runIde {
   val mode = providers.gradleProperty("kpaths.consumerExpected").orElse("enabled")
   val attempt = providers.gradleProperty("kpaths.consumerAttempt").orElse("1")
   val runId = providers.gradleProperty("kpaths.consumerRunId").orElse("manual")
+  val consumerProject = providers.gradleProperty("kpaths.consumerProject")
+    .orElse(rootProject.file("consumer").absolutePath)
   val probeDirectory = layout.buildDirectory.dir("ide-probe/${runId.get()}/${mode.get()}-${attempt.get()}")
   val probePreferences = probeDirectory.map { it.dir("preferences") }
   doFirst {
@@ -208,7 +210,7 @@ tasks.runIde {
     androidSettings.resolve("analytics.settings").writeText(analytics)
   }
   systemProperty("kpaths.consumerProbe", report.get().asFile.absolutePath)
-  systemProperty("kpaths.consumerProject", rootProject.file("consumer").absolutePath)
+  systemProperty("kpaths.consumerProject", consumerProject.get())
   systemProperty("kpaths.consumerSandbox", probeDirectory.get().asFile.absolutePath)
   systemProperty("kpaths.consumerExpected", mode.get())
   // RunIde's sandbox argument provider owns these paths; ordinary systemProperty calls

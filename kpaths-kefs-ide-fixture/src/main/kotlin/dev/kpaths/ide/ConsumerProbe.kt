@@ -38,7 +38,7 @@ class ConsumerProbe : ProjectActivity {
       return
     }
     val expected = System.getProperty("kpaths.consumerExpected", "enabled")
-    require(expected in setOf("enabled", "disabled"))
+    require(expected in setOf("enabled", "disabled", "diagnostic"))
     val source = Path.of(project.basePath!!, "src/main/kotlin/Example.kt")
     // Opening the file starts the IDE's normal highlighting passes. A reference resolving
     // alone does not imply that those passes have finished.
@@ -51,20 +51,36 @@ class ConsumerProbe : ProjectActivity {
     // A cold hosted runner must complete Gradle import and indexing before references resolve.
     val deadline = System.currentTimeMillis() + 600_000
     var last = "waiting for project"
+    var lastHighlightRestart = 0L
     while (System.currentTimeMillis() < deadline && !project.isDisposed) {
       delay(2_000)
       if (DumbService.isDumb(project)) continue
+      if (expected != "disabled" && System.currentTimeMillis() - lastHighlightRestart > 30_000) {
+        lastHighlightRestart = System.currentTimeMillis()
+        ApplicationManager.getApplication().invokeLater {
+          if (!project.isDisposed && sourceFile != null) {
+            FileEditorManager.getInstance(project).openFile(sourceFile, true)
+            PsiManager.getInstance(project).findFile(sourceFile)?.let {
+              DaemonCodeAnalyzerEx.getInstanceEx(project).restart(it)
+            }
+          }
+        }
+      }
       last = try {
         ReadAction.compute<String, Throwable> {
           val file = LocalFileSystem.getInstance().refreshAndFindFileByNioFile(source)
             ?: return@compute "missing source"
           val psi = PsiManager.getInstance(project).findFile(file) ?: return@compute "missing PSI"
           val document = FileDocumentManager.getInstance().getDocument(file) ?: return@compute "missing document"
-          if (expected == "enabled" && !DaemonCodeAnalyzerEx.getInstanceEx(project).isErrorAnalyzingFinished(psi)) {
-            return@compute "waiting for editor highlighting"
+          if (expected != "disabled" && !DaemonCodeAnalyzerEx.getInstanceEx(project).isErrorAnalyzingFinished(psi)) {
+            val analyzer = DaemonCodeAnalyzerEx.getInstanceEx(project)
+            val editors = FileEditorManager.getInstance(project)
+            val open = editors.isFileOpen(file)
+            val selected = file in editors.selectedFiles
+            return@compute "waiting for editor highlighting (open=$open selected=$selected available=${analyzer.isHighlightingAvailable(psi)})"
           }
           val diagnostics = mutableListOf<EditorDiagnostic>()
-          if (expected == "enabled") {
+          if (expected != "disabled") {
             DaemonCodeAnalyzerEx.processHighlights(document, project, HighlightSeverity.WARNING, 0, document.textLength) { highlight ->
               val offset = highlight.actualStartOffset.coerceIn(0, document.textLength)
               val line = document.getLineNumber(offset)
@@ -80,6 +96,7 @@ class ConsumerProbe : ProjectActivity {
           val queries = linkedMapOf(
             "Person annotation" to ("@Pathable\ndata class Person" to "Pathable"),
             "Direct property" to ("Person::name" to "name"),
+            "Hosted support" to ("HostedSupport.value" to "value"),
             "Person.Paths" to ("Person.Paths.name" to "Paths"),
             "Person.Paths.name" to ("Person.Paths.name" to "name"),
             "Event.Paths" to ("Event.Paths.Message.text" to "Paths"),

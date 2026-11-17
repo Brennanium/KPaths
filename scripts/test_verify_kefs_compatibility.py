@@ -18,6 +18,10 @@ class KefsMatrixTests(unittest.TestCase):
         self.tmp = tempfile.TemporaryDirectory()
         root = Path(self.tmp.name)
         self.addCleanup(self.tmp.cleanup)
+        consumer = root / "kpaths-kefs-ide-fixture/consumer"
+        (consumer / "src/main/kotlin").mkdir(parents=True)
+        (consumer / "src/main/kotlin/Example.kt").write_text("package example\n")
+        (consumer / "settings.gradle.kts").write_text('uri("../../build/consumer-verification/repository")\n' * 2)
         self.ide = root / "Studio.app"
         info = self.ide / "Contents/Resources/product-info.json"
         info.parent.mkdir(parents=True)
@@ -59,12 +63,12 @@ class KefsMatrixTests(unittest.TestCase):
 
     def test_project_trust_is_limited_to_fixture_sandbox(self):
         fixture = Path(self.tmp.name) / 'fixture'
-        module.trust_fixture_project(fixture, '123', 'enabled', 1)
+        module.trust_fixture_project(fixture, fixture / 'consumer', '123', 'enabled', 1)
         config = fixture / 'build/ide-probe/123/enabled-1/config/options/trusted-paths.xml'
         self.assertIn(str(fixture / 'consumer'), config.read_text())
-        module.trust_fixture_project(fixture, '123', 'enabled', 1)
+        module.trust_fixture_project(fixture, fixture / 'consumer', '123', 'enabled', 1)
         self.assertEqual(config.read_text().count(str(fixture / 'consumer')), 1)
-        module.trust_fixture_project(fixture, '123', 'disabled', 1)
+        module.trust_fixture_project(fixture, fixture / 'consumer', '123', 'disabled', 1)
         self.assertTrue((fixture / 'build/ide-probe/123/disabled-1/config/options/trusted-paths.xml').exists())
 
     def test_fatal_ide_startup_dialog_is_reported(self):
@@ -76,7 +80,8 @@ class KefsMatrixTests(unittest.TestCase):
     def test_retries_only_the_known_analytics_startup_failure(self):
         root = Path(self.tmp.name)
         calls = []
-        def run_mode(_ide, _kefs, _fixture, _report, mode, log, attempt, _run_id):
+        def run_mode(_ide, _kefs, _fixture, _project, _report, mode, log, attempt, _run_id):
+            self.assertEqual(_project, _project.resolve())
             calls.append((mode, attempt))
             if calls == [('enabled', 1)]:
                 log.write_text('analytics initialization failed')
@@ -86,7 +91,7 @@ class KefsMatrixTests(unittest.TestCase):
              mock.patch.object(module.subprocess, 'run'), \
              mock.patch.object(module, 'run_consumer_mode', side_effect=run_mode):
             module.verify_imported_consumer(self.ide, '0.5.0')
-        self.assertEqual(calls, [('enabled', 1), ('enabled', 2), ('disabled', 1)])
+        self.assertEqual(calls, [('enabled', 1), ('enabled', 2), ('disabled', 1), ('diagnostic', 1)])
         saved = root / 'kpaths-kefs-ide-fixture/build/consumer-probe-enabled-startup-retry.log'
         self.assertEqual(saved.read_text(), 'analytics initialization failed')
 
@@ -149,7 +154,7 @@ class KefsMatrixTests(unittest.TestCase):
         process.poll.return_value = 1
 
         def configure(*args, **kwargs):
-            settings.write_bytes(b"temporary settings")
+            self.assertNotIn(str(settings), args[0])
 
         with mock.patch.object(module, "ROOT", root), \
              mock.patch.object(module.subprocess, "run", side_effect=configure), \
@@ -158,6 +163,7 @@ class KefsMatrixTests(unittest.TestCase):
             with self.assertRaisesRegex(RuntimeError, "exited early"):
                 module.verify_imported_consumer(self.ide, "0.5.0-262")
         self.assertEqual(settings.read_bytes(), b"original settings")
+        self.assertEqual(list((root / "kpaths-kefs-ide-fixture/build").glob("imported-source-*")), [])
 
 
 if __name__ == "__main__":

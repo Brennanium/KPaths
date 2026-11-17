@@ -8,20 +8,22 @@ import os
 import signal
 import subprocess
 import sys
+import tempfile
 import time
 from pathlib import Path
 
 from ide_sandbox import trust_project
+from imported_ide_project import prepare_imported_project
 from matrix_project_root import project_root
 
 ROOT = project_root()
 MATRIX = ROOT / "kpaths-kefs-ide-fixture/ide-compatibility.json"
 
 
-def trust_fixture_project(fixture: Path, run_id: str, mode: str, attempt: int) -> None:
+def trust_fixture_project(fixture: Path, project: Path, run_id: str, mode: str, attempt: int) -> None:
     """Trust only this test project in the Gradle-created, isolated IDE configuration."""
     config = fixture / f"build/ide-probe/{run_id}/{mode}-{attempt}/config"
-    trust_project(config, fixture / 'consumer')
+    trust_project(config, project)
 
 
 def stop_fixture_ides(report: Path, mode: str) -> None:
@@ -104,12 +106,12 @@ class AnalyticsStartupError(RuntimeError):
     """Android Studio's intermittent analytics initialization failure during startup."""
 
 
-def run_consumer_mode(ide: Path, kefs: str, fixture: Path, report: Path, mode: str, log: Path, attempt: int, run_id: str) -> None:
+def run_consumer_mode(ide: Path, kefs: str, fixture: Path, project: Path, report: Path, mode: str, log: Path, attempt: int, run_id: str) -> None:
     report.unlink(missing_ok=True)
-    trust_fixture_project(fixture, run_id, mode, attempt)
+    trust_fixture_project(fixture, project, run_id, mode, attempt)
     command = [
         str(ROOT / "gradlew"), "--no-daemon", "-p", str(fixture), "runIde",
-        f"--args={fixture / 'consumer'}", f"-Pkpaths.idePath={ide}", f"-Pkpaths.kefsVersion={kefs}", f"-Pkpaths.consumerExpected={mode}", f"-Pkpaths.consumerAttempt={attempt}", f"-Pkpaths.consumerRunId={run_id}",
+        f"--args={project}", f"-Pkpaths.consumerProject={project}", f"-Pkpaths.idePath={ide}", f"-Pkpaths.kefsVersion={kefs}", f"-Pkpaths.consumerExpected={mode}", f"-Pkpaths.consumerAttempt={attempt}", f"-Pkpaths.consumerRunId={run_id}",
     ]
     with log.open("w") as output:
         process = subprocess.Popen(command, cwd=ROOT, stdout=output, stderr=subprocess.STDOUT, start_new_session=True)
@@ -159,27 +161,31 @@ def run_consumer_mode(ide: Path, kefs: str, fixture: Path, report: Path, mode: s
 
 def verify_imported_consumer(ide: Path, kefs: str) -> None:
     fixture = ROOT / "kpaths-kefs-ide-fixture"
-    settings = fixture / "consumer/.idea/kotlin-plugins.xml"
-    previous = settings.read_bytes() if settings.exists() else None
     report = fixture / "build/consumer-probe.txt"
     run_id = str(time.time_ns())
-    try:
-        for mode in ("enabled", "disabled"):
-            subprocess.run([sys.executable, str(fixture / "configure-consumer.py"), mode], cwd=ROOT, check=True)
+    # Every scenario uses a disposable imported project; no checked-in consumer or IDE
+    # settings are changed. The additional file also exercises multi-file source hosting.
+    source = (fixture / "consumer/src/main/kotlin/Example.kt").read_text()
+    source += "\nval hostedSupport = HostedSupport.value\n"
+    sources = {"Example.kt": source, "HostedSupport.kt": 'package example\nobject HostedSupport { val value = 42 }\n'}
+    (fixture / "build").mkdir(parents=True, exist_ok=True)
+    with tempfile.TemporaryDirectory(prefix="kpaths-imported-source-") as temporary:
+        project = prepare_imported_project(fixture / "consumer", Path(temporary).resolve() / "consumer",
+                                           ROOT / "build/consumer-verification/repository", sources)
+        for mode in ("enabled", "disabled", "diagnostic"):
+            source_file = project / "src/main/kotlin/Example.kt"
+            source_file.write_text(source + ('\nval diagnosticProbe: Int = "not an integer"\n' if mode == "diagnostic" else ''))
+            config_mode = "disabled" if mode == "disabled" else "enabled"
+            subprocess.run([sys.executable, str(fixture / "configure-consumer.py"), config_mode,
+                            "--project", str(project)], cwd=ROOT, check=True)
             log = fixture / f"build/consumer-probe-{mode}.log"
-            log.parent.mkdir(parents=True, exist_ok=True)
             try:
-                run_consumer_mode(ide, kefs, fixture, report, mode, log, 1, run_id)
+                run_consumer_mode(ide, kefs, fixture, project, report, mode, log, 1, run_id)
             except AnalyticsStartupError:
                 saved = log.with_name(f"consumer-probe-{mode}-startup-retry.log")
                 log.replace(saved)
                 print(f"Android Studio analytics startup failed; retrying once (first log: {saved}).", flush=True)
-                run_consumer_mode(ide, kefs, fixture, report, mode, log, 2, run_id)
-    finally:
-        if previous is None:
-            settings.unlink(missing_ok=True)
-        else:
-            settings.write_bytes(previous)
+                run_consumer_mode(ide, kefs, fixture, project, report, mode, log, 2, run_id)
 
 
 def select_ide(ide_path: Path, matrix: Path, requested_version: str | None, requested_kefs: str | None, allow_untested: bool = False) -> tuple[str, str, str]:

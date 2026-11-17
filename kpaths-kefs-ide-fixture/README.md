@@ -54,9 +54,12 @@ error; a successful test does not automatically add the IDE to the supported mat
 needs network access, JDK 17 and a JDK 25 toolchain, and an Android Studio environment capable of
 importing the test project. The isolated IDE may prompt for SDK configuration on a new machine.
 Linux also needs a graphical display; on headless CI, run the command with `xvfb-run -a`.
-The imported probe uses `assertEditor` to check reference resolution and unexpected errors after
-IDE highlighting in the enabled scenario. The disabled-plugin control deliberately has unresolved
-references and checks those separately. Use the CLI's `--suite all` option to run both this probe
+The imported probe creates a disposable Gradle project from Kotlin source strings, including a
+supporting source file. It uses `assertEditor` to check reference resolution and unexpected errors
+after IDE highlighting. A second enabled run introduces a type error and verifies both the default
+failure and an explicit diagnostic expectation. The disabled-plugin control deliberately has
+unresolved references and checks those separately. The source preparation is reusable scaffolding;
+the probe's expectations are currently specific to this KPaths fixture. Use the CLI's `--suite all` option to run both this probe
 and the separate focused highlighting fixture.
 Each probe attempt uses its own IDE configuration, system cache, and log directory under
 `build/ide-probe/`, so restarting the IDE cannot reuse another attempt's state.

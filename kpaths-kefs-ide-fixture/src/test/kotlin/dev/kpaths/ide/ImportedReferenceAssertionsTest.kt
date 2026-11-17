@@ -27,6 +27,16 @@ class ImportedReferenceAssertionsTest {
     }
   }
 
+  @Test fun diagnosticModeRequiresTheErrorAndRejectsAdditionalErrors() {
+    val mismatch = EditorDiagnostic(DiagnosticSeverity.ERROR, "Expected Int, actual String")
+    val control = ReferenceObservation.Resolved()
+    assertImportedReferences(observations(control, control, listOf(mismatch)), "diagnostic")
+    assertFailsWith<IllegalStateException> { assertImportedReferences(observations(control, control), "diagnostic") }
+    assertFailsWith<AssertionError> {
+      assertImportedReferences(observations(control, control, listOf(mismatch, EditorDiagnostic(DiagnosticSeverity.ERROR, "other"))), "diagnostic")
+    }
+  }
+
   @Test fun unavailableEnabledDiagnosticsDoNotPassAsEmpty() {
     val unavailable = object : EditorObservations {
       override fun diagnostics(): List<EditorDiagnostic> = error("highlighting unavailable")

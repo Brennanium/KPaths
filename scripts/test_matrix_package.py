@@ -34,6 +34,7 @@ class MatrixPackageTests(unittest.TestCase):
             wheel = next(artifacts.glob('*.whl'))
             with zipfile.ZipFile(wheel) as package:
                 self.assertIn('kotlin_plugin_matrix/kotlin-plugin-matrix.py', package.namelist())
+                self.assertIn('kotlin_plugin_matrix/imported_ide_project.py', package.namelist())
                 self.assertFalse(any('/test_' in item for item in package.namelist()))
             venv = root / 'venv'
             subprocess.run([sys.executable, '-m', 'venv', str(venv)], check=True, capture_output=True, text=True)
