@@ -1,6 +1,6 @@
 # Compiler snapshot assertions
 
-`assertCompilerSnapshots` compares inline expectations with named outputs from a compilation. Its
+`compiler-testing` supplies `assertCompilerSnapshots`, which compares inline expectations with named outputs from a compilation. Its
 assertion API is independent of KPaths and the compiler driver; the KPaths fixture currently supplies
 compilation and capture. `CompilerSnapshotKind.FIR` and `CompilerSnapshotKind.IR` are predefined,
 and a caller can use another `CompilerSnapshotKind` for a different kind of output.
@@ -22,8 +22,9 @@ assertCompiler(
 The `assertCompiler` adapter is currently private to that fixture; it isn't a published test API.
 
 Use one expectation when all tested compiler versions produce the same output. When a difference
-is intentional, supply exact-version overrides; an unlisted compiler version uses the default.
-No version ordering or prefix matching is inferred:
+is intentional, supply exact-version or range overrides; an unlisted compiler version uses the default.
+Exact versions take precedence, and overlapping matching ranges are rejected. See the
+[recording and selector guide](src/test/snapshots/README.md) for the supported syntax:
 
 ```kotlin
 assertCompilerSnapshots(

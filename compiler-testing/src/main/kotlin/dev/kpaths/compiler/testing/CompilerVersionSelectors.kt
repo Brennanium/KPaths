@@ -3,7 +3,7 @@ package dev.kpaths.compiler.testing
 import java.math.BigInteger
 
 /** Selects an exact override first, then a single matching pattern. Ambiguity is an error. */
-internal fun selectCompilerVersion(selectors: Set<String>, compilerVersion: String): String? {
+public fun selectCompilerVersion(selectors: Set<String>, compilerVersion: String): String? {
   val version = CompilerVersion.parse(compilerVersion)
   val patterns = selectors.associateWith(::parseSelector)
   if (compilerVersion in selectors) return compilerVersion

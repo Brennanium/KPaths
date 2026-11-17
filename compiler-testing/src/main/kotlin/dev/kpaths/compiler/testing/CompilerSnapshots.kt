@@ -7,7 +7,7 @@ import dev.kpaths.testing.snapshot.compareSnapshot
 import dev.kpaths.testing.snapshot.textSnapshotting
 
 /** Identifies a compiler output to be captured; integrations may define additional kinds. */
-internal data class CompilerSnapshotKind(val name: String) {
+public data class CompilerSnapshotKind(val name: String) {
   companion object {
     val FIR = CompilerSnapshotKind("FIR")
     val IR = CompilerSnapshotKind("IR")
@@ -15,7 +15,7 @@ internal data class CompilerSnapshotKind(val name: String) {
 }
 
 /** An inline default and compiler-version overrides, including explicit ranges. */
-internal data class SnapshotExpectation(
+public data class SnapshotExpectation(
   val default: String,
   val versions: Map<String, String> = emptyMap(),
   val missing: Boolean = false,
@@ -28,7 +28,7 @@ internal data class SnapshotExpectation(
  * Compare named compiler captures using expectations for the compiler actually used to compile.
  * The caller owns compiler setup and capture; this assertion layer has no plugin-specific logic.
  */
-internal fun assertCompilerSnapshots(
+public fun assertCompilerSnapshots(
   source: String,
   compilerVersion: String,
   expected: Map<CompilerSnapshotKind, SnapshotExpectation>,
@@ -49,12 +49,12 @@ internal fun assertCompilerSnapshots(
 }
 
 /** Explicit recording is file-backed; normal test runs never change snapshots. */
-internal enum class SnapshotRecording { NONE, MISSING, FAILED, ALL }
+public enum class SnapshotRecording { NONE, MISSING, FAILED, ALL }
 
 /** Requests a phase whose initial inline expectation will be recorded. */
-internal fun snapshot(): SnapshotExpectation = SnapshotExpectation("", missing = true)
+public fun snapshot(): SnapshotExpectation = SnapshotExpectation("", missing = true)
 
-internal fun shouldRecordSnapshot(
+public fun shouldRecordSnapshot(
   expectation: SnapshotExpectation,
   actual: String,
   compilerVersion: String,
@@ -71,7 +71,7 @@ internal fun shouldRecordSnapshot(
   }
 }
 
-internal fun assertCompilerSnapshotFiles(
+public fun assertCompilerSnapshotFiles(
   source: String,
   compilerVersion: String,
   directory: Path,

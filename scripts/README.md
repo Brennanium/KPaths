@@ -3,13 +3,16 @@
 Kotlin Plugin Matrix is the working name for compatibility tooling that exercises compiler plugins
 against Kotlin compiler and IDE versions. These scripts currently exercise KPaths specifically;
 extracting reusable compatibility tools is future work.
-The compiler snapshot assertions are a separate test facility: they check compiler output and
-diagnostics for a source snippet, while these scripts run a project's tests across versions and IDEs.
+The compiler snapshot assertions are a separate test facility: they compare captured compiler
+output for a source snippet, while these scripts run a project's tests across versions and IDEs.
+The current snapshot adapter captures FIR and IR; first-class diagnostic snapshots remain future work.
 The command-line tools should remain usable without GitHub Actions; CI workflows are consumers of
 the tools and provide matrix scheduling, summaries, and artifact uploads.
 
-For a future extraction, the CLI, an optional Gradle integration, and GitHub Actions can live in the
-same repository while being distributed separately. None of those integrations is published yet.
+For the future Knapshots extraction, the intended primary interface is a Gradle/Kotlin integration
+with a shared JVM runner; a standalone CLI could be a thin optional interface. The current Python
+CLI remains the working implementation and neither integration is published yet. See the
+[Knapshots handoff](../KNAPSHOTS_EXTRACTION.md).
 
 The CLI currently lives in this repository and delegates to the existing runners:
 

@@ -63,7 +63,8 @@ recording, and a general `assertEditor` API that hosts arbitrary inline source i
 project remain future work. The KPaths imported probe now creates a disposable project from a source
 map, but its reference and diagnostic expectations are still KPaths-specific.
 
-`assertCompiler` currently lives in the compiler fixture. Both assertion layers now share the
-basic snapshot strategy and comparison module. Generic snapshot expectations, version selection,
+The KPaths-specific `assertCompiler` adapter currently lives in the compiler fixture. Reusable
+compiler snapshot and version-selection utilities live in the unpublished `compiler-testing` module;
+both assertion layers use the shared snapshot strategy and comparison module. Generic snapshot expectations, version selection,
 diff rendering, and inline recording remain future work. Compiler capture, IDE capture, and CLI
 orchestration remain separate.

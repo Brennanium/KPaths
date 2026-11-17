@@ -34,8 +34,9 @@ The test was verified against Android Studio 2026.2.2 (build 262.10968.63.2622.1
 For now, KPaths targets Kotlin External FIR Support (KEFS) for IntelliJ-based IDEs. An isolated
 [KEFS integration fixture](../kpaths-kefs-ide-fixture/README.md) resolved IDE-compatible KPaths and contributor artifacts
 from a local repository and highlighted generated paths from both. The contributor's separate
-version in that test was simulated. Gradle import, user-facing configuration, distribution, and
-the future third-party compiler plugin still need verification.
+version in that test was simulated. The separate KEFS imported-consumer probe also exercises a
+real Gradle import and generated paths; general user-facing configuration, distribution, and a
+future third-party compiler plugin still need verification.
 
 A Gradle consumer's compiler JAR is not loaded by the IDE by default. An IDE provider must
 recognize the consumer's build artifact, resolve a KPaths compiler JAR built for that IDE's Kotlin
