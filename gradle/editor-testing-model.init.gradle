@@ -1,0 +1,57 @@
+// Prototype: export evaluated build facts for an IDE test project.
+// Project roles are supplied explicitly; artifact versions and plugin identifiers come from Gradle.
+import groovy.json.JsonOutput
+import org.gradle.api.artifacts.VersionCatalogsExtension
+import org.gradle.api.publish.PublishingExtension
+import org.gradle.plugin.devel.GradlePluginDevelopmentExtension
+
+gradle.projectsEvaluated {
+  def root = gradle.rootProject
+  def required = { String key ->
+    def value = root.providers.gradleProperty(key).orNull
+    if (!value) throw new GradleException("Missing -P${key}")
+    value
+  }
+  def pluginPath = required('editorTesting.gradlePluginProject')
+  def runtimePaths = required('editorTesting.runtimeProjects').split(',').collect { it.trim() }.findAll { it }
+  def compilerPath = required('editorTesting.compilerPluginProject')
+  def output = root.file(required('editorTesting.modelFile'))
+  def pluginProject = root.project(pluginPath)
+  def compilerProject = root.project(compilerPath)
+  def runtimeProjects = runtimePaths.collect { root.project(it) }
+  def pluginExtension = pluginProject.extensions.getByType(GradlePluginDevelopmentExtension)
+  def declarations = pluginExtension.plugins.toList()
+  if (declarations.size() != 1) {
+    throw new GradleException("${pluginPath} must declare exactly one Gradle plugin; found ${declarations.size()}")
+  }
+  def kotlinVersion = root.providers.gradleProperty('editorTesting.kotlinVersion').orNull
+  if (!kotlinVersion) {
+    def catalogs = root.extensions.findByType(VersionCatalogsExtension)
+    def catalog = catalogs?.find('libs')?.orElse(null)
+    kotlinVersion = catalog?.findVersion('kotlin')?.orElse(null)?.requiredVersion
+    if (!kotlinVersion) throw new GradleException('Cannot determine Kotlin version; supply -PeditorTesting.kotlinVersion')
+  }
+  def moduleFor = { project, publication ->
+    def publishing = project.extensions.getByType(PublishingExtension)
+    def artifact = publishing.publications.findByName(publication)
+    if (artifact == null) throw new GradleException("Missing publication '${publication}' in ${project.path}")
+    [project: project.path, group: artifact.groupId, name: artifact.artifactId, version: artifact.version]
+  }
+  def model = [
+    schemaVersion: 1,
+    kotlinVersion: kotlinVersion,
+    gradlePlugin: [project: pluginPath, id: declarations[0].id, group: pluginProject.group.toString(), version: pluginProject.version.toString()],
+    compilerPlugin: moduleFor(compilerProject, 'jvm'),
+    dependencies: runtimeProjects.collect { moduleFor(it, 'kotlinMultiplatform') },
+  ]
+  root.tasks.register('exportEditorTestingModel') {
+    group = 'verification'
+    description = 'Exports local Gradle metadata for the editor testing prototype.'
+    inputs.property('model', JsonOutput.toJson(model))
+    outputs.file(output)
+    doLast {
+      output.parentFile.mkdirs()
+      output.text = JsonOutput.prettyPrint(JsonOutput.toJson(model)) + '\n'
+    }
+  }
+}
