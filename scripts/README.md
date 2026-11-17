@@ -8,6 +8,9 @@ diagnostics for a source snippet, while these scripts run a project's tests acro
 The command-line tools should remain usable without GitHub Actions; CI workflows are consumers of
 the tools and provide matrix scheduling, summaries, and artifact uploads.
 
+For a future extraction, the CLI, an optional Gradle integration, and GitHub Actions can live in the
+same repository while being distributed separately. None of those integrations is published yet.
+
 The CLI currently lives in this repository and delegates to the existing runners:
 
 ```sh
@@ -24,7 +27,7 @@ also accept `--report-json <file>` for machine-readable results. See `compiler -
 Kotlin versions. `verify-android-studio-version.py` selects an Android Studio release and runs the
 KEFS fixture and imported-consumer checks. See the [IDE fixture README](../kpaths-kefs-ide-fixture/README.md)
 for requirements and options. The IDE checks currently support Apple Silicon macOS and x86-64 Linux;
-The IDE CI matrix is configured for both platforms; the Ubuntu integration is being verified.
+The IDE CI matrix has passed on both platforms for the currently recorded Android Studio version.
 The macOS jobs for iOS simulator tests are separate.
 
 The Android Studio selector also accepts `--driver /path/to/executable`. After preparing the
