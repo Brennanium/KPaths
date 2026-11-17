@@ -161,11 +161,17 @@ def main(argv=None):
     parser.add_argument('--ide-path', type=Path, help='Use this installed Android Studio if its build matches')
     parser.add_argument('--skip-ide-probe', action='store_true', help='Skip imported IDE consumer checks')
     parser.add_argument('--latest-kefs', action='store_true', help='Probe the newest compatible KEFS instead of a recorded tested version')
+    parser.add_argument('--suite', choices=('kefs', 'focused', 'all'), default='kefs',
+                        help='Run the KEFS/imported checks, the focused IDE fixture, or both')
     parser.add_argument('--driver', type=Path, help='Run a project-provided executable with --ide-path instead of the KPaths KEFS driver')
     parser.add_argument('--report-json', type=Path, help='Write resolved versions and test result')
     args = parser.parse_args(argv)
+    if args.driver and args.suite != 'kefs':
+        parser.error('--driver cannot be combined with --suite')
     if args.driver and (args.latest_kefs or args.skip_ide_probe):
         parser.error('--latest-kefs and --skip-ide-probe are specific to the KPaths KEFS driver')
+    if args.suite == 'focused' and (args.latest_kefs or args.skip_ide_probe):
+        parser.error('--latest-kefs and --skip-ide-probe do not apply to the focused suite')
     if not args.driver and not (ROOT / 'kpaths-kefs-ide-fixture/ide-compatibility.json').is_file():
         parser.error('The built-in IDE checks require a KPaths checkout; use --driver for another project')
     system, machine = platform.system(), platform.machine()
@@ -175,6 +181,7 @@ def main(argv=None):
     mounted = False
     extraction = None
     report = {'selector': args.version, 'result': 'failed'}
+    current_suite = None
     try:
         release = release_for(args.version, get_bytes(RELEASES), system)
         report['androidStudio'] = release
@@ -196,6 +203,7 @@ def main(argv=None):
                 ide = extract_linux_archive(dmg, Path(extraction.name))
             if installed_build(ide) != release['build']:
                 raise ValueError('Downloaded IDE build does not match the release feed')
+        report['idePath'] = str(ide)
         if args.driver:
             driver = args.driver.expanduser().resolve(strict=True)
             report.update({'idePath': str(ide), 'driver': str(driver)})
@@ -204,6 +212,16 @@ def main(argv=None):
             report['result'] = 'passed'
             print('Project IDE driver passed.', flush=True)
             return 0
+        report['suites'] = {name: 'not-run' for name in
+                            (('kefs', 'focused') if args.suite == 'all' else (args.suite,))}
+        if args.suite == 'focused':
+            current_suite = 'focused'
+            subprocess.run([str(ROOT / 'scripts/verify-local-ide-provider.sh'), '--ide-path', str(ide)], cwd=ROOT, check=True)
+            report['suites']['focused'] = 'passed'
+            report['result'] = 'passed'
+            print('Focused IDE checks passed.', flush=True)
+            return 0
+        current_suite = 'kefs'
         tested = json.loads((ROOT / 'kpaths-kefs-ide-fixture/ide-compatibility.json').read_text())['tested']
         matching = [entry for entry in tested if entry['product'] == 'Android Studio' and entry['build'] == release['build']]
         if len(matching) > 1:
@@ -223,12 +241,20 @@ def main(argv=None):
         if not args.skip_ide_probe:
             command.append('--ide-probe')
         subprocess.run(command, cwd=ROOT, check=True)
-        report['result'] = 'passed'
+        report['suites']['kefs'] = 'passed'
         if not args.skip_ide_probe:
             report['importedConsumer'] = 'passed'
+            report['importedConsumerChecks'] = ['references']
+        if args.suite == 'all':
+            current_suite = 'focused'
+            subprocess.run([str(ROOT / 'scripts/verify-local-ide-provider.sh'), '--ide-path', str(ide)], cwd=ROOT, check=True)
+            report['suites']['focused'] = 'passed'
+        report['result'] = 'passed'
         print('IDE compatibility checks passed.', flush=True)
         return 0
     except (OSError, ValueError, KeyError, ET.ParseError, tarfile.TarError, zipfile.BadZipFile, subprocess.CalledProcessError) as error:
+        if current_suite is not None:
+            report['suites'][current_suite] = 'failed'
         report['error'] = str(error)
         print(f'IDE compatibility check failed: {error}', file=sys.stderr)
         return 1

@@ -179,6 +179,99 @@ class AndroidStudioVersionTests(unittest.TestCase):
                 self.assertEqual(studio.main(['1.2.3.4', '--ide-path', str(ide), '--driver', str(driver)]), 0)
             self.assertEqual((root / 'received-arguments').read_text().splitlines(), ['--ide-path', str(ide)])
 
+    def test_all_suite_runs_both_checks_against_the_same_ide(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            ide = root / 'studio'
+            ide.mkdir()
+            matrix = root / 'kpaths-kefs-ide-fixture/ide-compatibility.json'
+            matrix.parent.mkdir()
+            matrix.write_text('{"tested": []}')
+            report = root / 'report.json'
+            release = {'name': 'Android Studio', 'version': '1.2.3.4', 'build': '262.1'}
+            with mock.patch.object(studio, 'ROOT', root), \
+                 mock.patch.object(studio.platform, 'system', return_value='Linux'), \
+                 mock.patch.object(studio.platform, 'machine', return_value='x86_64'), \
+                 mock.patch.object(studio, 'get_bytes', return_value=b'[]'), \
+                 mock.patch.object(studio, 'release_for', return_value=release), \
+                 mock.patch.object(studio, 'installed_build', return_value='262.1'), \
+                 mock.patch.object(studio, 'kefs_update', return_value={'version': '1', 'file': 'plugin.zip'}), \
+                 mock.patch.object(studio, 'compiler_version', return_value='2.4.20'), \
+                 mock.patch.object(studio.subprocess, 'run') as run:
+                self.assertEqual(studio.main(['1.2.3.4', '--ide-path', str(ide), '--suite', 'all', '--report-json', str(report)]), 0)
+            self.assertEqual(run.call_count, 2)
+            self.assertIn('--ide-probe', run.call_args_list[0].args[0])
+            self.assertEqual(run.call_args_list[1].args[0], [str(root / 'scripts/verify-local-ide-provider.sh'), '--ide-path', str(ide)])
+            self.assertEqual(json.loads(report.read_text())['suites'], {'kefs': 'passed', 'focused': 'passed'})
+
+    def test_all_suite_preserves_first_result_if_second_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            ide = root / 'studio'
+            ide.mkdir()
+            matrix = root / 'kpaths-kefs-ide-fixture/ide-compatibility.json'
+            matrix.parent.mkdir()
+            matrix.write_text('{"tested": []}')
+            report = root / 'report.json'
+            release = {'name': 'Android Studio', 'version': '1.2.3.4', 'build': '262.1'}
+            with mock.patch.object(studio, 'ROOT', root), \
+                 mock.patch.object(studio.platform, 'system', return_value='Linux'), \
+                 mock.patch.object(studio.platform, 'machine', return_value='x86_64'), \
+                 mock.patch.object(studio, 'get_bytes', return_value=b'[]'), \
+                 mock.patch.object(studio, 'release_for', return_value=release), \
+                 mock.patch.object(studio, 'installed_build', return_value='262.1'), \
+                 mock.patch.object(studio, 'kefs_update', return_value={'version': '1', 'file': 'plugin.zip'}), \
+                 mock.patch.object(studio, 'compiler_version', return_value='2.4.20'), \
+                 mock.patch.object(studio.subprocess, 'run', side_effect=[None, studio.subprocess.CalledProcessError(1, 'focused')]):
+                self.assertEqual(studio.main(['1.2.3.4', '--ide-path', str(ide), '--suite', 'all', '--report-json', str(report)]), 1)
+            result = json.loads(report.read_text())
+            self.assertEqual(result['result'], 'failed')
+            self.assertEqual(result['suites'], {'kefs': 'passed', 'focused': 'failed'})
+
+    def test_all_suite_reports_focused_not_run_when_kefs_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            ide = root / 'studio'
+            ide.mkdir()
+            matrix = root / 'kpaths-kefs-ide-fixture/ide-compatibility.json'
+            matrix.parent.mkdir()
+            matrix.write_text('{"tested": []}')
+            report = root / 'report.json'
+            release = {'name': 'Android Studio', 'version': '1.2.3.4', 'build': '262.1'}
+            with mock.patch.object(studio, 'ROOT', root), \
+                 mock.patch.object(studio.platform, 'system', return_value='Linux'), \
+                 mock.patch.object(studio.platform, 'machine', return_value='x86_64'), \
+                 mock.patch.object(studio, 'get_bytes', return_value=b'[]'), \
+                 mock.patch.object(studio, 'release_for', return_value=release), \
+                 mock.patch.object(studio, 'installed_build', return_value='262.1'), \
+                 mock.patch.object(studio, 'kefs_update', side_effect=ValueError('KEFS unavailable')):
+                self.assertEqual(studio.main(['1.2.3.4', '--ide-path', str(ide), '--suite', 'all', '--report-json', str(report)]), 1)
+            self.assertEqual(json.loads(report.read_text())['suites'], {'kefs': 'failed', 'focused': 'not-run'})
+
+    def test_focused_suite_does_not_resolve_kefs(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory).resolve()
+            ide = root / 'studio'
+            ide.mkdir()
+            matrix = root / 'kpaths-kefs-ide-fixture/ide-compatibility.json'
+            matrix.parent.mkdir()
+            matrix.write_text('{"tested": []}')
+            report = root / 'report.json'
+            release = {'name': 'Android Studio', 'version': '1.2.3.4', 'build': '262.1'}
+            with mock.patch.object(studio, 'ROOT', root), \
+                 mock.patch.object(studio.platform, 'system', return_value='Linux'), \
+                 mock.patch.object(studio.platform, 'machine', return_value='x86_64'), \
+                 mock.patch.object(studio, 'get_bytes', return_value=b'feed') as fetch, \
+                 mock.patch.object(studio, 'release_for', return_value=release), \
+                 mock.patch.object(studio, 'installed_build', return_value='262.1'), \
+                 mock.patch.object(studio.subprocess, 'run') as run:
+                self.assertEqual(studio.main(['1.2.3.4', '--ide-path', str(ide), '--suite', 'focused', '--report-json', str(report)]), 0)
+            fetch.assert_called_once_with(studio.RELEASES)
+            run.assert_called_once_with([str(root / 'scripts/verify-local-ide-provider.sh'), '--ide-path', str(ide)], cwd=root, check=True)
+            result = json.loads(report.read_text())
+            self.assertEqual(result['suites'], {'focused': 'passed'})
+            self.assertEqual(result['idePath'], str(ide))
+
 
 if __name__ == '__main__':
     unittest.main()

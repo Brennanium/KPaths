@@ -84,7 +84,7 @@ jobs:
           test -n "$ANDROID_HOME"
           printf 'sdk.dir=%s\n' "$ANDROID_HOME" > kpaths-kefs-ide-fixture/consumer/local.properties
       - name: Test IDE and imported consumer
-        timeout-minutes: 30
+        timeout-minutes: 45
         env:
           IDE_SELECTOR: ${{ matrix.version }}
           EVENT_NAME: ${{ github.event_name }}
@@ -98,6 +98,7 @@ jobs:
           set --
           if [ "$RUNNER_OS" = Linux ]; then set -- xvfb-run -a; fi
           "$@" python3 scripts/kotlin-plugin-matrix.py ide "$IDE_SELECTOR" \
+            --suite all \
             --report-json build/ide-compatibility/result.json \
             ${latest_kefs:+--latest-kefs} \
             2>&1 | tee build/ide-compatibility/runner.log
@@ -124,6 +125,9 @@ jobs:
             kpaths-kefs-ide-fixture/build/consumer-probe*.log
             kpaths-kefs-ide-fixture/build/ide-probe/**/log/
             kpaths-kefs-ide-fixture/build/reports/tests/
+            kpaths-kefs-ide-fixture/build/test-results/
+            kpaths-compiler-plugin-ide-fixture/build/reports/tests/
+            kpaths-compiler-plugin-ide-fixture/build/test-results/
             kpaths-kefs-ide-fixture/.intellijPlatform/sandbox/**/log_runIde/
           if-no-files-found: warn
           include-hidden-files: true
