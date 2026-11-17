@@ -16,6 +16,7 @@ The CLI currently lives in this repository and delegates to the existing runners
 ```sh
 python3 scripts/kotlin-plugin-matrix.py compiler 2.4.21 '2.5.0-dev*'
 python3 scripts/kotlin-plugin-matrix.py ide 2026.2.2.8
+python3 scripts/kotlin-plugin-matrix.py ide 2026.2.2.8 --suite all
 python3 scripts/kotlin-plugin-matrix.py ide --help
 ```
 
@@ -51,6 +52,11 @@ KEFS fixture and imported-consumer checks. See the [IDE fixture README](../kpath
 for requirements and options. The IDE checks currently support Apple Silicon macOS and x86-64 Linux;
 The IDE CI matrix has passed on both platforms for the currently recorded Android Studio version.
 The macOS jobs for iOS simulator tests are separate.
+
+For KPaths, `ide --suite all` runs both the KEFS/imported-project checks and the focused provider
+fixture against the same prepared IDE. `--suite focused` selects only the focused fixture; the
+default `--suite kefs` preserves the existing KEFS checks. A JSON report includes each completed
+suite's status. The IDE CI workflow runs both suites.
 
 The Android Studio selector also accepts `--driver /path/to/executable`. After preparing the
 selected IDE it invokes that executable from its parent directory with `--ide-path <path>`; the
