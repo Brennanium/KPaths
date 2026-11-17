@@ -15,11 +15,16 @@ internal class FixtureEditorObservations(
 ) : EditorObservations {
   override fun diagnostics(): List<EditorDiagnostic> = fixture.doHighlighting()
     .filterNot { ignoreMissingDependency && it.description?.contains("MISSING_DEPENDENCY") == true }
+    // Syntax-coloring highlights have no diagnostic message. Never hide errors or warnings.
+    .filterNot {
+      it.description == null && it.severity != HighlightSeverity.ERROR &&
+        it.severity != HighlightSeverity.WARNING && it.severity != HighlightSeverity.WEAK_WARNING
+    }
     .map {
       EditorDiagnostic(
         severity = when (it.severity) {
           HighlightSeverity.ERROR -> DiagnosticSeverity.ERROR
-          HighlightSeverity.WARNING -> DiagnosticSeverity.WARNING
+          HighlightSeverity.WARNING, HighlightSeverity.WEAK_WARNING -> DiagnosticSeverity.WARNING
           else -> DiagnosticSeverity.INFO
         },
         message = it.description ?: "<no description>",

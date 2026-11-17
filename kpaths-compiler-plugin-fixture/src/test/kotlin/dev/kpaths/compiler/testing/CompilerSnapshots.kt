@@ -3,6 +3,8 @@ package dev.kpaths.compiler.testing
 import kotlin.test.assertEquals
 import java.nio.file.Files
 import java.nio.file.Path
+import dev.kpaths.testing.snapshot.compareSnapshot
+import dev.kpaths.testing.snapshot.textSnapshotting
 
 /** Identifies a compiler output to be captured; integrations may define additional kinds. */
 internal data class CompilerSnapshotKind(val name: String) {
@@ -36,11 +38,13 @@ internal fun assertCompilerSnapshots(
   val actual = compile(source.trimIndent(), compilerVersion, expected.keys)
   expected.forEach { (kind, expectation) ->
     val captured = actual[kind] ?: error("The compiler did not provide the requested ${kind.name} snapshot.")
-    assertEquals(
-      expectation.forVersion(compilerVersion).trimIndent().trimEnd('\n', '\r'),
+    val difference = compareSnapshot(
       captured.trimEnd('\n', '\r'),
-      "${kind.name} snapshot for Kotlin $compilerVersion",
+      expectation.forVersion(compilerVersion).trimIndent().trimEnd('\n', '\r'),
+      textSnapshotting,
     )
+    if (difference != null) assertEquals(difference.expected, difference.actual,
+      "${kind.name} snapshot for Kotlin $compilerVersion")
   }
 }
 
@@ -57,8 +61,8 @@ internal fun shouldRecordSnapshot(
   recording: SnapshotRecording,
   recordVersion: Boolean,
 ): Boolean {
-  val differs = expectation.missing ||
-    expectation.forVersion(compilerVersion).trimIndent().trimEnd('\n', '\r') != actual.trimEnd('\n', '\r')
+  val differs = expectation.missing || compareSnapshot(actual.trimEnd('\n', '\r'),
+    expectation.forVersion(compilerVersion).trimIndent().trimEnd('\n', '\r'), textSnapshotting) != null
   return when (recording) {
     SnapshotRecording.NONE -> false
     SnapshotRecording.MISSING -> expectation.missing || (recordVersion && compilerVersion !in expectation.versions)

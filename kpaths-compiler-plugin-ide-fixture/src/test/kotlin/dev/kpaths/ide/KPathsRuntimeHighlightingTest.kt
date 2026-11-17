@@ -26,6 +26,7 @@ class KPathsRuntimeHighlightingTest : BasePlatformTestCase() {
       val text: CaseKeyPath<Event, String> = Event.Paths.Message.text
     """.trimIndent())
     assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+      diagnosticsSnapshot("")
       reference("Person.Paths.name").resolves()
       reference("Event.Paths.Message.text").resolves()
     }

@@ -19,13 +19,17 @@ be inspected (for example, because its expression is missing or ambiguous), the 
 of treating it as unresolved. The adapter is responsible for capturing a ready editor state and
 reporting failures faithfully.
 
+`diagnosticsSnapshot(expected)` compares all captured diagnostics as text, including warnings,
+using the shared `snapshot-testing` comparison strategy. It cannot be combined with individual
+diagnostic expectations in the same assertion. It does not record snapshots yet.
+
 The KPaths Android Studio light fixture supplies the first adapter and exercises both real
 highlighting and reference resolution. It explicitly filters the light fixture's existing
 `MISSING_DEPENDENCY` stub-classpath diagnostic; the assertion module does not filter diagnostics.
 The full imported-project probe is not yet wired to these assertions. Exact location support,
-completion, inlays, snapshots, and inline recording remain future work.
+completion, inlays, and inline recording remain future work.
 
-`assertCompiler` currently lives in the compiler fixture and has its own snapshot machinery. The
-two assertion layers can eventually share generic snapshot expectation, diffing, and inline
-recording components, while keeping compiler capture, IDE capture, and CLI orchestration separate.
-That extraction is not implemented yet.
+`assertCompiler` currently lives in the compiler fixture. Both assertion layers now share the
+basic snapshot strategy and comparison module. Generic snapshot expectations, version selection,
+diff rendering, and inline recording remain future work. Compiler capture, IDE capture, and CLI
+orchestration remain separate.

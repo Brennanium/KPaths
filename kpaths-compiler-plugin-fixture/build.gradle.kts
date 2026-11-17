@@ -38,6 +38,7 @@ kotlin {
       kotlin.srcDir("src/test/kotlin")
       dependencies {
         implementation(kotlin("test"))
+        implementation(project(":snapshot-testing"))
         implementation(libs.junit.jupiter)
         implementation(libs.asm)
         implementation("dev.zacsweers.kctfork:core:0.14.0")

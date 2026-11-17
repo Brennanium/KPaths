@@ -38,4 +38,5 @@ include(
   ":kpaths-compiler-plugin-fixture",
   ":kpaths-compiler-plugin-consumer",
   ":editor-testing",
+  ":snapshot-testing",
 )

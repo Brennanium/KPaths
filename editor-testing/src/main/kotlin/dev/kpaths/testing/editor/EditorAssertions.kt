@@ -1,5 +1,8 @@
 package dev.kpaths.testing.editor
 
+import dev.kpaths.testing.snapshot.compareSnapshot
+import dev.kpaths.testing.snapshot.textSnapshotting
+
 /** A diagnostic captured from the editor after the project and analysis are ready. */
 public data class EditorDiagnostic(
   val severity: DiagnosticSeverity,
@@ -30,12 +33,30 @@ public fun assertEditor(observations: EditorObservations, block: EditorExpectati
   EditorExpectations(observations).apply(block).verify()
 }
 
+private val diagnosticSnapshotting = textSnapshotting.pullback<List<EditorDiagnostic>> { diagnostics ->
+  diagnostics.joinToString("\n") { diagnostic ->
+    "${diagnostic.severity}${diagnostic.location?.let { " at $it" } ?: ""}: ${diagnostic.message}"
+  }
+}
+
 public class EditorExpectations internal constructor(private val observations: EditorObservations) {
   private val expectedDiagnostics = mutableListOf<ExpectedDiagnostic>()
   private val references = mutableListOf<ReferenceExpectation>()
+  private var expectedDiagnosticSnapshot: String? = null
+  private var hasDiagnosticBlock = false
 
   public fun diagnostics(block: DiagnosticExpectations.() -> Unit) {
+    check(expectedDiagnosticSnapshot == null) { "Diagnostic snapshots and individual diagnostic expectations cannot be combined." }
+    hasDiagnosticBlock = true
     DiagnosticExpectations(expectedDiagnostics).apply(block)
+  }
+
+  /** Compare all captured diagnostics as text, including warnings. Recording is not yet supported. */
+  public fun diagnosticsSnapshot(expected: String) {
+    check(expectedDiagnosticSnapshot == null && !hasDiagnosticBlock) {
+      "Diagnostic snapshots and individual diagnostic expectations cannot be combined or repeated."
+    }
+    expectedDiagnosticSnapshot = expected.trimIndent().trimEnd('\n', '\r')
   }
 
   public fun reference(expression: String): ReferenceExpectation {
@@ -46,29 +67,35 @@ public class EditorExpectations internal constructor(private val observations: E
   internal fun verify() {
     val failures = mutableListOf<String>()
     val actual = observations.diagnostics()
-    // Find a one-to-one match even when a broad expected message overlaps a more specific one.
-    val owner = IntArray(actual.size) { -1 }
-    fun assign(expectedIndex: Int, visited: BooleanArray): Boolean {
-      val expected = expectedDiagnostics[expectedIndex]
-      for (index in actual.indices) {
-        val diagnostic = actual[index]
-        if (visited[index] || diagnostic.severity != expected.severity ||
-          !diagnostic.message.contains(expected.messageContains) ||
-          (expected.location != null && expected.location != diagnostic.location)) continue
-        visited[index] = true
-        if (owner[index] == -1 || assign(owner[index], visited)) {
-          owner[index] = expectedIndex
-          return true
+    val expectedSnapshot = expectedDiagnosticSnapshot
+    if (expectedSnapshot != null) {
+      val difference = compareSnapshot(actual, expectedSnapshot, diagnosticSnapshotting)
+      if (difference != null) failures += "Diagnostic snapshot differs:\nExpected:\n${difference.expected}\nActual:\n${difference.actual}"
+    } else {
+      // Find a one-to-one match even when a broad expected message overlaps a more specific one.
+      val owner = IntArray(actual.size) { -1 }
+      fun assign(expectedIndex: Int, visited: BooleanArray): Boolean {
+        val expected = expectedDiagnostics[expectedIndex]
+        for (index in actual.indices) {
+          val diagnostic = actual[index]
+          if (visited[index] || diagnostic.severity != expected.severity ||
+            !diagnostic.message.contains(expected.messageContains) ||
+            (expected.location != null && expected.location != diagnostic.location)) continue
+          visited[index] = true
+          if (owner[index] == -1 || assign(owner[index], visited)) {
+            owner[index] = expectedIndex
+            return true
+          }
         }
+        return false
       }
-      return false
-    }
-    for ((index, expected) in expectedDiagnostics.withIndex()) {
-      if (!assign(index, BooleanArray(actual.size))) failures += "Missing ${expected.severity} diagnostic containing '${expected.messageContains}'" +
-        (expected.location?.let { " at $it" } ?: "")
-    }
-    actual.filterIndexed { index, it -> owner[index] == -1 && it.severity == DiagnosticSeverity.ERROR }.forEach {
-      failures += "Unexpected ERROR${it.location?.let { location -> " at $location" } ?: ""}: ${it.message}"
+      for ((index, expected) in expectedDiagnostics.withIndex()) {
+        if (!assign(index, BooleanArray(actual.size))) failures += "Missing ${expected.severity} diagnostic containing '${expected.messageContains}'" +
+          (expected.location?.let { " at $it" } ?: "")
+      }
+      actual.filterIndexed { index, it -> owner[index] == -1 && it.severity == DiagnosticSeverity.ERROR }.forEach {
+        failures += "Unexpected ERROR${it.location?.let { location -> " at $location" } ?: ""}: ${it.message}"
+      }
     }
     for (expected in references) {
       val shouldResolve = expected.shouldResolve

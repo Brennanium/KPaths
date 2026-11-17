@@ -92,4 +92,35 @@ class EditorAssertionsTest {
     }
     assertContains(failure.message.orEmpty(), "No expected resolution specified")
   }
+
+  @Test fun `diagnostics can be compared through a shared text snapshot strategy`() {
+    val editor = observations(listOf(EditorDiagnostic(DiagnosticSeverity.ERROR, "Unknown name", "A.kt:1")))
+    assertEditor(editor) { diagnosticsSnapshot("ERROR at A.kt:1: Unknown name") }
+    val failure = assertFailsWith<AssertionError> {
+      assertEditor(editor) { diagnosticsSnapshot("ERROR at A.kt:1: Different error") }
+    }
+    assertContains(failure.message.orEmpty(), "Diagnostic snapshot differs")
+    assertContains(failure.message.orEmpty(), "Actual:\nERROR at A.kt:1: Unknown name")
+  }
+
+  @Test fun `snapshot and individual diagnostics cannot silently conflict`() {
+    assertFailsWith<IllegalStateException> {
+      assertEditor(observations()) {
+        diagnostics { error("expected") }
+        diagnosticsSnapshot("")
+      }
+    }
+    assertFailsWith<IllegalStateException> {
+      assertEditor(observations()) {
+        diagnostics {}
+        diagnosticsSnapshot("")
+      }
+    }
+    assertFailsWith<IllegalStateException> {
+      assertEditor(observations()) {
+        diagnosticsSnapshot("")
+        diagnostics { warning("expected") }
+      }
+    }
+  }
 }
