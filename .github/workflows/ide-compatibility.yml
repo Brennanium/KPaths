@@ -31,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
       - name: Test IDE matrix and runner helpers
-        run: python3 -m unittest scripts/test_ide_sandbox.py scripts/test_ide_compatibility_matrix.py scripts/test_verify_android_studio_version.py scripts/test_verify_kefs_compatibility.py
+        run: python3 -m unittest scripts/test_kotlin_plugin_matrix.py scripts/test_ide_sandbox.py scripts/test_ide_compatibility_matrix.py scripts/test_verify_android_studio_version.py scripts/test_verify_kefs_compatibility.py
       - name: Select IDE matrix
         id: select
         env:
@@ -92,7 +92,7 @@ jobs:
           if [ "$EVENT_NAME" = schedule ]; then latest_kefs=--latest-kefs; fi
           set --
           if [ "$RUNNER_OS" = Linux ]; then set -- xvfb-run -a; fi
-          "$@" python3 scripts/verify-android-studio-version.py "$IDE_SELECTOR" \
+          "$@" python3 scripts/kotlin-plugin-matrix.py ide "$IDE_SELECTOR" \
             --report-json build/ide-compatibility/result.json \
             ${latest_kefs:+--latest-kefs} \
             2>&1 | tee build/ide-compatibility/runner.log

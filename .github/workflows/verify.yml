@@ -66,7 +66,7 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
       - name: Verify compiler plugin in downstream consumers
-        run: python3 scripts/verify-compiler-compatibility.py '${{ matrix.kotlin }}' --jvm-only
+        run: python3 scripts/kotlin-plugin-matrix.py compiler '${{ matrix.kotlin }}' --jvm-only
 
   compiler-compatibility-native:
     name: Compiler Native consumer / Kotlin ${{ matrix.kotlin }}
@@ -111,7 +111,7 @@ jobs:
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
       - name: Probe development compiler versions
-        run: python3 scripts/verify-compiler-compatibility.py --preview --jvm-only --report-json build/compiler-preview-report.json
+        run: python3 scripts/kotlin-plugin-matrix.py compiler --preview --jvm-only --report-json build/compiler-preview-report.json
       - name: Save resolved preview results
         if: always()
         uses: actions/upload-artifact@v6

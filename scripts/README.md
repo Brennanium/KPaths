@@ -5,6 +5,20 @@ against Kotlin compiler and IDE versions. These scripts currently exercise KPath
 extracting reusable compatibility tools is future work.
 The compiler snapshot assertions are a separate test facility: they check compiler output and
 diagnostics for a source snippet, while these scripts run a project's tests across versions and IDEs.
+The command-line tools should remain usable without GitHub Actions; CI workflows are consumers of
+the tools and provide matrix scheduling, summaries, and artifact uploads.
+
+The CLI currently lives in this repository and delegates to the existing runners:
+
+```sh
+python3 scripts/kotlin-plugin-matrix.py compiler 2.4.21 '2.5.0-dev*'
+python3 scripts/kotlin-plugin-matrix.py ide 2026.2.2.8
+python3 scripts/kotlin-plugin-matrix.py ide --help
+```
+
+On headless Linux, prefix the IDE command with `xvfb-run -a`. The compiler and IDE subcommands
+also accept `--report-json <file>` for machine-readable results. See `compiler --help` and
+`ide --help` for their options.
 
 `verify-compiler-compatibility.py` runs compiler-plugin and downstream consumer tests for selected
 Kotlin versions. `verify-android-studio-version.py` selects an Android Studio release and runs the
@@ -18,7 +32,9 @@ selected IDE it invokes that executable from its parent directory with `--ide-pa
 driver's exit status determines the result. A project can use this to build and test its own IDE
 plugin instead of using the default KPaths KEFS fixture. The driver is responsible for its plugin
 installation, consumer fixture, and assertions. This is an experimental integration boundary; it has
-not yet been verified against a separately built IDE plugin.
+not yet been verified against a separately built IDE plugin. The example
+`scripts/verify-local-ide-provider.sh` runs KPaths' existing non-KEFS IDE fixture through this
+boundary. That fixture uses a test-only provider; it does not install or test a packaged IDE plugin.
 
 ## Inspiration
 
