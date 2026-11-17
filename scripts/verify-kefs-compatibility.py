@@ -12,8 +12,9 @@ import time
 from pathlib import Path
 
 from ide_sandbox import trust_project
+from matrix_project_root import project_root
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = project_root()
 MATRIX = ROOT / "kpaths-kefs-ide-fixture/ide-compatibility.json"
 
 

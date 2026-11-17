@@ -22,8 +22,13 @@ jobs:
       kotlin: ${{ steps.versions.outputs.kotlin }}
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
+      - name: Install Python packaging tools
+        run: python -m pip install setuptools wheel
       - name: Test matrix orchestration
-        run: python3 -m unittest scripts/test_kotlin_version_resolver.py scripts/test_verify_compiler_compatibility.py scripts/test_verify_android_studio_version.py scripts/test_verify_kefs_compatibility.py
+        run: python3 -m unittest scripts/test_matrix_package.py scripts/test_kotlin_plugin_matrix.py scripts/test_kotlin_version_resolver.py scripts/test_verify_compiler_compatibility.py scripts/test_verify_android_studio_version.py scripts/test_verify_kefs_compatibility.py
       - id: versions
         env:
           REQUESTED_VERSIONS: ${{ inputs.versions }}

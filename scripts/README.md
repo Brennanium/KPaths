@@ -23,6 +23,27 @@ On headless Linux, prefix the IDE command with `xvfb-run -a`. The compiler and I
 also accept `--report-json <file>` for machine-readable results. See `compiler --help` and
 `ide --help` for their options.
 
+The CLI also has an unpublished Python package, currently at the development-only version
+`0.0.0.dev0`. To try a pinned installation in a virtual environment without publishing anything:
+
+```sh
+python3 -m pip wheel --no-deps --wheel-dir dist .
+python3 -m venv .venv-matrix
+.venv-matrix/bin/python -m pip install --no-index --find-links dist 'kotlin-plugin-matrix==0.0.0.dev0'
+.venv-matrix/bin/kotlin-plugin-matrix --help
+```
+
+With `uv` installed, the same unpublished, versioned wheel can be run without installing it into
+the project environment:
+
+```sh
+uvx --from dist/kotlin_plugin_matrix-0.0.0.dev0-py3-none-any.whl kotlin-plugin-matrix --help
+```
+
+The built-in KPaths checks require a KPaths checkout; run the installed command in that checkout or
+set `KPATHS_PROJECT_ROOT`. Other projects can use their own drivers without a KPaths checkout.
+The version and packaging are for local development and are not a published release or stable API.
+
 `verify-compiler-compatibility.py` runs compiler-plugin and downstream consumer tests for selected
 Kotlin versions. `verify-android-studio-version.py` selects an Android Studio release and runs the
 KEFS fixture and imported-consumer checks. See the [IDE fixture README](../kpaths-kefs-ide-fixture/README.md)

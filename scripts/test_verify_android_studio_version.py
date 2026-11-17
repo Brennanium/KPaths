@@ -2,6 +2,7 @@ import importlib.util
 import hashlib
 import io
 import json
+import sys
 import tempfile
 import tarfile
 import unittest
@@ -9,6 +10,7 @@ import zipfile
 from pathlib import Path
 from unittest import mock
 
+sys.path.insert(0, str(Path(__file__).parent))
 spec = importlib.util.spec_from_file_location('studio', Path(__file__).with_name('verify-android-studio-version.py'))
 studio = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(studio)

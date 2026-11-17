@@ -16,8 +16,9 @@ import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
+from matrix_project_root import project_root
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = project_root()
 RELEASES = 'https://jb.gg/android-studio-releases-list.xml'
 UPDATES = 'https://plugins.jetbrains.com/api/plugins/26480/updates?size=100'
 MARKETPLACE = 'https://plugins.jetbrains.com/files/'
@@ -165,6 +166,8 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.driver and (args.latest_kefs or args.skip_ide_probe):
         parser.error('--latest-kefs and --skip-ide-probe are specific to the KPaths KEFS driver')
+    if not args.driver and not (ROOT / 'kpaths-kefs-ide-fixture/ide-compatibility.json').is_file():
+        parser.error('The built-in IDE checks require a KPaths checkout; use --driver for another project')
     system, machine = platform.system(), platform.machine()
     if (system, machine) not in (('Darwin', 'arm64'), ('Linux', 'x86_64')):
         parser.error('Automatic Android Studio installation requires Apple Silicon macOS or x86_64 Linux')
