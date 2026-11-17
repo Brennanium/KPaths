@@ -10,6 +10,7 @@ import platform
 import re
 import subprocess
 import sys
+import tarfile
 import tempfile
 import urllib.request
 import xml.etree.ElementTree as ET
@@ -27,7 +28,7 @@ def get_bytes(url):
         return response.read()
 
 
-def release_for(selector, xml):
+def release_for(selector, xml, system='Darwin'):
     items = ET.fromstring(xml).findall('item')
     if selector == 'latest-stable':
         items = [item for item in items if item.findtext('channel') in ('Stable', 'Patch')]
@@ -39,9 +40,10 @@ def release_for(selector, xml):
         if len(items) != 1:
             raise ValueError(f'Expected one Android Studio release for {selector!r}, found {len(items)}; use the full version or build')
         item = items[0]
-    downloads = [d for d in item.findall('download') if (d.findtext('link') or '').endswith('-mac_arm.dmg')]
+    suffix = {'Darwin': '-mac_arm.dmg', 'Linux': '-linux.tar.gz'}[system]
+    downloads = [d for d in item.findall('download') if (d.findtext('link') or '').endswith(suffix)]
     if len(downloads) != 1:
-        raise ValueError('No unique Apple Silicon macOS download in Android Studio release')
+        raise ValueError(f'No unique {system} download in Android Studio release')
     url = downloads[0].findtext('link')
     digest = downloads[0].findtext('checksum')
     if not url.startswith('https://') or not re.fullmatch(r'[0-9a-fA-F]{64}', digest or ''):
@@ -71,7 +73,10 @@ def kefs_update(build, updates, preferred=None):
 
 
 def compiler_version(ide, build, plugin_zip):
-    kotlin_lib = ide / 'Contents/plugins/Kotlin/lib/kotlinc.kotlin-compiler-common.jar'
+    kotlin_lib = next((p for p in (ide / 'Contents/plugins/Kotlin/lib/kotlinc.kotlin-compiler-common.jar',
+                                    ide / 'plugins/Kotlin/lib/kotlinc.kotlin-compiler-common.jar') if p.is_file()), None)
+    if kotlin_lib is None:
+        raise ValueError(f'No bundled Kotlin compiler found in {ide}')
     with zipfile.ZipFile(kotlin_lib) as jar:
         raw = jar.read('META-INF/compiler.version').decode().strip()
     if not re.fullmatch(r'\d+\.\d+\.255-dev-\d+', raw):
@@ -95,7 +100,11 @@ def compiler_version(ide, build, plugin_zip):
 
 
 def installed_build(ide):
-    info = json.loads((ide / 'Contents/Resources/product-info.json').read_text())
+    candidates = (ide / 'Contents/Resources/product-info.json', ide / 'product-info.json')
+    info_path = next((p for p in candidates if p.is_file()), None)
+    if info_path is None:
+        raise ValueError(f'No product-info.json found in {ide}')
+    info = json.loads(info_path.read_text())
     if info['name'] != 'Android Studio':
         raise ValueError(f'{ide} is not Android Studio')
     return info['buildNumber'].removeprefix('AI-')
@@ -124,6 +133,27 @@ def download_checked(url, sha256, destination):
         temporary.unlink(missing_ok=True)
 
 
+def extract_linux_archive(archive, destination):
+    """Extract a verified archive without permitting paths or links outside the sandbox."""
+    with tarfile.open(archive, 'r:gz') as source:
+        root = destination.resolve()
+        for member in source.getmembers():
+            target = (root / member.name).resolve()
+            if not target.is_relative_to(root):
+                raise ValueError(f'Unsafe archive path: {member.name}')
+            if member.issym() or member.islnk():
+                link = (target.parent / member.linkname).resolve() if member.issym() else (root / member.linkname).resolve()
+                if not link.is_relative_to(root):
+                    raise ValueError(f'Unsafe archive link: {member.name}')
+            if member.isdev() or member.isfifo():
+                raise ValueError(f'Unsupported archive entry: {member.name}')
+        source.extractall(destination)
+    ide = destination / 'android-studio'
+    if not ide.is_dir():
+        raise ValueError('Android Studio archive has no android-studio directory')
+    return ide
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('version', help='Full Android Studio version/build, or latest-stable')
@@ -132,26 +162,32 @@ def main(argv=None):
     parser.add_argument('--latest-kefs', action='store_true', help='Probe the newest compatible KEFS instead of a recorded tested version')
     parser.add_argument('--report-json', type=Path, help='Write resolved versions and test result')
     args = parser.parse_args(argv)
-    if platform.system() != 'Darwin' or platform.machine() != 'arm64':
-        parser.error('Automatic Android Studio installation currently requires Apple Silicon macOS')
+    system, machine = platform.system(), platform.machine()
+    if (system, machine) not in (('Darwin', 'arm64'), ('Linux', 'x86_64')):
+        parser.error('Automatic Android Studio installation requires Apple Silicon macOS or x86_64 Linux')
     mount = None
     mounted = False
+    extraction = None
     report = {'selector': args.version, 'result': 'failed'}
     try:
-        release = release_for(args.version, get_bytes(RELEASES))
+        release = release_for(args.version, get_bytes(RELEASES), system)
         report['androidStudio'] = release
         print(f"Resolved {args.version}: {release['name']} (build {release['build']})", flush=True)
-        ide = args.ide_path.expanduser().resolve() if args.ide_path else Path('/Applications/Android Studio.app')
+        ide = args.ide_path.expanduser().resolve() if args.ide_path else Path('/Applications/Android Studio.app' if system == 'Darwin' else '/opt/android-studio')
         if args.ide_path and installed_build(ide) != release['build']:
             raise ValueError(f"Installed IDE does not match requested build {release['build']}")
         if not ide.exists() or installed_build(ide) != release['build']:
-            dmg = ROOT / 'build/ide-distributions' / (release['version'] + '-mac-arm.dmg')
+            dmg = ROOT / 'build/ide-distributions' / (release['version'] + ('-mac-arm.dmg' if system == 'Darwin' else '-linux.tar.gz'))
             print(f'Preparing checksum-verified image from {release["url"]}', flush=True)
             download_checked(release['url'], release['sha256'], dmg)
-            mount = Path(tempfile.mkdtemp(prefix='kpaths-studio-'))
-            subprocess.run(['hdiutil', 'attach', '-readonly', '-nobrowse', '-mountpoint', str(mount), str(dmg)], check=True)
-            mounted = True
-            ide = mount / 'Android Studio.app'
+            if system == 'Darwin':
+                mount = Path(tempfile.mkdtemp(prefix='kpaths-studio-'))
+                subprocess.run(['hdiutil', 'attach', '-readonly', '-nobrowse', '-mountpoint', str(mount), str(dmg)], check=True)
+                mounted = True
+                ide = mount / 'Android Studio.app'
+            else:
+                extraction = tempfile.TemporaryDirectory(prefix='kpaths-studio-')
+                ide = extract_linux_archive(dmg, Path(extraction.name))
             if installed_build(ide) != release['build']:
                 raise ValueError('Downloaded IDE build does not match the release feed')
         tested = json.loads((ROOT / 'kpaths-kefs-ide-fixture/ide-compatibility.json').read_text())['tested']
@@ -178,11 +214,13 @@ def main(argv=None):
             report['importedConsumer'] = 'passed'
         print('IDE compatibility checks passed.', flush=True)
         return 0
-    except (OSError, ValueError, KeyError, ET.ParseError, zipfile.BadZipFile, subprocess.CalledProcessError) as error:
+    except (OSError, ValueError, KeyError, ET.ParseError, tarfile.TarError, zipfile.BadZipFile, subprocess.CalledProcessError) as error:
         report['error'] = str(error)
         print(f'IDE compatibility check failed: {error}', file=sys.stderr)
         return 1
     finally:
+        if extraction is not None:
+            extraction.cleanup()
         if mount is not None:
             if mounted and subprocess.run(['hdiutil', 'detach', '-force', str(mount)], check=False).returncode:
                 report['result'] = 'failed'

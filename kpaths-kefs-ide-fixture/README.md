@@ -36,10 +36,11 @@ and a standalone Gradle consumer, run from the repository root:
 python3 scripts/verify-android-studio-version.py 2026.2.2.8
 ```
 
-On Apple Silicon macOS, this resolves the full release version or build using JetBrains' Android
+On Apple Silicon macOS or x86-64 Linux, this resolves the full release version or build using JetBrains' Android
 Studio release feed. `latest-stable` selects the latest stable release or patch. The runner uses a
 matching `/Applications/Android Studio.app` when available; otherwise it downloads the official
-disk image, verifies its SHA-256 checksum, and mounts it read-only. `--ide-path` selects a different
+disk image or Linux archive and verifies its SHA-256 checksum. On macOS the image is mounted read-only;
+on Linux the archive is extracted into a temporary directory. `--ide-path` selects a different
 installed copy and verifies that it matches the requested release. It selects a compatible stable
 KEFS Marketplace release and reads KEFS's bundled mapping to resolve Android Studio's Kotlin
 compiler. The fixture independently checks that KEFS reports the same compiler version.
@@ -52,6 +53,7 @@ the resolved versions and outcome. A missing KEFS release or compiler mapping is
 error; a successful test does not automatically add the IDE to the supported matrix. The runner
 needs network access, JDK 17 and a JDK 25 toolchain, and an Android Studio environment capable of
 importing the test project. The isolated IDE may prompt for SDK configuration on a new machine.
+Linux also needs a graphical display; on headless CI, run the command with `xvfb-run -a`.
 Each probe attempt uses its own IDE configuration, system cache, and log directory under
 `build/ide-probe/`, so restarting the IDE cannot reuse another attempt's state.
 The runner reports a fatal Android Studio startup dialog as a failed check and records its log at

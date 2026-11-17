@@ -3,6 +3,7 @@ import hashlib
 import io
 import json
 import tempfile
+import tarfile
 import unittest
 import zipfile
 from pathlib import Path
@@ -24,10 +25,11 @@ def zipped(entries):
 class AndroidStudioVersionTests(unittest.TestCase):
     def test_resolves_stable_and_exact_with_validated_download(self):
         def item(version, channel, build):
-            return f'''<item><name>Studio {version}</name><version>{version}</version><build>AI-{build}</build><channel>{channel}</channel><download><link>https://example.org/studio-mac_arm.dmg</link><checksum>{'a' * 64}</checksum></download></item>'''
+            return f'''<item><name>Studio {version}</name><version>{version}</version><build>AI-{build}</build><channel>{channel}</channel><download><link>https://example.org/studio-mac_arm.dmg</link><checksum>{'a' * 64}</checksum></download><download><link>https://example.org/studio-linux.tar.gz</link><checksum>{'b' * 64}</checksum></download></item>'''
         feed = '<content>' + item('2026.2.2.8', 'Stable', '262.1.1') + item('2026.2.2.9', 'Patch', '262.1.2') + item('2026.2.3.1', 'Canary', '262.1.3') + '</content>'
         self.assertEqual(studio.release_for('latest-stable', feed)['version'], '2026.2.2.9')
         self.assertEqual(studio.release_for('2026.2.3.1', feed)['build'], '262.1.3')
+        self.assertTrue(studio.release_for('2026.2.3.1', feed, 'Linux')['url'].endswith('-linux.tar.gz'))
         with self.assertRaisesRegex(ValueError, 'Expected one'):
             studio.release_for('2026.2.2', feed)
 
@@ -79,6 +81,43 @@ class AndroidStudioVersionTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'SHA-256'):
                     studio.download_checked('https://example.org/studio.dmg', '0' * 64, image)
             self.assertEqual(image.read_bytes(), data)
+
+    def test_linux_archive_and_product_layout(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive = root / 'studio.tar.gz'
+            info = json.dumps({'name': 'Android Studio', 'buildNumber': 'AI-262.1'}).encode()
+            compiler = zipped({'META-INF/compiler.version': '2.4.20-ij262-52'})
+            with tarfile.open(archive, 'w:gz') as tar:
+                for name, data in [('android-studio/product-info.json', info),
+                                   ('android-studio/plugins/Kotlin/lib/kotlinc.kotlin-compiler-common.jar', compiler)]:
+                    member = tarfile.TarInfo(name)
+                    member.size = len(data)
+                    tar.addfile(member, io.BytesIO(data))
+            ide = studio.extract_linux_archive(archive, root / 'out')
+            self.assertEqual(studio.installed_build(ide), '262.1')
+            self.assertEqual(studio.compiler_version(ide, '262.1', b''), '2.4.20-ij262-52')
+
+    def test_linux_archive_rejects_traversal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory) / 'bad.tar.gz'
+            with tarfile.open(archive, 'w:gz') as tar:
+                member = tarfile.TarInfo('../outside')
+                member.size = 1
+                tar.addfile(member, io.BytesIO(b'x'))
+            with self.assertRaisesRegex(ValueError, 'Unsafe archive path'):
+                studio.extract_linux_archive(archive, Path(directory) / 'out')
+
+    def test_linux_archive_rejects_external_symlink(self):
+        with tempfile.TemporaryDirectory() as directory:
+            archive = Path(directory) / 'bad.tar.gz'
+            with tarfile.open(archive, 'w:gz') as tar:
+                member = tarfile.TarInfo('android-studio/escape')
+                member.type = tarfile.SYMTYPE
+                member.linkname = '../../outside'
+                tar.addfile(member)
+            with self.assertRaisesRegex(ValueError, 'Unsafe archive link'):
+                studio.extract_linux_archive(archive, Path(directory) / 'out')
 
 
 if __name__ == '__main__':
