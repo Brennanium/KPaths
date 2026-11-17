@@ -35,11 +35,17 @@ class MatrixPackageTests(unittest.TestCase):
             with zipfile.ZipFile(wheel) as package:
                 self.assertIn('kotlin_plugin_matrix/kotlin-plugin-matrix.py', package.namelist())
                 self.assertIn('kotlin_plugin_matrix/imported_ide_project.py', package.namelist())
+                self.assertIn('kotlin_plugin_matrix/editor_testing_config.py', package.namelist())
+                self.assertIn('kotlin_plugin_matrix/editor_project_model.py', package.namelist())
+                self.assertIn('kotlin_plugin_matrix/prototype_editor_project.py', package.namelist())
                 self.assertFalse(any('/test_' in item for item in package.namelist()))
+                metadata = package.read(next(item for item in package.namelist() if item.endswith('.dist-info/METADATA'))).decode()
+                self.assertIn('Requires-Dist: tomli', metadata)
+                self.assertIn('python_version < "3.11"', metadata)
             venv = root / 'venv'
             subprocess.run([sys.executable, '-m', 'venv', str(venv)], check=True, capture_output=True, text=True)
             python = venv / ('Scripts/python.exe' if os.name == 'nt' else 'bin/python')
-            subprocess.run([str(python), '-m', 'pip', 'install', '--no-index', '--find-links',
+            subprocess.run([str(python), '-m', 'pip', 'install', '--no-index', '--no-deps', '--find-links',
                             str(artifacts), 'kotlin-plugin-matrix==0.0.0.dev0'],
                            cwd=external, env=env, check=True, capture_output=True, text=True)
             command = venv / ('Scripts/kotlin-plugin-matrix.exe' if os.name == 'nt' else 'bin/kotlin-plugin-matrix')

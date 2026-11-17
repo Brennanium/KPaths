@@ -54,8 +54,11 @@ error; a successful test does not automatically add the IDE to the supported mat
 needs network access, JDK 17 and a JDK 25 toolchain, and an Android Studio environment capable of
 importing the test project. The isolated IDE may prompt for SDK configuration on a new machine.
 Linux also needs a graphical display; on headless CI, run the command with `xvfb-run -a`.
-The imported probe creates a disposable Gradle project from Kotlin source strings, including a
-supporting source file. It uses `assertEditor` to check reference resolution and unexpected errors
+The runner reads the local Gradle project roles from `editor-testing.toml`, obtains versions and
+publication coordinates from Gradle, and generates its disposable Gradle project. It supplies Kotlin
+source strings including a supporting source file. `--config` selects another TOML file and
+`--kotlin-version` overrides the generated project's Kotlin version. The latter does not rebuild the
+compiler plugin for that version or establish compatibility by itself. It uses `assertEditor` to check reference resolution and unexpected errors
 after IDE highlighting. A second enabled run introduces a type error and verifies both the default
 failure and an explicit diagnostic expectation. The disabled-plugin control deliberately has
 unresolved references and checks those separately. The source preparation is reusable scaffolding;

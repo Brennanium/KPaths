@@ -1,29 +1,28 @@
 # Editor project generation prototype
 
-This experiment explores deriving an imported IDE test project from a local Gradle build. It is
-not yet connected to `assertEditor`, Kotlin Plugin Matrix, the CI workflow, or an IDE observation
-protocol. The current runner and existing imported fixture remain unchanged.
+The KEFS compatibility runner now generates its imported JVM consumer from the roles in
+`editor-testing.toml`. It asks the evaluated Gradle build for the Kotlin catalog version, plugin ID,
+and publication coordinates, prepares local checkout artifacts, generates a Gradle project, and
+runs the existing imported reference and diagnostic checks. It does not publish a release.
 
-The experiment takes explicit Gradle project roles, then asks the evaluated build for the Kotlin
-version from the `libs` version catalog, the plugin ID, and Maven publication coordinates. It
-publishes the checkout's current artifacts to the existing local consumer-verification repository,
-generates a JVM consumer project and wrapper, and can compile source files supplied by the caller.
-No release is published. Artifact preparation currently uses the KPaths-specific local repository
-initialization script and expects one Gradle plugin declaration, a JVM compiler plugin publication,
-and Kotlin Multiplatform root and JVM runtime publications.
-
-For example, from the repository root, put Kotlin sources in a directory and run:
+The same preparation can be exercised separately with a directory of Kotlin source files:
 
 ```shell
 python3 scripts/prototype_editor_project.py \
-  --gradle-plugin-project :kpaths-gradle-plugin \
-  --compiler-plugin-project :kpaths-compiler-plugin \
-  --runtime-project :kpaths-core \
-  --runtime-project :kpaths-annotations \
   --source-dir /path/to/kotlin-sources \
   --project-dir /path/to/new/temporary-project \
   --compile
 ```
+
+The project roles default to `editor-testing.toml`; use `--config` to choose another file or the
+role flags to override individual entries. The matrix IDE command likewise accepts `--config` and
+`--kotlin-version` overrides. Python 3.11 includes the TOML parser; installed CLI distributions
+supply `tomli` on Python 3.9 and 3.10.
+
+Artifact preparation currently uses the KPaths-specific local repository initialization script
+and expects one Gradle plugin declaration, a JVM compiler plugin publication, and Kotlin
+Multiplatform root and JVM runtime publications. The KPaths IDE checks and source assertions remain
+specific to KPaths; this is not yet a general imported-project `assertEditor` API.
 
 The destination must not already exist. `--offline` restricts Gradle to cached dependencies;
 `--kotlin-version` overrides the generated consumer's Kotlin version. That override does **not**
@@ -52,8 +51,8 @@ The Gradle model integration test is opt-in because it launches Gradle:
 KPATHS_RUN_EDITOR_MODEL_INTEGRATION=1 python3 -m unittest discover -s scripts -p 'test_editor_testing_model_integration.py'
 ```
 
-Next steps include a project-level configuration format, generalized publication and plugin roles,
-SDK and JDK discovery, building the IDE artifact automatically, and the process bridge that lets
+Next steps include generalized publication and plugin roles, more complete SDK and JDK discovery,
+and the process bridge that lets
 an arbitrary `assertEditor` call send its source and expectations to the running IDE. Versioned
 or compiled dependencies must not be assumed to have the same semantics as the host test
 classpath. No IDE/OS compatibility is established by these local experiments alone.

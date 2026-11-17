@@ -198,9 +198,12 @@ class AndroidStudioVersionTests(unittest.TestCase):
                  mock.patch.object(studio, 'kefs_update', return_value={'version': '1', 'file': 'plugin.zip'}), \
                  mock.patch.object(studio, 'compiler_version', return_value='2.4.20'), \
                  mock.patch.object(studio.subprocess, 'run') as run:
-                self.assertEqual(studio.main(['1.2.3.4', '--ide-path', str(ide), '--suite', 'all', '--report-json', str(report)]), 0)
+                self.assertEqual(studio.main(['1.2.3.4', '--ide-path', str(ide), '--suite', 'all', '--report-json', str(report), '--config', str(root / 'editor.toml'), '--kotlin-version', '2.4.20']), 0)
             self.assertEqual(run.call_count, 2)
             self.assertIn('--ide-probe', run.call_args_list[0].args[0])
+            self.assertIn(str(root / 'editor.toml'), run.call_args_list[0].args[0])
+            self.assertIn('2.4.20', run.call_args_list[0].args[0])
+            self.assertEqual(json.loads(report.read_text())['projectKotlinVersionOverride'], '2.4.20')
             self.assertEqual(run.call_args_list[1].args[0], [str(root / 'scripts/verify-local-ide-provider.sh'), '--ide-path', str(ide)])
             self.assertEqual(json.loads(report.read_text())['suites'], {'kefs': 'passed', 'focused': 'passed'})
 

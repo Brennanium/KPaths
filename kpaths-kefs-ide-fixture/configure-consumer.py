@@ -7,13 +7,14 @@ from xml.etree import ElementTree as ET
 parser = argparse.ArgumentParser()
 parser.add_argument("mode", choices=("enabled", "disabled"))
 parser.add_argument("--project", type=Path, help="Disposable consumer project (defaults to the fixture)")
+parser.add_argument("--artifact", default="io.github.brennanium:kpaths-compiler-plugin-jvm")
 args = parser.parse_args()
 root = Path(__file__).resolve().parent
 project = ET.Element("project", version="4")
 component = ET.SubElement(project, "component", name="KotlinPluginsSettings")
 settings = {
     "repositories": ("KPaths local", f"{root / 'build/kefs-repository'};PATH"),
-    "plugins": ("KPaths", f"EXACT;{str(args.mode == 'enabled').lower()};false;io.github.brennanium:kpaths-compiler-plugin-jvm"),
+    "plugins": ("KPaths", f"EXACT;{str(args.mode == 'enabled').lower()};false;{args.artifact}"),
     "pluginsRepos": ("KPaths", "KPaths local"),
 }
 for name, (key, value) in settings.items():

@@ -36,7 +36,7 @@ jobs:
       - name: Install Python packaging tools
         run: python -m pip install setuptools wheel
       - name: Test IDE matrix and runner helpers
-        run: python3 -m unittest scripts/test_matrix_package.py scripts/test_kotlin_plugin_matrix.py scripts/test_ide_sandbox.py scripts/test_ide_compatibility_matrix.py scripts/test_verify_android_studio_version.py scripts/test_verify_kefs_compatibility.py
+        run: python3 -m unittest scripts/test_matrix_package.py scripts/test_kotlin_plugin_matrix.py scripts/test_ide_sandbox.py scripts/test_ide_compatibility_matrix.py scripts/test_verify_android_studio_version.py scripts/test_verify_kefs_compatibility.py scripts/test_editor_testing_config.py scripts/test_editor_project_model.py scripts/test_prototype_editor_project.py
       - name: Select IDE matrix
         id: select
         env:
@@ -63,6 +63,9 @@ jobs:
         os: [ubuntu-latest, macos-15]
     steps:
       - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.11'
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

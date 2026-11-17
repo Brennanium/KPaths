@@ -6,6 +6,7 @@ import argparse
 import json
 import os
 import signal
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -13,7 +14,9 @@ import time
 from pathlib import Path
 
 from ide_sandbox import trust_project
-from imported_ide_project import prepare_imported_project
+from editor_project_model import generate_project
+from editor_testing_config import read_config
+from prototype_editor_project import prepare_checkout
 from matrix_project_root import project_root
 
 ROOT = project_root()
@@ -159,7 +162,20 @@ def run_consumer_mode(ide: Path, kefs: str, fixture: Path, project: Path, report
             stop_fixture_ides(report, mode)
 
 
-def verify_imported_consumer(ide: Path, kefs: str) -> None:
+def stage_android_sdk(fixture: Path, project: Path) -> None:
+    """Supply the configured SDK to the isolated Android Studio, when available."""
+    configured = fixture / "consumer/local.properties"
+    if configured.is_file():
+        shutil.copy2(configured, project / "local.properties")
+        return
+    sdk = os.environ.get("ANDROID_HOME") or os.environ.get("ANDROID_SDK_ROOT")
+    if sdk:
+        # Java properties: escape backslashes and separators (including Windows drive letters).
+        escaped = ''.join('\\' + c if c in '\\:=#! ' else c for c in str(Path(sdk).resolve()))
+        (project / "local.properties").write_text(f"sdk.dir={escaped}\n")
+
+
+def verify_imported_consumer(ide: Path, kefs: str, model: dict) -> None:
     fixture = ROOT / "kpaths-kefs-ide-fixture"
     report = fixture / "build/consumer-probe.txt"
     run_id = str(time.time_ns())
@@ -170,14 +186,17 @@ def verify_imported_consumer(ide: Path, kefs: str) -> None:
     sources = {"Example.kt": source, "HostedSupport.kt": 'package example\nobject HostedSupport { val value = 42 }\n'}
     (fixture / "build").mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="kpaths-imported-source-") as temporary:
-        project = prepare_imported_project(fixture / "consumer", Path(temporary).resolve() / "consumer",
-                                           ROOT / "build/consumer-verification/repository", sources)
+        project = generate_project(Path(temporary).resolve() / "consumer", model,
+                                   ROOT / "build/consumer-verification/repository", ROOT, sources)
+        stage_android_sdk(fixture, project)
+        compiler = model['compilerPlugin']
+        artifact = f"{compiler['group']}:{compiler['name']}"
         for mode in ("enabled", "disabled", "diagnostic"):
             source_file = project / "src/main/kotlin/Example.kt"
             source_file.write_text(source + ('\nval diagnosticProbe: Int = "not an integer"\n' if mode == "diagnostic" else ''))
             config_mode = "disabled" if mode == "disabled" else "enabled"
             subprocess.run([sys.executable, str(fixture / "configure-consumer.py"), config_mode,
-                            "--project", str(project)], cwd=ROOT, check=True)
+                            "--project", str(project), "--artifact", artifact], cwd=ROOT, check=True)
             log = fixture / f"build/consumer-probe-{mode}.log"
             try:
                 run_consumer_mode(ide, kefs, fixture, project, report, mode, log, 1, run_id)
@@ -220,9 +239,11 @@ def select_ide(ide_path: Path, matrix: Path, requested_version: str | None, requ
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--ide-path", required=True, type=Path, help="Path to the installed IDE")
+    parser.add_argument("--config", type=Path, help="Editor project TOML (defaults to editor-testing.toml)")
+    parser.add_argument("--kotlin-version", help="Override the generated project's Kotlin version")
     parser.add_argument("--ide-kotlin-version", help="KEFS compiler version for an unlisted IDE")
     parser.add_argument("--kefs-version", help="KEFS plugin version for an unlisted IDE")
-    parser.add_argument("--ide-probe", action="store_true", help="Also launch an isolated IDE twice to check the imported consumer")
+    parser.add_argument("--ide-probe", action="store_true", help="Also launch isolated IDE scenarios to check the imported consumer")
     parser.add_argument("--allow-untested-combination", action="store_true", help="Allow a known IDE with different explicitly selected KEFS/compiler versions")
     args = parser.parse_args()
     ide = args.ide_path.expanduser().resolve()
@@ -232,30 +253,31 @@ def main() -> None:
         parser.error(str(error))
     print(f"Verifying {label} with KEFS {kefs} and IDE compiler {version}", flush=True)
     wrapper = str(ROOT / "gradlew")
-    subprocess.run([
-        wrapper, "--no-configuration-cache", "-I", "gradle/local-test-repository.init.gradle",
-        ":kpaths-gradle-plugin:publishAllPublicationsToConsumerVerificationRepository",
-        ":kpaths-compiler-plugin:publishJvmPublicationToConsumerVerificationRepository",
-        ":kpaths-core:publishKotlinMultiplatformPublicationToConsumerVerificationRepository",
-        ":kpaths-core:publishJvmPublicationToConsumerVerificationRepository",
-        ":kpaths-annotations:publishKotlinMultiplatformPublicationToConsumerVerificationRepository",
-        ":kpaths-annotations:publishJvmPublicationToConsumerVerificationRepository",
-        ":kpaths-compiler-plugin:jvmJar", ":kpaths-compiler-plugin-contributor:jvmJar",
-        ":kpaths-core:jvmJar", ":kpaths-annotations:jvmJar",
-    ], cwd=ROOT, check=True)
+    try:
+        roles = read_config(args.config or ROOT / 'editor-testing.toml')['project']
+    except (OSError, ValueError) as error:
+        parser.error(str(error))
+    model = prepare_checkout(ROOT, roles['gradle-plugin'], roles['compiler-plugin'], roles['runtime'], args.kotlin_version)
+    print(f"Generated consumer Kotlin version: {model['kotlinVersion']}", flush=True)
+    # The IDE fixture's contributor tests exercise a separate compiler plugin.
+    subprocess.run([wrapper, ':kpaths-compiler-plugin-contributor:jvmJar'], cwd=ROOT, check=True)
     publish_ide_artifact([
         wrapper, "-p", "kpaths-kefs-ide-fixture",
         "publishIdeCompilerPluginPublicationToKefsLocalRepository",
         f"-Pkpaths.idePath={ide}", f"-Pkpaths.ideKotlinVersion={version}", f"-Pkpaths.kefsVersion={kefs}",
     ])
-    subprocess.run([
-        wrapper, "-p", "kpaths-kefs-ide-fixture/consumer", "build",
-    ], cwd=ROOT, check=True)
+    fixture = ROOT / "kpaths-kefs-ide-fixture"
+    with tempfile.TemporaryDirectory(prefix='kpaths-consumer-build-') as temporary:
+        source = (fixture / 'consumer/src/main/kotlin/Example.kt').read_text()
+        project = generate_project(Path(temporary).resolve() / 'consumer', model,
+                                   ROOT / 'build/consumer-verification/repository', ROOT,
+                                   {'Example.kt': source})
+        subprocess.run([wrapper, '-p', str(project), 'build'], cwd=ROOT, check=True)
     repository = ROOT / "kpaths-kefs-ide-fixture/build/kefs-repository"
     print(f"Verified IDE artifact published locally to {repository}")
     print("Verified the standalone Gradle consumer build and KEFS highlighting in the IDE test fixture.")
     if args.ide_probe:
-        verify_imported_consumer(ide, kefs)
+        verify_imported_consumer(ide, kefs, model)
     else:
         print("Pass --ide-probe to verify resolution in the imported consumer IDE.")
     print("No release or user IDE was configured.")

@@ -159,6 +159,8 @@ def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('version', help='Full Android Studio version/build, or latest-stable')
     parser.add_argument('--ide-path', type=Path, help='Use this installed Android Studio if its build matches')
+    parser.add_argument('--config', type=Path, help='Editor project TOML (defaults to editor-testing.toml)')
+    parser.add_argument('--kotlin-version', help="Override the generated project's Kotlin version")
     parser.add_argument('--skip-ide-probe', action='store_true', help='Skip imported IDE consumer checks')
     parser.add_argument('--latest-kefs', action='store_true', help='Probe the newest compatible KEFS instead of a recorded tested version')
     parser.add_argument('--suite', choices=('kefs', 'focused', 'all'), default='kefs',
@@ -168,10 +170,10 @@ def main(argv=None):
     args = parser.parse_args(argv)
     if args.driver and args.suite != 'kefs':
         parser.error('--driver cannot be combined with --suite')
-    if args.driver and (args.latest_kefs or args.skip_ide_probe):
-        parser.error('--latest-kefs and --skip-ide-probe are specific to the KPaths KEFS driver')
-    if args.suite == 'focused' and (args.latest_kefs or args.skip_ide_probe):
-        parser.error('--latest-kefs and --skip-ide-probe do not apply to the focused suite')
+    if args.driver and (args.latest_kefs or args.skip_ide_probe or args.config or args.kotlin_version):
+        parser.error('--latest-kefs, --skip-ide-probe, --config, and --kotlin-version are specific to the KPaths KEFS driver')
+    if args.suite == 'focused' and (args.latest_kefs or args.skip_ide_probe or args.config or args.kotlin_version):
+        parser.error('--latest-kefs, --skip-ide-probe, --config, and --kotlin-version do not apply to the focused suite')
     if not args.driver and not (ROOT / 'kpaths-kefs-ide-fixture/ide-compatibility.json').is_file():
         parser.error('The built-in IDE checks require a KPaths checkout; use --driver for another project')
     system, machine = platform.system(), platform.machine()
@@ -238,6 +240,11 @@ def main(argv=None):
         print(f'Resolved KEFS {kefs}; IDE Kotlin compiler {kotlin}', flush=True)
         command = [sys.executable, str(ROOT / 'scripts/verify-kefs-compatibility.py'), '--ide-path', str(ide),
                    '--ide-kotlin-version', kotlin, '--kefs-version', kefs, '--allow-untested-combination']
+        if args.config:
+            command.extend(['--config', str(args.config.resolve())])
+        if args.kotlin_version:
+            command.extend(['--kotlin-version', args.kotlin_version])
+            report['projectKotlinVersionOverride'] = args.kotlin_version
         if not args.skip_ide_probe:
             command.append('--ide-probe')
         subprocess.run(command, cwd=ROOT, check=True)

@@ -5,6 +5,12 @@ start an IDE, import a project, or configure compiler plugins. The Kotlin Plugin
 version selection and orchestration; an IDE test fixture or future IDE-side adapter captures the
 editor observations. The two communicate through the test runner or a future result protocol.
 
+A future Gradle-facing integration can provide the assertions and matching runner from the same
+release, so test authors would not separately pin the CLI as a `uvx` dependency. The standalone
+matrix CLI can remain available for direct local and CI orchestration. That distribution and the imported-project bridge are not implemented yet. The
+current CLI is Python-based, so bundling its scripts with a Kotlin artifact alone would still need a
+Python runtime; a self-contained JVM distribution would require a JVM implementation of the runner.
+
 An `EditorSourceHost` connects inline source to a prepared editor and exposes observations to the
 assertion layer. In the KPaths lightweight IntelliJ fixture, a test base supplies that host:
 

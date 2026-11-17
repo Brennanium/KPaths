@@ -22,6 +22,14 @@ class KefsMatrixTests(unittest.TestCase):
         (consumer / "src/main/kotlin").mkdir(parents=True)
         (consumer / "src/main/kotlin/Example.kt").write_text("package example\n")
         (consumer / "settings.gradle.kts").write_text('uri("../../build/consumer-verification/repository")\n' * 2)
+        (root / 'gradle/wrapper').mkdir(parents=True)
+        (root / 'gradle/wrapper/gradle-wrapper.properties').write_text('wrapper')
+        for name in ('gradlew', 'gradlew.bat'):
+            (root / name).write_text(name)
+        self.model = {'schemaVersion': 1, 'kotlinVersion': '2.4.21',
+                      'gradlePlugin': {'id': 'example.plugin', 'version': 'local'},
+                      'compilerPlugin': {'group': 'example', 'name': 'compiler'},
+                      'dependencies': []}
         self.ide = root / "Studio.app"
         info = self.ide / "Contents/Resources/product-info.json"
         info.parent.mkdir(parents=True)
@@ -71,6 +79,21 @@ class KefsMatrixTests(unittest.TestCase):
         module.trust_fixture_project(fixture, fixture / 'consumer', '123', 'disabled', 1)
         self.assertTrue((fixture / 'build/ide-probe/123/disabled-1/config/options/trusted-paths.xml').exists())
 
+    def test_sdk_settings_are_staged_in_the_disposable_project(self):
+        root = Path(self.tmp.name)
+        fixture = root / 'kpaths-kefs-ide-fixture'
+        project = root / 'project'
+        project.mkdir()
+        fixture_local = fixture / 'consumer/local.properties'
+        fixture_local.write_text('sdk.dir=/configured/sdk\n')
+        with mock.patch.dict(module.os.environ, {'ANDROID_HOME': '/other/sdk'}, clear=True):
+            module.stage_android_sdk(fixture, project)
+        self.assertEqual((project / 'local.properties').read_text(), 'sdk.dir=/configured/sdk\n')
+        fixture_local.unlink()
+        with mock.patch.dict(module.os.environ, {'ANDROID_HOME': '/sdk with spaces'}, clear=True):
+            module.stage_android_sdk(fixture, project)
+        self.assertIn('sdk.dir=/sdk\\ with\\ spaces', (project / 'local.properties').read_text())
+
     def test_fatal_ide_startup_dialog_is_reported(self):
         log = Path(self.tmp.name) / 'idea.log'
         self.assertFalse(module.startup_failure(log))
@@ -90,7 +113,7 @@ class KefsMatrixTests(unittest.TestCase):
              mock.patch.object(module, 'trust_fixture_project'), \
              mock.patch.object(module.subprocess, 'run'), \
              mock.patch.object(module, 'run_consumer_mode', side_effect=run_mode):
-            module.verify_imported_consumer(self.ide, '0.5.0')
+            module.verify_imported_consumer(self.ide, '0.5.0', self.model)
         self.assertEqual(calls, [('enabled', 1), ('enabled', 2), ('disabled', 1), ('diagnostic', 1)])
         saved = root / 'kpaths-kefs-ide-fixture/build/consumer-probe-enabled-startup-retry.log'
         self.assertEqual(saved.read_text(), 'analytics initialization failed')
@@ -101,7 +124,7 @@ class KefsMatrixTests(unittest.TestCase):
              mock.patch.object(module.subprocess, 'run'), \
              mock.patch.object(module, 'run_consumer_mode', side_effect=RuntimeError('resolution failed')) as run:
             with self.assertRaisesRegex(RuntimeError, 'resolution failed'):
-                module.verify_imported_consumer(self.ide, '0.5.0')
+                module.verify_imported_consumer(self.ide, '0.5.0', self.model)
         self.assertEqual(run.call_count, 1)
 
     def test_only_the_descriptor_filesystem_race_is_retried(self):
@@ -161,7 +184,7 @@ class KefsMatrixTests(unittest.TestCase):
              mock.patch.object(module.subprocess, "Popen", return_value=process), \
              mock.patch.object(module, "stop_fixture_ides"):
             with self.assertRaisesRegex(RuntimeError, "exited early"):
-                module.verify_imported_consumer(self.ide, "0.5.0-262")
+                module.verify_imported_consumer(self.ide, "0.5.0-262", self.model)
         self.assertEqual(settings.read_bytes(), b"original settings")
         self.assertEqual(list((root / "kpaths-kefs-ide-fixture/build").glob("imported-source-*")), [])
 

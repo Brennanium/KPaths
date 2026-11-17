@@ -1,6 +1,8 @@
 import tempfile
 import unittest
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).parent))
 from editor_project_model import generate_project
 
 

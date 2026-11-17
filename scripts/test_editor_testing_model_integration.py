@@ -47,9 +47,6 @@ class EditorTestingModelIntegrationTest(unittest.TestCase):
             )
             project = root / 'generated'
             command = [sys.executable, str(ROOT / 'scripts/prototype_editor_project.py'),
-                       '--gradle-plugin-project', ':kpaths-gradle-plugin',
-                       '--compiler-plugin-project', ':kpaths-compiler-plugin',
-                       '--runtime-project', ':kpaths-core', '--runtime-project', ':kpaths-annotations',
                        '--source-dir', str(sources), '--project-dir', str(project), '--compile']
             subprocess.run(command, cwd=ROOT, check=True, capture_output=True, text=True)
             self.assertTrue((project / 'build/classes/kotlin/main/ExampleKt.class').exists())

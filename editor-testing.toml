@@ -1,0 +1,8 @@
+# Local Gradle projects used to prepare imported editor tests.
+[project]
+gradle-plugin = ":kpaths-gradle-plugin"
+compiler-plugin = ":kpaths-compiler-plugin"
+runtime = [":kpaths-core", ":kpaths-annotations"]
+
+[ide]
+integration = "kefs"
