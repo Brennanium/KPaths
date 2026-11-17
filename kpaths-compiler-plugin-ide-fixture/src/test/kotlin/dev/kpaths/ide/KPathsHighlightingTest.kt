@@ -1,6 +1,5 @@
 package dev.kpaths.ide
 
-import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.testFramework.PsiTestUtil
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinCommonCompilerArgumentsHolder
@@ -52,9 +51,10 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
       val value: WritableKeyPath<Box<String>, String> = Box.Paths<String>().value
       val classValue: WritableKeyPath<Box<String>, String> = Box.Paths.of(String::class).value
     """.trimIndent())
-    val errors = myFixture.doHighlighting().filter { it.severity == HighlightSeverity.ERROR }
-      .map { it.description }.filterNot { it.contains("MISSING_DEPENDENCY") }
-    assertEmpty(errors)
+    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+      reference("Box.Paths<String>().value").resolves()
+      reference("Box.Paths.of(String::class).value").resolves()
+    }
   }
 
   fun testGenericSealedWholeCasePathsResolve() {
@@ -74,9 +74,10 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
       val unit: CaseKeyPath<Event<String>, Unit> = Event.Paths<String>().Idle.unit
       val all = Event.Paths<String>().allCasePaths
     """.trimIndent())
-    val errors = myFixture.doHighlighting().filter { it.severity == HighlightSeverity.ERROR }
-      .map { it.description }.filterNot { it.contains("MISSING_DEPENDENCY") }
-    assertEmpty(errors)
+    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+      reference("Event.Paths<String>().Value.value").resolves()
+      reference("Event.Paths<String>().Idle.unit").resolves()
+    }
   }
 
   fun testGeneratedPathsResolve() {
@@ -95,9 +96,10 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
       }
       val open: CaseKeyPath<Request, Pair<String, Boolean>> = Request.Paths.Open.payload
     """.trimIndent())
-    val errors = myFixture.doHighlighting().filter { it.severity == HighlightSeverity.ERROR }
-      .map { it.description }.filterNot { it.contains("MISSING_DEPENDENCY") }
-    assertEmpty(errors)
+    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+      reference("Person.Paths.name").resolves()
+      reference("Request.Paths.Open.payload").resolves()
+    }
   }
 
   fun testRenamedPropertyPathResolves() {
@@ -113,9 +115,11 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
       @Pathable data class Constant(@PathName(FIELD_NAME) val name: String)
       val constant = Constant.Paths.shown
     """.trimIndent())
-    val errors = myFixture.doHighlighting().filter { it.severity == HighlightSeverity.ERROR }
-      .map { it.description }.filterNot { it.contains("MISSING_DEPENDENCY") }
-    assertEmpty(errors)
+    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+      reference("Person.Paths.display").resolves()
+      reference("Named.Paths.alias").resolves()
+      reference("Constant.Paths.shown").resolves()
+    }
   }
 
   fun testRenamedCasePathResolves() {
@@ -128,9 +132,9 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
       }
       val message = Event.Paths.MessageCase.text
     """.trimIndent())
-    val errors = myFixture.doHighlighting().filter { it.severity == HighlightSeverity.ERROR }
-      .map { it.description }.filterNot { it.contains("MISSING_DEPENDENCY") }
-    assertEmpty(errors)
+    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+      reference("Event.Paths.MessageCase.text").resolves()
+    }
   }
 
   fun testCasePropertyCatalogAndBoundFactoryResolve() {
@@ -145,9 +149,10 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
       val property: KeyPath<Event.Message, String> = Event.Paths.MessagePaths.text
       val bound: CaseKeyPath<Event, String> = Event.Paths.Message.textFor(id = 1)
     """.trimIndent())
-    val errors = myFixture.doHighlighting().filter { it.severity == HighlightSeverity.ERROR }
-      .map { it.description }.filterNot { it.contains("MISSING_DEPENDENCY") }
-    assertEmpty(errors)
+    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+      reference("Event.Paths.MessagePaths.text").resolves()
+      reference("Event.Paths.Message.textFor(id = 1)").resolves()
+    }
   }
 
   fun testIncompleteCatalogIsHighlightedAsWarning() {
@@ -191,9 +196,9 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
         object Paths
       }
     """.trimIndent())
-    val errors = myFixture.doHighlighting().filter { it.severity == HighlightSeverity.ERROR }
-      .map { it.description }
-    assertTrue(errors.toString(), errors.any { it.contains("Cannot generate 'Person.Paths'") })
+    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+      diagnostics { error("Cannot generate 'Person.Paths'") }
+    }
   }
 
   fun testInaccessibleSetterIsHighlightedAsError() {
@@ -205,9 +210,9 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
           private set
       }
     """.trimIndent())
-    val errors = myFixture.doHighlighting().filter { it.severity == HighlightSeverity.ERROR }
-      .map { it.description }
-    assertTrue(errors.toString(), errors.any { it.contains("Data-class property 'count'") })
+    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+      diagnostics { error("Data-class property 'count'") }
+    }
   }
 
   fun testOnlyNestedSealedCasesResolve() {
@@ -222,9 +227,9 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
       }
       val case = Feature.Event.Paths.Idle
     """.trimIndent())
-    val errors = myFixture.doHighlighting().filter { it.severity == HighlightSeverity.ERROR }
-      .map { it.description }.filterNot { it.contains("MISSING_DEPENDENCY") }
-    assertEmpty(errors)
+    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+      reference("Feature.Event.Paths.Idle").resolves()
+    }
     myFixture.configureByText("InvalidFeature.kt", """
       import dev.kpaths.annotations.Pathable
       class OtherFeature {
@@ -251,14 +256,16 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
       }
       val case = Event.Paths.Idle
     """.trimIndent())
-    val errors = myFixture.doHighlighting().filter { it.severity == HighlightSeverity.ERROR }
-      .map { it.description }.filterNot { it.contains("MISSING_DEPENDENCY") }
-    assertEmpty(errors)
+    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+      reference("Event.Paths.Idle").resolves()
+    }
   }
 
   fun testInvalidKotlinProducesErrors() {
     myFixture.configureByText("Broken.kt", "val broken: Int = \"not an integer\"")
-    assertTrue(myFixture.doHighlighting().any { it.severity == HighlightSeverity.ERROR })
+    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+      diagnostics { error("Int") }
+    }
   }
 
   fun testReferenceObservationRejectsMissingAndAmbiguousExpressions() {
