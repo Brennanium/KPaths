@@ -9,8 +9,9 @@ import signal
 import subprocess
 import sys
 import time
-import xml.etree.ElementTree as ET
 from pathlib import Path
+
+from ide_sandbox import trust_project
 
 ROOT = Path(__file__).resolve().parent.parent
 MATRIX = ROOT / "kpaths-kefs-ide-fixture/ide-compatibility.json"
@@ -18,25 +19,8 @@ MATRIX = ROOT / "kpaths-kefs-ide-fixture/ide-compatibility.json"
 
 def trust_fixture_project(fixture: Path, run_id: str, mode: str, attempt: int) -> None:
     """Trust only this test project in the Gradle-created, isolated IDE configuration."""
-    config = fixture / f"build/ide-probe/{run_id}/{mode}-{attempt}/config/options/trusted-paths.xml"
-    config.parent.mkdir(parents=True, exist_ok=True)
-    project = ET.parse(config).getroot() if config.exists() else ET.Element("application")
-    component = project.find("component[@name='Trusted.Paths']")
-    if component is None:
-        component = ET.SubElement(project, "component", name="Trusted.Paths")
-    option = component.find("option[@name='TRUSTED_PROJECT_PATHS']")
-    if option is None:
-        option = ET.SubElement(component, "option", name="TRUSTED_PROJECT_PATHS")
-    mapping = option.find("map")
-    if mapping is None:
-        mapping = ET.SubElement(option, "map")
-    path = str(fixture / "consumer")
-    entry = next((item for item in mapping.findall("entry") if item.get("key") == path), None)
-    if entry is None:
-        entry = ET.SubElement(mapping, "entry", key=path)
-    entry.set("value", "true")
-    ET.indent(project, space="  ")
-    ET.ElementTree(project).write(config, encoding="unicode", xml_declaration=True)
+    config = fixture / f"build/ide-probe/{run_id}/{mode}-{attempt}/config"
+    trust_project(config, fixture / 'consumer')
 
 
 def stop_fixture_ides(report: Path, mode: str) -> None:

@@ -1,11 +1,13 @@
 import importlib.util
 import io
 import json
+import sys
 import tempfile
 import unittest
 from unittest import mock
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).parent))
 spec = importlib.util.spec_from_file_location("verify_kefs", Path(__file__).with_name("verify-kefs-compatibility.py"))
 module = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(module)
