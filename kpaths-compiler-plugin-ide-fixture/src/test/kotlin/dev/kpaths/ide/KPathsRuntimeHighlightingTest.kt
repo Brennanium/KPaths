@@ -1,9 +1,9 @@
 package dev.kpaths.ide
 
-import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.testFramework.PsiTestUtil
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinCommonCompilerArgumentsHolder
+import dev.kpaths.testing.editor.assertEditor
 
 class KPathsRuntimeHighlightingTest : BasePlatformTestCase() {
   override fun setUp() {
@@ -25,9 +25,10 @@ class KPathsRuntimeHighlightingTest : BasePlatformTestCase() {
       val name: WritableKeyPath<Person, String> = Person.Paths.name
       val text: CaseKeyPath<Event, String> = Event.Paths.Message.text
     """.trimIndent())
-    val errors = myFixture.doHighlighting().filter { it.severity == HighlightSeverity.ERROR }
-      .map { it.description }.filterNot { it.contains("MISSING_DEPENDENCY") }
-    assertEmpty(errors)
+    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+      reference("Person.Paths.name").resolves()
+      reference("Event.Paths.Message.text").resolves()
+    }
   }
 
 }

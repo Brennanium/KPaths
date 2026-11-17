@@ -4,6 +4,8 @@ import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
 import com.intellij.testFramework.PsiTestUtil
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinCommonCompilerArgumentsHolder
+import dev.kpaths.testing.editor.assertEditor
+import dev.kpaths.testing.editor.ReferenceObservation
 
 class KPathsHighlightingTest : BasePlatformTestCase() {
   override fun setUp() {
@@ -157,9 +159,9 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
         data class Many(val a: Int, val b: Int, val c: Int, val d: Int) : Event
       }
     """.trimIndent())
-    val warnings = myFixture.doHighlighting().filter { it.severity == HighlightSeverity.WARNING }
-      .map { it.description }
-    assertTrue(warnings.toString(), warnings.any { it.contains("generated case catalog omits 'Many'") })
+    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+      diagnostics { warning("generated case catalog omits 'Many'") }
+    }
   }
 
   fun testGeneratedMemberCollisionIsHighlightedAsError() {
@@ -171,9 +173,14 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
         data class Connected(override val Connected: String) : Connection()
       }
     """.trimIndent())
-    val errors = myFixture.doHighlighting().filter { it.severity == HighlightSeverity.ERROR }
-      .map { it.description }
-    assertTrue(errors.toString(), errors.any { it.contains("'Connected' would name both") })
+    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+      diagnostics {
+        error("'Connected' would name both")
+        // Kotlin also diagnoses the colliding class and property declarations.
+        error("[REDECLARATION]")
+        error("[REDECLARATION]")
+      }
+    }
   }
 
   fun testNestedCatalogCollisionIsHighlightedAsError() {
@@ -228,9 +235,10 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
       }
       val invalid = OtherFeature.Event.Paths.Metadata
     """.trimIndent())
-    val invalidErrors = myFixture.doHighlighting().filter { it.severity == HighlightSeverity.ERROR }
-      .map { it.description }
-    assertTrue(invalidErrors.toString(), invalidErrors.any { it.contains("Metadata") })
+    assertEditor(FixtureEditorObservations(myFixture, ignoreMissingDependency = true)) {
+      diagnostics { error("Metadata") }
+      reference("OtherFeature.Event.Paths.Metadata").isUnresolved()
+    }
   }
 
   fun testGenericAliasSealedCaseResolves() {
@@ -251,5 +259,13 @@ class KPathsHighlightingTest : BasePlatformTestCase() {
   fun testInvalidKotlinProducesErrors() {
     myFixture.configureByText("Broken.kt", "val broken: Int = \"not an integer\"")
     assertTrue(myFixture.doHighlighting().any { it.severity == HighlightSeverity.ERROR })
+  }
+
+  fun testReferenceObservationRejectsMissingAndAmbiguousExpressions() {
+    myFixture.configureByText("References.kt", "val first = 1\nval second = 1")
+    val observations = FixtureEditorObservations(myFixture)
+    assertTrue(observations.reference("missing") is ReferenceObservation.Unavailable)
+    val duplicate = observations.reference("1") as ReferenceObservation.Unavailable
+    assertEquals("expression is ambiguous", duplicate.reason)
   }
 }

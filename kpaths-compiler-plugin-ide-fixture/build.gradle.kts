@@ -18,6 +18,7 @@ dependencies {
     testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
   }
   testImplementation(kotlin("test"))
+  testImplementation("dev.kpaths.testing:editor-testing:0.0.0-dev")
   testImplementation("junit:junit:4.13.2")
 }
 
