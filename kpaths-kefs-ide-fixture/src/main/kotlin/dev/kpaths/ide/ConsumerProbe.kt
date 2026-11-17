@@ -8,6 +8,9 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiManager
+import dev.kpaths.testing.editor.EditorDiagnostic
+import dev.kpaths.testing.editor.EditorObservations
+import dev.kpaths.testing.editor.ReferenceObservation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
 import java.nio.file.Files
@@ -44,33 +47,43 @@ class ConsumerProbe : ProjectActivity {
             ?: return@compute "missing source"
           val psi = PsiManager.getInstance(project).findFile(file) ?: return@compute "missing PSI"
           val code = psi.text
-          val queries = listOf("Person.Paths.name" to "Paths", "Person.Paths.name" to "name",
-            "Event.Paths.Message.text" to "Paths", "Event.Paths.Message.text" to "Message",
-            "Event.Paths.Message.text" to "text")
-          val controls = listOf("@Pathable" to "Pathable", "Person::name" to "name")
-          val results = (controls + queries).map { (expression, name) ->
-            val start = code.indexOf(expression)
-            check(start >= 0) { "Missing $expression" }
-            val offset = start + expression.indexOf(name)
-            val element = checkNotNull(psi.findElementAt(offset)).parent
-            val target = element.references.firstNotNullOfOrNull { it.resolve() }
-            "$expression:$name=element:${element.javaClass.simpleName}:${element.text}:target:${target?.javaClass?.simpleName ?: "UNRESOLVED"}:${target?.text?.take(80)?.replace("\n", " ")}"
+          val queries = linkedMapOf(
+            "Person annotation" to ("@Pathable\ndata class Person" to "Pathable"),
+            "Direct property" to ("Person::name" to "name"),
+            "Person.Paths" to ("Person.Paths.name" to "Paths"),
+            "Person.Paths.name" to ("Person.Paths.name" to "name"),
+            "Event.Paths" to ("Event.Paths.Message.text" to "Paths"),
+            "Event.Paths.Message" to ("Event.Paths.Message.text" to "Message"),
+            "Event.Paths.Message.text" to ("Event.Paths.Message.text" to "text"),
+          )
+          val observations = object : EditorObservations {
+            override fun diagnostics(): List<EditorDiagnostic> = error("Imported probe does not capture diagnostics")
+            override fun reference(expression: String): ReferenceObservation {
+              val (anchor, name) = queries[expression] ?: return ReferenceObservation.Unavailable("unknown query")
+              val start = code.indexOf(anchor)
+              if (start < 0) return ReferenceObservation.Unavailable("source anchor not found: $anchor")
+              if (code.indexOf(anchor, start + 1) >= 0) return ReferenceObservation.Unavailable("source anchor is ambiguous: $anchor")
+              val element = psi.findElementAt(start + anchor.indexOf(name))?.parent
+                ?: return ReferenceObservation.Unavailable("reference element not found")
+              val refs = element.references
+              if (refs.isEmpty()) return ReferenceObservation.Unavailable("element has no reference")
+              val target = refs.firstNotNullOfOrNull { it.resolve() }
+              return if (target == null) ReferenceObservation.Unresolved else ReferenceObservation.Resolved()
+            }
           }
-          results.joinToString("\n")
+          try {
+            assertImportedReferences(observations, expected)
+            "PASS ($expected)"
+          } catch (failure: AssertionError) {
+            failure.message ?: "Editor assertions failed"
+          }
         }
       } catch (error: CancellationException) {
         throw error
       } catch (error: Exception) {
         "${error.javaClass.name}: ${error.message}"
       }
-      val results = last.lines()
-      val controlsPass = results.size == 7 && results.take(2).none { it.contains("UNRESOLVED") }
-      val generatedPass = if (expected == "enabled") {
-        results.drop(2).none { it.contains("UNRESOLVED") }
-      } else {
-        results.drop(2).all { it.contains("UNRESOLVED") }
-      }
-      if (controlsPass && generatedPass) {
+      if (last == "PASS ($expected)") {
         Files.writeString(Path.of(report), "PASS ($expected)\n$last")
         // This activity runs only in the isolated runIde probe. Exit that IDE so Gradle can
         // finish before the runner changes the project configuration for the next launch.

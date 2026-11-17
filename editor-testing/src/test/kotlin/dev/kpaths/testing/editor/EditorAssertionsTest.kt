@@ -123,4 +123,19 @@ class EditorAssertionsTest {
       }
     }
   }
+
+  @Test fun `reference-only checks explicitly skip unavailable diagnostics`() {
+    val source = object : EditorObservations {
+      override fun diagnostics(): List<EditorDiagnostic> = error("diagnostics unavailable")
+      override fun reference(expression: String) = ReferenceObservation.Resolved()
+    }
+    assertEditor(source, checkDiagnostics = false) { reference("Person.Paths.name").resolves() }
+    assertFailsWith<IllegalStateException> {
+      assertEditor(source, checkDiagnostics = false) { diagnostics { error("unexpected") } }
+    }
+    assertFailsWith<IllegalStateException> {
+      assertEditor(source, checkDiagnostics = false) { diagnosticsSnapshot("") }
+    }
+    assertFailsWith<IllegalStateException> { assertEditor(source) {} }
+  }
 }

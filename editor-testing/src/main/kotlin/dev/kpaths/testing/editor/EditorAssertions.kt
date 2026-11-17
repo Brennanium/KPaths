@@ -27,10 +27,15 @@ public interface EditorObservations {
 
 /**
  * Check observations from an already prepared editor. Unexpected errors fail by default;
- * warnings are checked only when explicitly expected. This function does not launch an IDE.
+ * warnings are checked only when explicitly expected. Set [checkDiagnostics] to false only for
+ * a reference-only adapter that cannot capture diagnostics. This function does not launch an IDE.
  */
-public fun assertEditor(observations: EditorObservations, block: EditorExpectations.() -> Unit) {
-  EditorExpectations(observations).apply(block).verify()
+public fun assertEditor(
+  observations: EditorObservations,
+  checkDiagnostics: Boolean = true,
+  block: EditorExpectations.() -> Unit,
+) {
+  EditorExpectations(observations, checkDiagnostics).apply(block).verify()
 }
 
 private val diagnosticSnapshotting = textSnapshotting.pullback<List<EditorDiagnostic>> { diagnostics ->
@@ -39,13 +44,17 @@ private val diagnosticSnapshotting = textSnapshotting.pullback<List<EditorDiagno
   }
 }
 
-public class EditorExpectations internal constructor(private val observations: EditorObservations) {
+public class EditorExpectations internal constructor(
+  private val observations: EditorObservations,
+  private val checkDiagnostics: Boolean,
+) {
   private val expectedDiagnostics = mutableListOf<ExpectedDiagnostic>()
   private val references = mutableListOf<ReferenceExpectation>()
   private var expectedDiagnosticSnapshot: String? = null
   private var hasDiagnosticBlock = false
 
   public fun diagnostics(block: DiagnosticExpectations.() -> Unit) {
+    check(checkDiagnostics) { "Diagnostic checking is disabled for this editor assertion." }
     check(expectedDiagnosticSnapshot == null) { "Diagnostic snapshots and individual diagnostic expectations cannot be combined." }
     hasDiagnosticBlock = true
     DiagnosticExpectations(expectedDiagnostics).apply(block)
@@ -53,6 +62,7 @@ public class EditorExpectations internal constructor(private val observations: E
 
   /** Compare all captured diagnostics as text, including warnings. Recording is not yet supported. */
   public fun diagnosticsSnapshot(expected: String) {
+    check(checkDiagnostics) { "Diagnostic checking is disabled for this editor assertion." }
     check(expectedDiagnosticSnapshot == null && !hasDiagnosticBlock) {
       "Diagnostic snapshots and individual diagnostic expectations cannot be combined or repeated."
     }
@@ -66,6 +76,23 @@ public class EditorExpectations internal constructor(private val observations: E
 
   internal fun verify() {
     val failures = mutableListOf<String>()
+    if (checkDiagnostics) verifyDiagnostics(failures)
+    for (expected in references) {
+      val shouldResolve = expected.shouldResolve
+      if (shouldResolve == null) {
+        failures += "No expected resolution specified for reference '${expected.expression}'"
+        continue
+      }
+      when (val result = observations.reference(expected.expression)) {
+        is ReferenceObservation.Resolved -> if (!shouldResolve) failures += "Reference '${expected.expression}' unexpectedly resolved"
+        ReferenceObservation.Unresolved -> if (shouldResolve) failures += "Reference '${expected.expression}' did not resolve"
+        is ReferenceObservation.Unavailable -> failures += "Cannot inspect reference '${expected.expression}': ${result.reason}"
+      }
+    }
+    if (failures.isNotEmpty()) throw AssertionError(failures.joinToString("\n", prefix = "Editor assertions failed:\n"))
+  }
+
+  private fun verifyDiagnostics(failures: MutableList<String>) {
     val actual = observations.diagnostics()
     val expectedSnapshot = expectedDiagnosticSnapshot
     if (expectedSnapshot != null) {
@@ -97,19 +124,6 @@ public class EditorExpectations internal constructor(private val observations: E
         failures += "Unexpected ERROR${it.location?.let { location -> " at $location" } ?: ""}: ${it.message}"
       }
     }
-    for (expected in references) {
-      val shouldResolve = expected.shouldResolve
-      if (shouldResolve == null) {
-        failures += "No expected resolution specified for reference '${expected.expression}'"
-        continue
-      }
-      when (val result = observations.reference(expected.expression)) {
-        is ReferenceObservation.Resolved -> if (!shouldResolve) failures += "Reference '${expected.expression}' unexpectedly resolved"
-        ReferenceObservation.Unresolved -> if (shouldResolve) failures += "Reference '${expected.expression}' did not resolve"
-        is ReferenceObservation.Unavailable -> failures += "Cannot inspect reference '${expected.expression}': ${result.reason}"
-      }
-    }
-    if (failures.isNotEmpty()) throw AssertionError(failures.joinToString("\n", prefix = "Editor assertions failed:\n"))
   }
 }
 

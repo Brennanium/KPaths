@@ -14,6 +14,7 @@ repositories {
 }
 
 dependencies {
+  implementation("dev.kpaths.testing:editor-testing:0.0.0-dev")
   intellijPlatform {
     local(providers.gradleProperty("kpaths.idePath").orElse("/Applications/Android Studio.app"))
     bundledPlugin("org.jetbrains.kotlin")

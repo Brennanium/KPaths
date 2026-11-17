@@ -26,8 +26,9 @@ diagnostic expectations in the same assertion. It does not record snapshots yet.
 The KPaths Android Studio light fixture supplies the first adapter and exercises both real
 highlighting and reference resolution. It explicitly filters the light fixture's existing
 `MISSING_DEPENDENCY` stub-classpath diagnostic; the assertion module does not filter diagnostics.
-The full imported-project probe is not yet wired to these assertions. Exact location support,
-completion, inlays, and inline recording remain future work.
+The imported-project probe uses the same reference assertions with diagnostic checking explicitly
+disabled: it does not yet capture editor diagnostics. Exact location support, completion, inlays,
+and inline recording remain future work.
 
 `assertCompiler` currently lives in the compiler fixture. Both assertion layers now share the
 basic snapshot strategy and comparison module. Generic snapshot expectations, version selection,
