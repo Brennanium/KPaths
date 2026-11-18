@@ -22,7 +22,9 @@ on:
       - "scripts/fetch-kefs-maven.sh"
       - "scripts/build-release-doc-snapshots.sh"
       - "scripts/finalize-doc-site.py"
+      - "scripts/prepare-release-doc-theme.py"
       - "scripts/test_finalize_doc_site.py"
+      - "scripts/test_prepare_release_doc_theme.py"
   workflow_dispatch:
 
 permissions:
@@ -52,7 +54,7 @@ jobs:
       - name: Install documentation dependencies
         run: python3 -m pip install -r docs/requirements.txt
       - name: Test documentation assembly
-        run: python3 -m unittest scripts/test_finalize_doc_site.py
+        run: python3 -m unittest scripts/test_finalize_doc_site.py scripts/test_prepare_release_doc_theme.py
       - name: Build documentation
         run: ./gradlew docsBuild -PdocumentationVersion=main
       - name: Build release documentation snapshots

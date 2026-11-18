@@ -20,9 +20,13 @@ while IFS= read -r version; do
   (
     cd "$worktree"
     ./gradlew docsBuild -I "$repo/gradle/documentation.init.gradle.kts" -PdocumentationVersion="$version" "-PdocsPython=$docs_python"
+    config=$("$docs_python" "$repo/scripts/prepare-release-doc-theme.py" "$repo" "$worktree" "$version")
+    "$docs_python" -m mkdocs build --strict --config-file "$config"
+    cp -a "$worktree/build/docs/site/api/." "$worktree/build/docs/themed-site/api/"
   )
+  rm -rf -- "$repo/build/docs/site/$version"
   mkdir -p "$repo/build/docs/site/$version"
-  cp -a "$worktree/build/docs/site/." "$repo/build/docs/site/$version/"
+  cp -a "$worktree/build/docs/themed-site/." "$repo/build/docs/site/$version/"
   git -C "$repo" worktree remove --force "$worktree"
   worktree=''
 done < <(git -C "$repo" tag --list --sort=version:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
