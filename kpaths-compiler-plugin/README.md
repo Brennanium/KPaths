@@ -221,6 +221,12 @@ The JVM fixture also has an opt-in integration with a local Knapshots checkout. 
 
 With this checkout configured, the downstream compiler contract suite also uses Knapshots to compare and record its existing inline and file-backed snapshots. Builds without the checkout continue to use the original KPaths test harness until Knapshots is available as a regular dependency.
 
+The KSP processor also has an opt-in Knapshots integration that checks its generated Kotlin source and diagnostics:
+
+```shell
+./gradlew :kpaths-ksp:jvmTest -Pknapshots.checkout=/path/to/Knapshots --tests '*KnapshotsKspTest'
+```
+
 To verify Knapshots-managed compilation directories against a real Gradle consumer, including inline and file-backed snapshots, run:
 
 ```shell

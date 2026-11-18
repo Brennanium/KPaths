@@ -57,6 +57,10 @@ kotlin {
     }
     jvmTest {
       kotlin.srcDir("src/test/kotlin")
+      if (providers.gradleProperty("knapshots.checkout").isPresent) {
+        kotlin.srcDir("src/knapshotsTest/kotlin")
+        dependencies { implementation("dev.knapshots:knapshots-ksp:0.1.0-SNAPSHOT") }
+      }
       dependencies {
         implementation(kotlin("test"))
         implementation(libs.junit.jupiter)
@@ -79,5 +83,13 @@ tasks.named<Test>("jvmTest") {
     ":kpaths-ksp:jvmJar",
   )
   systemProperty("kpaths.projectDir", rootProject.projectDir.absolutePath)
+  if (providers.gradleProperty("knapshots.checkout").isPresent) {
+    fun artifact(module: String) = rootProject.file("$module/build/libs/$module-jvm-${project.version}.jar")
+    systemProperty("knapshots.ksp.version", libs.versions.ksp.get())
+    systemProperty("knapshots.ksp.kotlinVersion", libs.versions.kotlin.get())
+    systemProperty("knapshots.ksp.record", providers.gradleProperty("knapshots.ksp.record").orElse("none").get())
+    systemProperty("knapshots.ksp.processorClasspath", files(artifact("kpaths-ksp"), configurations.getByName("jvmRuntimeClasspath")).asPath)
+    systemProperty("knapshots.ksp.classpath", files(artifact("kpaths-core"), artifact("kpaths-annotations")).asPath)
+  }
   useJUnitPlatform()
 }
