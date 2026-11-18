@@ -213,6 +213,14 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@17 \
 
 The JVM fixture includes in-process snippet compilation for fast compiler tests. The separate [Android Studio analysis fixture](../kpaths-compiler-plugin-ide-fixture/README.md) tests editor highlighting using the Kotlin compiler bundled with a local IDE and a test-only plugin provider. The separate [KEFS fixture](../kpaths-kefs-ide-fixture/README.md) verifies local IDE-compatible artifact publication, KEFS highlighting, and the imported consumer's symbol resolution. Its compatibility matrix records the IDE builds that have been tested. These fixtures do not yet provide a publicly distributed artifact or automatic KEFS discovery for KPaths.
 
+The JVM fixture also has an opt-in integration with a local Knapshots checkout. It runs real KPaths compiler assertions for generation, diagnostics, FIR/IR snapshots, version-specific expectations, and inline recording:
+
+```shell
+./gradlew :kpaths-compiler-plugin-fixture:jvmTest -Pknapshots.checkout=/path/to/Knapshots --tests '*KnapshotsCompilerTest'
+```
+
+This is an integration fixture for the in-development Knapshots library; the existing KPaths compiler tests remain in place.
+
 This intentionally proves source resolution, object construction, cached direct read-only, reference-writable, and data-class copy-writable KeyPath members, direct whole-case CaseKeyPaths, enum-entry CaseKeyPaths, binary meta-annotation discovery, an external compiler-plugin request, metadata, and JVM/Native backend portability. `copyWritableVals` works through direct `@Pathable`, `@KPathsPathable` meta-annotations, and a contributing compiler plugin's `KPathsGenerationOptions`. Generated `allCasePaths` catalogs use the canonical associated-value paths for object cases and cases with one to three properties. Cases without a supported canonical payload are omitted, so `case` can fail for those cases; the plugin warns when it generates an incomplete catalog. Broader diagnostics and conformance coverage remain future work. In compiler-plugin mode, source annotations must spell `copyWritableVals` with a literal `true` or `false`, rather than a `const val` reference. FIR can request generated signatures before constant references are resolved; the plugin reports an error instead of silently producing a read-only path. KSP mode continues to support constant annotation arguments. `@PathsAdapter` establishes the binary metadata contract and factory lookup. Explicit catalog requests can supply compiler-side adapters; automatic integration-wide registration of those lower-level IR adapters and broader adapter validation remain future work.
 
 `kpaths-compiler-plugin-fixture/LanguageSyntaxExperiments.kt` separately demonstrates the Kotlin generic `invoke` syntax used by generated catalogs.

@@ -21,6 +21,9 @@ dependencyResolutionManagement {
 
 rootProject.name = "KPaths"
 
+// Opt-in integration with the in-development Knapshots build.
+providers.gradleProperty("knapshots.checkout").orNull?.let { includeBuild(it) }
+
 include(
   ":kpaths-annotations",
   ":kpaths-core",
