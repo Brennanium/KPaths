@@ -37,13 +37,17 @@ kotlin {
     jvmTest {
       kotlin.srcDir("src/test/kotlin")
       if (providers.gradleProperty("knapshots.checkout").isPresent) {
+        kotlin.srcDir("src/knapshotsHarness/kotlin")
+        kotlin.exclude("dev/kpaths/compiler/testing/**")
         kotlin.srcDir("src/knapshotsTest/kotlin")
         resources.srcDir("src/knapshotsTest/resources")
         dependencies { implementation("dev.knapshots:knapshots-compiler:0.1.0-SNAPSHOT") }
+      } else {
+        kotlin.srcDir("src/legacyHarness/kotlin")
+        dependencies { implementation(project(":compiler-testing")) }
       }
       dependencies {
         implementation(kotlin("test"))
-        implementation(project(":compiler-testing"))
         implementation(libs.junit.jupiter)
         implementation(libs.asm)
         implementation("dev.zacsweers.kctfork:core:0.14.0")
@@ -82,7 +86,7 @@ val snapshotRecording = providers.gradleProperty("kpaths.snapshotRecording")
   .orElse("missing")
 
 tasks.named<Test>("jvmTest") {
-  dependsOn(":compiler-testing:test")
+  if (!providers.gradleProperty("knapshots.checkout").isPresent) dependsOn(":compiler-testing:test")
   systemProperty("idea.home.path", rootProject.projectDir.absolutePath)
   useJUnitPlatform {
     excludeTags("compiler-plugin-contract")

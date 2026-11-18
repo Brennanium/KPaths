@@ -219,7 +219,7 @@ The JVM fixture also has an opt-in integration with a local Knapshots checkout. 
 ./gradlew :kpaths-compiler-plugin-fixture:jvmTest -Pknapshots.checkout=/path/to/Knapshots --tests '*KnapshotsCompilerTest'
 ```
 
-This is an integration fixture for the in-development Knapshots library; the existing KPaths compiler tests remain in place.
+With this checkout configured, the downstream compiler contract suite also uses Knapshots to compare and record its existing inline and file-backed snapshots. Builds without the checkout continue to use the original KPaths test harness until Knapshots is available as a regular dependency.
 
 To verify Knapshots-managed compilation directories against a real Gradle consumer, including inline and file-backed snapshots, run:
 
