@@ -1038,12 +1038,12 @@ class FutureCompilerPluginContractTest {
           compilerOptions.freeCompilerArgs.add("-Xplugin=${plugin.toGradlePath()}")
           providers.gradleProperty("kpaths.firSnapshot").orNull?.let { snapshot ->
             compilerOptions.freeCompilerArgs.addAll(
-              listOf("-P", "plugin:dev.kpaths.compiler:firSnapshot=${'$'}snapshot"),
+              listOf("-P", "plugin:dev.kpaths.compiler-plugin:firSnapshot=${'$'}snapshot"),
             )
           }
           providers.gradleProperty("kpaths.irSnapshot").orNull?.let { snapshot ->
             compilerOptions.freeCompilerArgs.addAll(
-              listOf("-P", "plugin:dev.kpaths.compiler:irSnapshot=${'$'}snapshot"),
+              listOf("-P", "plugin:dev.kpaths.compiler-plugin:irSnapshot=${'$'}snapshot"),
             )
           }
         }

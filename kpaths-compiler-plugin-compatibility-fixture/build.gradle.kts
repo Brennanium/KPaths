@@ -1,6 +1,6 @@
 plugins {
   kotlin("multiplatform")
-  id("dev.kpaths.compiler")
+  id("dev.kpaths.gradle-plugin")
 }
 val kpathsVersion = rootProject.file("../gradle.properties").readLines()
   .single { it.startsWith("VERSION_NAME=") }.substringAfter('=')

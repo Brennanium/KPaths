@@ -18,7 +18,7 @@ class PrepareVersionTest(unittest.TestCase):
             props = root / "gradle.properties"
             props.write_text("VERSION_NAME=0.1.0\n")
             consumer.write_text('''plugins {
-  id("dev.kpaths.compiler") version "0.1.0"
+  id("dev.kpaths.gradle-plugin") version "0.1.0"
 }
 dependencies {
   implementation("io.github.brennanium:kpaths-core:0.1.0")
@@ -27,7 +27,7 @@ dependencies {
 ''')
             MODULE.prepare(root, "0.2.0-ci.1")
             self.assertEqual(props.read_text(), "VERSION_NAME=0.2.0-ci.1\n")
-            self.assertIn('id("dev.kpaths.compiler") version "0.2.0-ci.1"', consumer.read_text())
+            self.assertIn('id("dev.kpaths.gradle-plugin") version "0.2.0-ci.1"', consumer.read_text())
             self.assertEqual(consumer.read_text().count("0.2.0-ci.1"), 3)
             before = props.read_bytes(), consumer.read_bytes()
             with self.assertRaises(ValueError):

@@ -106,6 +106,9 @@ Once an IDE-compatible KPaths artifact is published to the planned Maven reposit
 Support → Artifacts** with:
 
 * Coordinates: `io.github.brennanium:kpaths-compiler-plugin-jvm`.
+  This is currently shared with the build compiler artifact: KEFS matches the incoming build JAR's
+  artifact path when resolving its IDE-compatible replacement. A differently named IDE artifact
+  requires a working mapping; the fixture verifies that a distinct ID alone does not match.
 * Version matching: `Exact`.
 * Repository: the KPaths IDE artifact repository URL, once published.
 

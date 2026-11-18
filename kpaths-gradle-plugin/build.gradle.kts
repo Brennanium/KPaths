@@ -29,7 +29,7 @@ dependencies {
 gradlePlugin {
   plugins {
     create("kpathsCompiler") {
-      id = "dev.kpaths.compiler"
+      id = "dev.kpaths.gradle-plugin"
       implementationClass = "dev.kpaths.gradle.KPathsGradlePlugin"
       displayName = "KPaths compiler plugin"
       description = "Generates nested KPaths catalogs with the Kotlin compiler."

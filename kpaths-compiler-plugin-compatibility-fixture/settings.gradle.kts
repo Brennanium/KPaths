@@ -4,7 +4,7 @@ pluginManagement {
     .single { it.startsWith("VERSION_NAME=") }.substringAfter('=')
   plugins {
     kotlin("multiplatform") version testKotlinVersion
-    id("dev.kpaths.compiler") version kpathsVersion
+    id("dev.kpaths.gradle-plugin") version kpathsVersion
   }
   if ("-dev-" in testKotlinVersion) {
     resolutionStrategy.eachPlugin {

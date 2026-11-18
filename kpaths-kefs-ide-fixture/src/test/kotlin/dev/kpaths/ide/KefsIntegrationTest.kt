@@ -62,6 +62,12 @@ class KefsIntegrationTest : BasePlatformTestCase() {
     settingsClass.getMethod("updateToNewState", List::class.java, List::class.java).invoke(settings, listOf(repo), listOf(descriptor, contributorDescriptor))
     val providerClass = cls("KefsProvider")
     val provider = providerClass.getDeclaredConstructor().apply { isAccessible = true }.newInstance() as KotlinBundledFirCompilerPluginProvider
+    // KEFS' default lookup compares the incoming build JAR path to the configured Maven ID.
+    // An IDE artifact with a different ID does not match the build compiler plugin by itself.
+    val differentId = construct("MavenId", "io.github.brennanium:kpaths-ide-plugin")
+    val differentDescriptor = construct("KotlinPluginDescriptor", "Different IDE artifact", listOf(differentId), enumValue("KotlinPluginDescriptor\$VersionMatching", "EXACT"), true, false, listOf(repo), null)
+    val locate = providerClass.methods.single { it.name.startsWith("locateKotlinPluginDescriptorVersionedOrNull") }
+    assertNull("A distinct IDE artifact ID needs a tested mapping from the build artifact", locate.invoke(provider, requested, differentDescriptor))
     fun awaitResolution(path: Path): Path {
       var resolved: Path? = null
       val deadline = System.currentTimeMillis() + 30000

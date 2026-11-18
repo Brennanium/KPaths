@@ -24,7 +24,7 @@ class EditorTestingModelIntegrationTest(unittest.TestCase):
             subprocess.run(command + ['-PeditorTesting.kotlinVersion=2.4.20'], cwd=ROOT, check=True, capture_output=True, text=True)
             override = json.loads(output.read_text())
             self.assertEqual(override['kotlinVersion'], '2.4.20')
-            self.assertEqual(override['gradlePlugin']['id'], 'dev.kpaths.compiler')
+            self.assertEqual(override['gradlePlugin']['id'], 'dev.kpaths.gradle-plugin')
             self.assertEqual(override['compilerPlugin']['name'], 'kpaths-compiler-plugin-jvm')
             self.assertEqual([item['name'] for item in override['dependencies']], ['kpaths-core', 'kpaths-annotations'])
             subprocess.run(command, cwd=ROOT, check=True, capture_output=True, text=True)

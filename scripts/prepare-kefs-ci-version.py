@@ -18,7 +18,7 @@ def prepare(root: Path, version: str) -> None:
         raise ValueError("Expected exactly one VERSION_NAME in gradle.properties")
     previous = match[0]
     consumer_text = consumer.read_text()
-    old = [f'id("dev.kpaths.compiler") version "{previous}"',
+    old = [f'id("dev.kpaths.gradle-plugin") version "{previous}"',
            f'io.github.brennanium:kpaths-core:{previous}',
            f'io.github.brennanium:kpaths-annotations:{previous}']
     if any(consumer_text.count(value) != 1 for value in old):

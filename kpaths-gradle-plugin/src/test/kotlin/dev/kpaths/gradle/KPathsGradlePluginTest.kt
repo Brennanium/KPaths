@@ -39,11 +39,11 @@ class KPathsGradlePluginTest {
       <project><modelVersion>4.0.0</modelVersion><groupId>io.github.brennanium</groupId>
       <artifactId>kpaths-gradle-plugin</artifactId><version>$version</version></project>
     """.trimIndent())
-    val marker = repo.resolve("dev/kpaths/compiler/dev.kpaths.compiler.gradle.plugin/$version")
+    val marker = repo.resolve("dev/kpaths/gradle-plugin/dev.kpaths.gradle-plugin.gradle.plugin/$version")
     Files.createDirectories(marker)
-    Files.writeString(marker.resolve("dev.kpaths.compiler.gradle.plugin-$version.pom"), """
-      <project><modelVersion>4.0.0</modelVersion><groupId>dev.kpaths.compiler</groupId>
-      <artifactId>dev.kpaths.compiler.gradle.plugin</artifactId><version>$version</version><packaging>pom</packaging>
+    Files.writeString(marker.resolve("dev.kpaths.gradle-plugin.gradle.plugin-$version.pom"), """
+      <project><modelVersion>4.0.0</modelVersion><groupId>dev.kpaths.gradle-plugin</groupId>
+      <artifactId>dev.kpaths.gradle-plugin.gradle.plugin</artifactId><version>$version</version><packaging>pom</packaging>
       <dependencies><dependency><groupId>io.github.brennanium</groupId><artifactId>kpaths-gradle-plugin</artifactId>
       <version>$version</version></dependency></dependencies></project>
     """.trimIndent())
@@ -75,7 +75,7 @@ class KPathsGradlePluginTest {
     val core = project.resolve("kpaths-core/build/libs/kpaths-core-jvm-$version.jar")
     val annotations = project.resolve("kpaths-annotations/build/libs/kpaths-annotations-jvm-$version.jar")
     Files.writeString(directory.resolve("build.gradle.kts"), """
-      plugins { id("dev.kpaths.compiler") version "$version"; kotlin("jvm") version "$testKotlinVersion" }
+      plugins { id("dev.kpaths.gradle-plugin") version "$version"; kotlin("jvm") version "$testKotlinVersion" }
       dependencies { implementation(files("${core.toGradlePath()}", "${annotations.toGradlePath()}")) }
       val loader = extensions.getByName("kotlin").javaClass.classLoader
       val wrapper = Class.forName("org.jetbrains.kotlin.gradle.plugin.KotlinPluginWrapperKt", true, loader)
@@ -107,7 +107,7 @@ class KPathsGradlePluginTest {
     assertContains(first.output, "KPATHS_GRADLE_PLUGIN_OK")
     val second = run()
     assertContains(second.output, "Configuration cache entry reused")
-    assertEquals("dev.kpaths.compiler", KPathsGradlePlugin().getCompilerPluginId())
+    assertEquals("dev.kpaths.compiler-plugin", KPathsGradlePlugin().getCompilerPluginId())
   }
 
   private fun Path.toGradlePath(): String = toAbsolutePath().toString().replace("\\", "\\\\")

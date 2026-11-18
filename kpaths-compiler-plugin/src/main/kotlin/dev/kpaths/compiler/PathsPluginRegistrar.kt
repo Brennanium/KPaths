@@ -20,6 +20,6 @@ public class PathsPluginRegistrar : CompilerPluginRegistrar() {
   }
 
   internal companion object {
-    const val pluginId: String = "dev.kpaths.compiler"
+    const val pluginId: String = "dev.kpaths.compiler-plugin"
   }
 }

@@ -20,7 +20,7 @@ public class KPathsGradlePlugin : KotlinCompilerPluginSupportPlugin {
     )
   }
 
-  override fun getCompilerPluginId(): String = "dev.kpaths.compiler"
+  override fun getCompilerPluginId(): String = "dev.kpaths.compiler-plugin"
 
   override fun getPluginArtifact(): SubpluginArtifact =
     SubpluginArtifact(KPATHS_GROUP, "kpaths-compiler-plugin-jvm", KPATHS_VERSION)
