@@ -1,14 +1,12 @@
 # K2 `Type.Paths` compiler plugin
 
-This module is a deliberately scoped K2 compiler-plugin implementation. It is not yet a
-published KPaths module and has no production API.
+This module is a deliberately scoped K2 compiler-plugin implementation. It is not yet a published KPaths module and has no production API.
 
 See the [KSP parity audit](PARITY.md) for covered behavior, known differences, and release decisions.
 
 ## How the plugins fit together
 
-The Gradle plugin configures the build, the compiler plugin generates paths, and the IDE plugin
-makes those paths available while editing. Their identifiers serve different purposes:
+The Gradle plugin configures the build, the compiler plugin generates paths, and the IDE plugin makes those paths available while editing. Their identifiers serve different purposes:
 
 | Component or identifier | KPaths name | Purpose |
 | --- | --- | --- |
@@ -17,15 +15,9 @@ makes those paths available while editing. Their identifiers serve different pur
 | Compiler plugin artifact | `io.github.brennanium:kpaths-compiler-plugin-jvm` | Maven group and artifact for the JAR Gradle loads into the build's Kotlin compiler. |
 | IDE plugin through KEFS | `io.github.brennanium:kpaths-compiler-plugin-jvm` | An IDE-compatible build of the compiler plugin that KEFS loads into Android Studio's bundled Kotlin compiler. |
 
-The last two rows currently use the same Maven name in different repositories. The IDE artifact's
-version includes the IDE's Kotlin compiler version as well as the KPaths version. KEFS matches the
-build artifact's name when selecting its IDE-compatible replacement; a distinct IDE artifact name
-needs a verified mapping before it can be used. The IDE plugin is supplied through KEFS, not
-installed as a standalone Android Studio plugin. See the [KEFS integration guide](../kpaths-kefs-ide-fixture/README.md)
-for the current setup and the [Gradle plugin guide](../kpaths-gradle-plugin/README.md) for a build example.
+The last two rows are **different JAR builds with the same Maven group and artifact name**. KPaths uses the shared name because KEFS' default lookup matches the build JAR's artifact name when selecting its IDE-compatible replacement. The builds are published to different repositories: the build artifact uses the KPaths version, while the IDE artifact's version includes the IDE's Kotlin compiler version as well as the KPaths version. For example, a build version `0.1.0` and IDE compiler version `2.4.20-ij262-52` select an IDE artifact version `2.4.20-ij262-52-0.1.0`. These IDE artifacts are not yet released. A distinct IDE artifact name needs a verified mapping before it can be used. The IDE plugin is supplied through KEFS, not installed as a standalone Android Studio plugin. See the [KEFS integration guide](../kpaths-kefs-ide-fixture/README.md) for the current setup and the [Gradle plugin guide](../kpaths-gradle-plugin/README.md) for a build example.
 
-It proves that a `FirDeclarationGenerationExtension` can discover a source-visible `@Pathable`
-declaration through FIR's predicate index and synthesize a *real* nested `Paths` object:
+It proves that a `FirDeclarationGenerationExtension` can discover a source-visible `@Pathable` declaration through FIR's predicate index and synthesize a *real* nested `Paths` object:
 
 ```kotlin
 @Pathable
@@ -34,12 +26,7 @@ data class Person(val name: String)
 val name: KeyPath<Person, String> = Person.Paths.name
 ```
 
-No companion object and no generated Kotlin source file are involved. For concrete root types, the
-plugin's IR extension emits a private `KeyPathBase` subclass behind each generated field. That
-subclass stores its `PathId` and structural `TypeId`—including nested nullability, generic
-arguments, use-site variance, and star projections—and calls the source getter directly. There is
-no `KProperty1` reference or stored closure in those emitted paths. Generic class roots also expose
-a typed factory:
+No companion object and no generated Kotlin source file are involved. For concrete root types, the plugin's IR extension emits a private `KeyPathBase` subclass behind each generated field. That subclass stores its `PathId` and structural `TypeId`—including nested nullability, generic arguments, use-site variance, and star projections—and calls the source getter directly. There is no `KProperty1` reference or stored closure in those emitted paths. Generic class roots also expose a typed factory:
 
 ```kotlin
 @Pathable
@@ -51,15 +38,9 @@ val stringValue = Box.Paths.of(String::class).value
 val explicitValue = Box.Paths.of<String?>(TypeId.of<String?>()).value
 ```
 
-The factory captures each reified type argument as a `TypeId`, so path identity preserves generic
-arguments and nullability. The catalog caches direct path implementations; the `TypeId.of` call
-uses Kotlin type metadata at the factory call site. A `KClass` can be passed when a non-null class
-token is already available; it does not retain nested generic arguments or nullability.
-The explicit `TypeId` overload is useful in non-reified generic code; callers are responsible for
-passing a token that matches each type argument.
+The factory captures each reified type argument as a `TypeId`, so path identity preserves generic arguments and nullability. The catalog caches direct path implementations; the `TypeId.of` call uses Kotlin type metadata at the factory call site. A `KClass` can be passed when a non-null class token is already available; it does not retain nested generic arguments or nullability. The explicit `TypeId` overload is useful in non-reified generic code; callers are responsible for passing a token that matches each type argument.
 
-On supported non-generic roots, `@PathName` changes the generated property-path spelling while
-preserving its identity:
+On supported non-generic roots, `@PathName` changes the generated property-path spelling while preserving its identity:
 
 ```kotlin
 @Pathable
@@ -68,8 +49,7 @@ data class Person(@PathName("display") var name: String)
 val display = Person.Paths.display  // Same path identity as Person::name.
 ```
 
-Invalid names and collisions are diagnosed. A source declaration named `Paths` also conflicts with
-the generated nested catalog and must be renamed.
+Invalid names and collisions are diagnosed. A source declaration named `Paths` also conflicts with the generated nested catalog and must be renamed.
 
 For a concrete sealed hierarchy, direct nested variants receive the same nested catalog shape:
 
@@ -83,13 +63,9 @@ sealed interface Delivery {
 val message: CaseKeyPath<Delivery, Delivery.Message> = Delivery.Paths.Message
 ```
 
-Those whole-case members are direct `CaseKeyPathBase` implementations: matching is an `is` check,
-embedding returns the supplied case, and their `PathId`/`TypeId` metadata is emitted without
-reflection. This slice covers variants declared directly inside the sealed root, including direct
-payload paths for object cases and cases with one to three constructor properties.
+Those whole-case members are direct `CaseKeyPathBase` implementations: matching is an `is` check, embedding returns the supplied case, and their `PathId`/`TypeId` metadata is emitted without reflection. This slice covers variants declared directly inside the sealed root, including direct payload paths for object cases and cases with one to three constructor properties.
 
-Generic sealed roots also generate whole-case paths, including cases that forward or reorder root
-type parameters and covariant `Nothing` cases:
+Generic sealed roots also generate whole-case paths, including cases that forward or reorder root type parameters and covariant `Nothing` cases:
 
 ```kotlin
 @Pathable
@@ -105,14 +81,9 @@ val property: KeyPath<Loadable.Loaded<String>, String> = Loadable.Paths<String>(
 val cases = Loadable.Paths<String>().allCasePaths
 ```
 
-Generic catalogs expose whole-case paths, direct payload paths for object cases and data cases with
-one to three constructor properties, case property KeyPath catalogs, bound payload factories, and
-`allCasePaths`. Automatic `CasePathable` conformance for generic roots remains future work.
-The [generic `CasePathable` research notes](generic-case-pathable-research.md) cover the type
-identity problem, possible contracts, compiler-assisted access, and experiments to run.
+Generic catalogs expose whole-case paths, direct payload paths for object cases and data cases with one to three constructor properties, case property KeyPath catalogs, bound payload factories, and `allCasePaths`. Automatic `CasePathable` conformance for generic roots remains future work. The [generic `CasePathable` research notes](generic-case-pathable-research.md) cover the type identity problem, possible contracts, compiler-assisted access, and experiments to run.
 
-Use `@CaseName` on a sealed case or enum entry to choose its generated member name. Its identity
-continues to use the original case name, and invalid or colliding names are diagnosed:
+Use `@CaseName` on a sealed case or enum entry to choose its generated member name. Its identity continues to use the original case name, and invalid or colliding names are diagnosed:
 
 ```kotlin
 @Pathable
@@ -123,8 +94,7 @@ sealed interface Event {
 val text = Event.Paths.MessageCase.text
 ```
 
-The generated catalog also exposes property KeyPaths for each case. For cases with two or three
-constructor properties, named factories bind the other values and focus one payload property:
+The generated catalog also exposes property KeyPaths for each case. For cases with two or three constructor properties, named factories bind the other values and focus one payload property:
 
 ```kotlin
 @Pathable
@@ -136,33 +106,22 @@ val textProperty = Event.Paths.MessagePaths.text
 val messageText = Event.Paths.Message.textFor(id = 1)
 ```
 
-`@PathsName` renames the case's property catalog, and `@PathName` renames a property path within
-that catalog. The bound path's identity includes its bound values. Its generated implementation
-uses an internal, reflection-free core helper.
+`@PathsName` renames the case's property catalog, and `@PathName` renames a property path within that catalog. The bound path's identity includes its bound values. Its generated implementation uses an internal, reflection-free core helper.
 
-The compiler plugin currently discovers only cases declared inside the sealed root. Kotlin also
-allows a sealed subclass to be declared outside the root, in the same package and module:
+The compiler plugin currently discovers only cases declared inside the sealed root. Kotlin also allows a sealed subclass to be declared outside the root, in the same package and module:
 
 ```kotlin
 @Pathable sealed interface Event
 data object Idle : Event
 ```
 
-The plugin does not currently generate a case path for `Idle` in this form. The KSP processor
-supports both nested and package-level sealed subclasses. For the compiler plugin, declare cases
-inside the sealed root for now. The local case-discovery experiment records the investigation into
-identifying nested cases. Direct nested sealed-interface variants are diagnosed as unsupported,
-using the same case-shape policy as KSP; use a class or object for a generated case path.
+The plugin does not currently generate a case path for `Idle` in this form. The KSP processor supports both nested and package-level sealed subclasses. For the compiler plugin, declare cases inside the sealed root for now. The local case-discovery experiment records the investigation into identifying nested cases. Direct nested sealed-interface variants are diagnosed as unsupported, using the same case-shape policy as KSP; use a class or object for a generated case path.
 
-Case discovery is experimental. There may be edge cases where the plugin omits a generated case
-path without reporting a diagnostic.
+Case discovery is experimental. There may be edge cases where the plugin omits a generated case path without reporting a diagnostic.
 
-When a non-generic sealed root has a generic direct variant, the compiler plugin reports the same
-unsupported-variant diagnostic as KSP rather than silently omitting the case.
+When a non-generic sealed root has a generic direct variant, the compiler plugin reports the same unsupported-variant diagnostic as KSP rather than silently omitting the case.
 
-As with KSP, a bare unnamed `companion object` must be the last member of an annotated type.
-Otherwise Kotlin can interpret a following keyword as the companion's name and change the parsed
-declarations. A named companion or `companion object {}` can appear earlier in the body.
+As with KSP, a bare unnamed `companion object` must be the last member of an annotated type. Otherwise Kotlin can interpret a following keyword as the companion's name and change the parsed declarations. A named companion or `companion object {}` can appear earlier in the body.
 
 Bare Kotlin enums receive the corresponding unit-focused case paths:
 
@@ -173,8 +132,7 @@ enum class ConnectionStatus { Offline, Connecting, Online }
 val online: CaseKeyPath<ConnectionStatus, Unit> = ConnectionStatus.Paths.Online
 ```
 
-The generated path compares directly with `ConnectionStatus.Online` and embeds that same entry;
-it does not depend on Kotlin reflection.
+The generated path compares directly with `ConnectionStatus.Online` and embeds that same entry; it does not depend on Kotlin reflection.
 
 ### Enum `CasePathable` conformance
 
@@ -190,11 +148,7 @@ val status: CasePathable<ConnectionStatus> = ConnectionStatus.Online
 val activeCase = status.case
 ```
 
-The plugin works around a Kotlin 2.4.21 FIR issue when adding enum supertypes; a local standalone
-reproduction records the finding.
-An upstream issue has not yet been filed. Supported non-generic sealed roots receive
-the `CasePathable` conformance automatically. With KSP, root types must declare the conformance
-and implement `case` themselves, although their generated catalogs implement `CasePathCatalog`.
+The plugin works around a Kotlin 2.4.21 FIR issue when adding enum supertypes; a local standalone reproduction records the finding. An upstream issue has not yet been filed. Supported non-generic sealed roots receive the `CasePathable` conformance automatically. With KSP, root types must declare the conformance and implement `case` themselves, although their generated catalogs implement `CasePathCatalog`.
 
 The companion modules demonstrate two important boundaries:
 
@@ -220,53 +174,19 @@ The companion modules demonstrate two important boundaries:
   tests and the plugin-free consumer verify that the draft's reference-writable paths call the
   generated setters and preserve the projected property type.
 
-Contributors can opt individual properties out of `copyWritableVals` by passing their FIR property
-symbols in `KPathsGenerationOptions.copyWritableValExclusions`. An excluded `val` keeps its
-ordinary read-only path; excluding a `var` does not remove its ordinary write access. The same
-option applies to properties of supported sealed cases. Properties are identified by their owners
-as well as their names, so excluding one case's property does not exclude a namesake in another.
+Contributors can opt individual properties out of `copyWritableVals` by passing their FIR property symbols in `KPathsGenerationOptions.copyWritableValExclusions`. An excluded `val` keeps its ordinary read-only path; excluding a `var` does not remove its ordinary write access. The same option applies to properties of supported sealed cases. Properties are identified by their owners as well as their names, so excluding one case's property does not exclude a namesake in another.
 
-When a contributor owns a synthesized FIR class, it calls `session.kpaths.pathable` before nested
-classifier lookup and delegates the class's catalog lookup and generation through
-`nestedClassifierNames` and `generateNestedClassifier`. It also delegates the generated catalog's
-member and nested-classifier callbacks through the registry's `callableNames`,
-`generateConstructors`, `generateProperties`, and `generateFunctions` methods. The contributor
-still generates the original class and properties and implements their IR bodies; KPaths generates
-the catalog and its paths. See `SyntheticPathsGenerator` in the contributor fixture for a complete
-example, including generic roots and a declarative adapter from another module.
+When a contributor owns a synthesized FIR class, it calls `session.kpaths.pathable` before nested classifier lookup and delegates the class's catalog lookup and generation through `nestedClassifierNames` and `generateNestedClassifier`. It also delegates the generated catalog's member and nested-classifier callbacks through the registry's `callableNames`, `generateConstructors`, `generateProperties`, and `generateFunctions` methods. The contributor still generates the original class and properties and implements their IR bodies; KPaths generates the catalog and its paths. See `SyntheticPathsGenerator` in the contributor fixture for a complete example, including generic roots and a declarative adapter from another module.
 
-For properties synthesized by another plugin, FIR does not run the usual source-declaration
-checker. KPaths reports an invalid adapter when the corresponding generated property path is
-accessed; merely declaring or accessing the catalog does not guarantee that every synthesized
-property has been diagnosed. The error appears at the path access because the generated property
-itself has no source location.
+For properties synthesized by another plugin, FIR does not run the usual source-declaration checker. KPaths reports an invalid adapter when the corresponding generated property path is accessed; merely declaring or accessing the catalog does not guarantee that every synthesized property has been diagnosed. The error appears at the path access because the generated property itself has no source location.
 
-`@Pathable` automatically recognizes declarative `@PathsAdapter` factories. The factory's single
-`make(KeyPath<Root, Storage>)` function determines the specialized generated path type; KPaths
-emits a call without loading the factory into the compiler. The shared contract and supported
-restrictions are described in [Advanced path techniques](../docs/advanced-paths.md).
+`@Pathable` automatically recognizes declarative `@PathsAdapter` factories. The factory's single `make(KeyPath<Root, Storage>)` function determines the specialized generated path type; KPaths emits a call without loading the factory into the compiler. The shared contract and supported restrictions are described in [Advanced path techniques](../docs/advanced-paths.md).
 
-A cooperating compiler plugin can call `session.kpaths.adapterFactoryFor(storageClass)` on a
-resolved storage class symbol to discover its `@PathsAdapter` factory's class ID, including when
-the storage type comes from a compiled dependency. This lookup is experimental and returns `null`
-when the annotation or its arguments are not available in the resolved form; callers must invoke
-it at a suitable compiler phase. It does not register an adapter or generate a specialized path.
+A cooperating compiler plugin can call `session.kpaths.adapterFactoryFor(storageClass)` on a resolved storage class symbol to discover its `@PathsAdapter` factory's class ID, including when the storage type comes from a compiled dependency. This lookup is experimental and returns `null` when the annotation or its arguments are not available in the resolved form; callers must invoke it at a suitable compiler phase. It does not register an adapter or generate a specialized path.
 
-A cooperating plugin requesting a catalog may also provide an ordered `propertyPathAdapters` list
-in `KPathsGenerationOptions`. Each `KPathsCompilerPropertyAdapter` can inspect the property and
-its substituted root, storage, and ordinary path types, then return a recipe with a specialized
-public FIR type and an IR callback. The callback receives the ordinary generated path and can wrap
-it to implement the integration's semantics. KPaths uses the first non-null recipe. See the
-[contributor fixture](../kpaths-compiler-plugin-contributor/src/main/kotlin/dev/kpaths/compiler/contributor/ContributedPathsPlugin.kt)
-and [runtime fixture](../kpaths-compiler-plugin-fixture/src/main/kotlin/dev/kpaths/compiler/fixture/PathsFixture.kt)
-for an end-to-end example using a storage type from a compiled dependency.
+A cooperating plugin requesting a catalog may also provide an ordered `propertyPathAdapters` list in `KPathsGenerationOptions`. Each `KPathsCompilerPropertyAdapter` can inspect the property and its substituted root, storage, and ordinary path types, then return a recipe with a specialized public FIR type and an IR callback. The callback receives the ordinary generated path and can wrap it to implement the integration's semantics. KPaths uses the first non-null recipe. See the [contributor fixture](../kpaths-compiler-plugin-contributor/src/main/kotlin/dev/kpaths/compiler/contributor/ContributedPathsPlugin.kt) and [runtime fixture](../kpaths-compiler-plugin-fixture/src/main/kotlin/dev/kpaths/compiler/fixture/PathsFixture.kt) for an end-to-end example using a storage type from a compiled dependency.
 
-This compiler integration is experimental: adapters must generate type-correct IR and preserve
-the intended identity and value semantics. The callback is compiler-version-specific. KPaths
-diagnoses a recipe whose public type is not a KeyPath subtype, but cannot verify the callback's
-emitted IR or the integration's identity and value semantics.
-These lower-level IR adapters are supplied on explicit compiler-plugin catalog requests. The
-declarative factory route does not require an integration-specific compiler plugin.
+This compiler integration is experimental: adapters must generate type-correct IR and preserve the intended identity and value semantics. The callback is compiler-version-specific. KPaths diagnoses a recipe whose public type is not a KeyPath subtype, but cannot verify the callback's emitted IR or the integration's identity and value semantics. These lower-level IR adapters are supplied on explicit compiler-plugin catalog requests. The declarative factory route does not require an integration-specific compiler plugin.
 
 Useful verification commands:
 
@@ -291,32 +211,8 @@ JAVA_HOME=/opt/homebrew/opt/openjdk@17 \
   ./gradlew :kpaths-compiler-plugin-fixture:compileKotlinIosSimulatorArm64
 ```
 
-The JVM fixture includes in-process snippet compilation for fast compiler tests. The separate
-[Android Studio analysis fixture](../kpaths-compiler-plugin-ide-fixture/README.md) tests editor
-highlighting using the Kotlin compiler bundled with a local IDE and a test-only plugin provider.
-The separate [KEFS fixture](../kpaths-kefs-ide-fixture/README.md) verifies local IDE-compatible
-artifact publication, KEFS highlighting, and the imported consumer's symbol resolution. Its
-compatibility matrix records the IDE builds that have been tested. These fixtures do not yet
-provide a publicly distributed artifact or automatic KEFS discovery for KPaths.
+The JVM fixture includes in-process snippet compilation for fast compiler tests. The separate [Android Studio analysis fixture](../kpaths-compiler-plugin-ide-fixture/README.md) tests editor highlighting using the Kotlin compiler bundled with a local IDE and a test-only plugin provider. The separate [KEFS fixture](../kpaths-kefs-ide-fixture/README.md) verifies local IDE-compatible artifact publication, KEFS highlighting, and the imported consumer's symbol resolution. Its compatibility matrix records the IDE builds that have been tested. These fixtures do not yet provide a publicly distributed artifact or automatic KEFS discovery for KPaths.
 
-This intentionally proves source resolution, object construction, cached direct read-only,
-reference-writable, and data-class copy-writable KeyPath members, direct whole-case CaseKeyPaths,
-enum-entry CaseKeyPaths,
-binary meta-annotation discovery, an external compiler-plugin request, metadata, and JVM/Native
-backend portability.
-`copyWritableVals` works through direct `@Pathable`, `@KPathsPathable` meta-annotations, and a
-contributing compiler plugin's `KPathsGenerationOptions`. Generated `allCasePaths` catalogs use
-the canonical associated-value paths for object cases and cases with one to three properties.
-Cases without a supported canonical payload are omitted, so `case` can fail for those cases;
-the plugin warns when it generates an incomplete catalog. Broader diagnostics and conformance
-coverage remain future work.
-In compiler-plugin mode, source annotations must spell `copyWritableVals` with a literal `true` or
-`false`, rather than a `const val` reference. FIR can request generated signatures before constant
-references are resolved; the plugin reports an error instead of silently producing a read-only path.
-KSP mode continues to support constant annotation arguments.
-`@PathsAdapter` establishes the binary metadata contract and factory lookup. Explicit catalog
-requests can supply compiler-side adapters; automatic integration-wide registration of those
-lower-level IR adapters and broader adapter validation remain future work.
+This intentionally proves source resolution, object construction, cached direct read-only, reference-writable, and data-class copy-writable KeyPath members, direct whole-case CaseKeyPaths, enum-entry CaseKeyPaths, binary meta-annotation discovery, an external compiler-plugin request, metadata, and JVM/Native backend portability. `copyWritableVals` works through direct `@Pathable`, `@KPathsPathable` meta-annotations, and a contributing compiler plugin's `KPathsGenerationOptions`. Generated `allCasePaths` catalogs use the canonical associated-value paths for object cases and cases with one to three properties. Cases without a supported canonical payload are omitted, so `case` can fail for those cases; the plugin warns when it generates an incomplete catalog. Broader diagnostics and conformance coverage remain future work. In compiler-plugin mode, source annotations must spell `copyWritableVals` with a literal `true` or `false`, rather than a `const val` reference. FIR can request generated signatures before constant references are resolved; the plugin reports an error instead of silently producing a read-only path. KSP mode continues to support constant annotation arguments. `@PathsAdapter` establishes the binary metadata contract and factory lookup. Explicit catalog requests can supply compiler-side adapters; automatic integration-wide registration of those lower-level IR adapters and broader adapter validation remain future work.
 
-`kpaths-compiler-plugin-fixture/LanguageSyntaxExperiments.kt` separately demonstrates the Kotlin
-generic `invoke` syntax used by generated catalogs.
+`kpaths-compiler-plugin-fixture/LanguageSyntaxExperiments.kt` separately demonstrates the Kotlin generic `invoke` syntax used by generated catalogs.

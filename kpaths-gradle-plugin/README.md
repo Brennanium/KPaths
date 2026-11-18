@@ -2,8 +2,7 @@
 
 The KPaths Gradle plugin configures the KPaths compiler plugin for Kotlin compilations. It is experimental and has not yet been released. The same compiler plugin build is tested with Kotlin 2.4.20 and 2.4.21; other versions can be tried but have not been verified. See the [compiler compatibility guide](../kpaths-compiler-plugin/COMPATIBILITY.md).
 
-For the Gradle plugin ID, compiler plugin ID, build artifact, and KEFS IDE artifact, see
-[How the plugins fit together](../kpaths-compiler-plugin/README.md#how-the-plugins-fit-together).
+For the Gradle plugin ID, compiler plugin ID, build artifact, and KEFS IDE artifact, see [How the plugins fit together](../kpaths-compiler-plugin/README.md#how-the-plugins-fit-together).
 
 Once matching artifacts are available in a configured plugin repository, apply it alongside the Kotlin plugin:
 
