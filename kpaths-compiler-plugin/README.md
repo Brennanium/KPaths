@@ -5,6 +5,25 @@ published KPaths module and has no production API.
 
 See the [KSP parity audit](PARITY.md) for covered behavior, known differences, and release decisions.
 
+## How the plugins fit together
+
+The Gradle plugin configures the build, the compiler plugin generates paths, and the IDE plugin
+makes those paths available while editing. Their identifiers serve different purposes:
+
+| Component or identifier | KPaths name | Purpose |
+| --- | --- | --- |
+| Gradle plugin ID | `dev.kpaths.gradle-plugin` | Apply this plugin to a Gradle project. It configures the Kotlin compilations that use KPaths. |
+| Compiler plugin ID | `dev.kpaths.compiler-plugin` | Identifies the loaded compiler plugin to Kotlin, including when passing compiler options. |
+| Compiler plugin artifact | `io.github.brennanium:kpaths-compiler-plugin-jvm` | Maven group and artifact for the JAR Gradle loads into the build's Kotlin compiler. |
+| IDE plugin through KEFS | `io.github.brennanium:kpaths-compiler-plugin-jvm` | An IDE-compatible build of the compiler plugin that KEFS loads into Android Studio's bundled Kotlin compiler. |
+
+The last two rows currently use the same Maven name in different repositories. The IDE artifact's
+version includes the IDE's Kotlin compiler version as well as the KPaths version. KEFS matches the
+build artifact's name when selecting its IDE-compatible replacement; a distinct IDE artifact name
+needs a verified mapping before it can be used. The IDE plugin is supplied through KEFS, not
+installed as a standalone Android Studio plugin. See the [KEFS integration guide](../kpaths-kefs-ide-fixture/README.md)
+for the current setup and the [Gradle plugin guide](../kpaths-gradle-plugin/README.md) for a build example.
+
 It proves that a `FirDeclarationGenerationExtension` can discover a source-visible `@Pathable`
 declaration through FIR's predicate index and synthesize a *real* nested `Paths` object:
 
