@@ -24,3 +24,5 @@ while IFS= read -r version; do
   git -C "$repo" worktree remove --force "$worktree"
   worktree=''
 done < <(git -C "$repo" tag --list --sort=version:refname | grep -E '^[0-9]+\.[0-9]+\.[0-9]+$' || true)
+
+"$docs_python" "$repo/scripts/finalize-doc-site.py" "$repo/build/docs/site"

@@ -61,12 +61,18 @@ val mkdocsBuild = tasks.register<Exec>("mkdocsBuild") {
   )
 }
 
-tasks.register<Sync>("docsBuild") {
-  group = "documentation"
-  description = "Builds the complete KPaths documentation site, including the Dokka API reference."
+val copyDokkaApi = tasks.register<Sync>("copyDokkaApi") {
   dependsOn(mkdocsBuild)
   from(layout.buildDirectory.dir("docs/api"))
   into(docsSiteDirectory.map { it.dir("api") })
+}
+
+tasks.register<Exec>("docsBuild") {
+  group = "documentation"
+  description = "Builds the complete KPaths documentation site, including the Dokka API reference."
+  dependsOn(copyDokkaApi)
+  workingDir = rootDir
+  commandLine(docsPython.get(), "scripts/finalize-doc-site.py", docsSiteDirectory.get().asFile.absolutePath)
 }
 
 tasks.register("verifyMavenPublications") {

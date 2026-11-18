@@ -21,6 +21,8 @@ on:
       - "scripts/verify-kefs-maven-repository.py"
       - "scripts/fetch-kefs-maven.sh"
       - "scripts/build-release-doc-snapshots.sh"
+      - "scripts/finalize-doc-site.py"
+      - "scripts/test_finalize_doc_site.py"
   workflow_dispatch:
 
 permissions:
@@ -49,6 +51,8 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
       - name: Install documentation dependencies
         run: python3 -m pip install -r docs/requirements.txt
+      - name: Test documentation assembly
+        run: python3 -m unittest scripts/test_finalize_doc_site.py
       - name: Build documentation
         run: ./gradlew docsBuild -PdocumentationVersion=main
       - name: Build release documentation snapshots

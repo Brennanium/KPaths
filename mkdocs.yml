@@ -3,23 +3,70 @@ site_description: Typed, comparable KeyPaths and CaseKeyPaths for Kotlin.
 site_dir: build/docs/site
 repo_name: Brennanium/KPaths
 repo_url: https://github.com/Brennanium/KPaths
+edit_uri: edit/main/docs/
 
 theme:
   name: material
   language: en
+  logo: assets/images/kpaths-mark.svg
+  favicon: assets/images/kpaths-mark.svg
+  font:
+    text: Inter
+    code: JetBrains Mono
+  palette:
+    - media: '(prefers-color-scheme)'
+      toggle:
+        icon: material/brightness-auto
+        name: Switch to light mode
+    - media: '(prefers-color-scheme: light)'
+      scheme: default
+      primary: white
+      accent: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: '(prefers-color-scheme: dark)'
+      scheme: slate
+      primary: black
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
   features:
+    - content.action.edit
+    - content.action.view
+    - content.code.copy
+    - content.code.select
+    - content.tabs.link
     - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
+    - navigation.footer
     - navigation.top
     - search.suggest
     - search.highlight
-    - content.code.copy
+    - search.share
+
+plugins:
+  - search
+
+extra_css:
+  - assets/stylesheets/kpaths.css
+extra_javascript:
+  - assets/javascripts/site.js
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/Brennanium/KPaths
 
 markdown_extensions:
   - admonition
+  - attr_list
+  - md_in_html
   - tables
   - toc:
       permalink: true
+  - pymdownx.details
   - pymdownx.highlight:
       anchor_linenums: true
       line_spans: __span
@@ -34,9 +81,9 @@ nav:
   - Guides:
       - KeyPaths: key-paths.md
       - CaseKeyPaths: case-paths.md
+      - Generated catalogs: generation.md
       - KeyPath and CaseKeyPath recipes: recipes.md
       - KeyPath and CaseKeyPath API design: route-aware-apis.md
       - Advanced KeyPaths: advanced-paths.md
-      - Generated catalogs: generation.md
       - Identity and type metadata: identity.md
   - API reference: api/index.md
