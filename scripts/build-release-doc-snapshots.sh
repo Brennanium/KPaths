@@ -2,7 +2,9 @@
 # Add every stable release's documentation to an already-built development site.
 set -euo pipefail
 repo=$(git rev-parse --show-toplevel)
-if [ -x "$repo/.venv-docs/bin/python" ]; then
+if [ -n "${DOCS_PYTHON:-}" ]; then
+  docs_python="$DOCS_PYTHON"
+elif [ -x "$repo/.venv-docs/bin/python" ]; then
   docs_python="$repo/.venv-docs/bin/python"
 else
   docs_python=$(command -v python3)

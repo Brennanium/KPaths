@@ -95,3 +95,7 @@ python3 -m pip install -r docs/requirements.txt
 The result is `build/docs/site`. Run `./gradlew docsServe` to serve it locally at
 <http://localhost:8000>. The tasks automatically use `.venv-docs/bin/python`; use
 `-PdocsPython=/absolute/path/to/python` to choose another interpreter.
+
+To preview the version switcher with documentation from local release tags, run
+`./gradlew docsServeVersions` instead. Building release snapshots takes longer than
+serving the current documentation alone.

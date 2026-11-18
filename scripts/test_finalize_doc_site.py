@@ -13,7 +13,7 @@ class FinalizeDocSiteTest(unittest.TestCase):
     def test_injects_release_and_api_assets_and_builds_version_list_idempotently(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for name in ('assets/javascripts/site.js', 'assets/stylesheets/kpaths.css', 'assets/stylesheets/dokka.css', 'assets/images/kpaths-mark.svg'):
+            for name in ('assets/javascripts/site.js', 'assets/stylesheets/kpaths.css', 'assets/stylesheets/dokka.css', 'assets/stylesheets/palette.123.min.css', 'assets/images/kpaths-mark.svg'):
                 path = root / name
                 path.parent.mkdir(parents=True, exist_ok=True)
                 path.write_text('asset')
@@ -31,13 +31,26 @@ class FinalizeDocSiteTest(unittest.TestCase):
                 {'label': '0.1.0', 'path': '0.1.0/'}])
             self.assertIn('../../assets/stylesheets/dokka.css', (root / 'api/deep/item.html').read_text())
             self.assertIn('../assets/stylesheets/kpaths.css', (root / '0.1.0/index.html').read_text())
+            release = (root / '0.1.0/index.html').read_text()
+            self.assertIn('../assets/stylesheets/palette.123.min.css', release)
+            self.assertLess(release.index('palette.123.min.css'), release.index('kpaths.css'))
             self.assertIn('../../assets/stylesheets/dokka.css', (root / '0.1.0/api/index.html').read_text())
+            self.assertNotIn('palette.123.min.css', (root / '0.1.0/api/index.html').read_text())
             self.assertEqual(fragment.read_text(), '<nav>fragment</nav>')
             self.assertEqual((root / 'api/images/kpaths-mark.svg').read_text(), 'asset')
             self.assertEqual((root / '0.1.0/api/images/kpaths-mark.svg').read_text(), 'asset')
             first = (root / 'api/index.html').read_text()
             docs.finalize(root)
             self.assertEqual((root / 'api/index.html').read_text(), first)
+            self.assertEqual((root / '0.1.0/index.html').read_text(), release)
+
+    def test_keeps_existing_release_palette(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            page = root / 'index.html'
+            page.write_text('<html><head><link rel="stylesheet" href="assets/stylesheets/palette.old.min.css"></head><body></body></html>')
+            docs.add_assets(page, root, 'kpaths.css', root / 'assets/stylesheets/palette.new.min.css')
+            self.assertNotIn('palette.new.min.css', page.read_text())
 
     def test_rejects_incomplete_site(self):
         with tempfile.TemporaryDirectory() as directory:

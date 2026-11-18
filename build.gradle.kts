@@ -154,3 +154,22 @@ tasks.register<Exec>("docsServe") {
     docsSiteDirectory.get().asFile.absolutePath,
   )
 }
+
+val docsReleaseSnapshots = tasks.register<Exec>("docsReleaseSnapshots") {
+  group = "documentation"
+  description = "Adds documentation for local release tags to the generated site."
+  dependsOn("docsBuild")
+  workingDir = rootDir
+  environment("DOCS_PYTHON", docsPython.get())
+  commandLine("bash", "scripts/build-release-doc-snapshots.sh")
+}
+
+tasks.register<Exec>("docsServeVersions") {
+  group = "documentation"
+  description = "Builds and serves the development and release documentation at http://localhost:8000."
+  dependsOn(docsReleaseSnapshots)
+  commandLine(
+    docsPython.get(), "-m", "http.server", "8000", "--directory",
+    docsSiteDirectory.get().asFile.absolutePath,
+  )
+}
