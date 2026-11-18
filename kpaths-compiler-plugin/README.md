@@ -221,6 +221,12 @@ The JVM fixture also has an opt-in integration with a local Knapshots checkout. 
 
 This is an integration fixture for the in-development Knapshots library; the existing KPaths compiler tests remain in place.
 
+To verify the existing `directory`-based assertion shape against a real Gradle consumer, including inline and file-backed snapshots, run:
+
+```shell
+./gradlew :kpaths-compiler-plugin-fixture:compilerPluginContractTest -Pknapshots.checkout=/path/to/Knapshots --tests '*KnapshotsGradleCompatibilityTest'
+```
+
 This intentionally proves source resolution, object construction, cached direct read-only, reference-writable, and data-class copy-writable KeyPath members, direct whole-case CaseKeyPaths, enum-entry CaseKeyPaths, binary meta-annotation discovery, an external compiler-plugin request, metadata, and JVM/Native backend portability. `copyWritableVals` works through direct `@Pathable`, `@KPathsPathable` meta-annotations, and a contributing compiler plugin's `KPathsGenerationOptions`. Generated `allCasePaths` catalogs use the canonical associated-value paths for object cases and cases with one to three properties. Cases without a supported canonical payload are omitted, so `case` can fail for those cases; the plugin warns when it generates an incomplete catalog. Broader diagnostics and conformance coverage remain future work. In compiler-plugin mode, source annotations must spell `copyWritableVals` with a literal `true` or `false`, rather than a `const val` reference. FIR can request generated signatures before constant references are resolved; the plugin reports an error instead of silently producing a read-only path. KSP mode continues to support constant annotation arguments. `@PathsAdapter` establishes the binary metadata contract and factory lookup. Explicit catalog requests can supply compiler-side adapters; automatic integration-wide registration of those lower-level IR adapters and broader adapter validation remain future work.
 
 `kpaths-compiler-plugin-fixture/LanguageSyntaxExperiments.kt` separately demonstrates the Kotlin generic `invoke` syntax used by generated catalogs.

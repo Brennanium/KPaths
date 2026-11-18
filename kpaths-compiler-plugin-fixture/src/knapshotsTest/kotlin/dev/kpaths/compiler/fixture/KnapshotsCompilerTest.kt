@@ -73,12 +73,14 @@ class KnapshotsCompilerTest {
     Files.createDirectories(copy.parent)
     Files.copy(root.resolve("kpaths-compiler-plugin-fixture/src/knapshotsTest/kotlin").resolve(relative), copy)
     val previous = System.getProperty("user.dir")
+    val previousRecording = System.getProperty("knapshots.compiler.record")
     try {
       System.setProperty("user.dir", directory.toString())
+      System.setProperty("knapshots.compiler.record", "missing")
       val failure = assertFailsWith<AssertionError> {
         assertCompiler(
           source = "import dev.kpaths.annotations.Pathable\n@Pathable data class Book(val title: String)\nval title = Book.Paths.title",
-          fir = snapshot(), record = SnapshotRecording.MISSING,
+          fir = snapshot(),
         )
       }
       assertContains(failure.message.orEmpty(), "review and rerun")
@@ -86,6 +88,39 @@ class KnapshotsCompilerTest {
       assertContains(Files.readString(copy), "fir = SnapshotExpectation(")
     } finally {
       System.setProperty("user.dir", previous)
+      if (previousRecording == null) System.clearProperty("knapshots.compiler.record")
+      else System.setProperty("knapshots.compiler.record", previousRecording)
+    }
+  }
+
+  @Test fun `project defaults record a version override and explicit arguments take precedence`(@TempDir directory: Path) {
+    val file = directory.resolve("ExampleTest.kt")
+    val original = "fun example() {\n  assertCompiler(source = \"example\", fir = SnapshotExpectation(\"shared\"))\n}\n"
+    Files.writeString(file, original)
+    val oldRecord = System.getProperty("knapshots.compiler.record")
+    val oldVersion = System.getProperty("knapshots.compiler.recordVersion")
+    try {
+      System.setProperty("knapshots.compiler.record", "missing")
+      System.setProperty("knapshots.compiler.recordVersion", "true")
+      assertFailsWith<AssertionError> {
+        assertCompiler(
+          source = "import dev.kpaths.annotations.Pathable\n@Pathable data class Note(val body: String)\nval body = Note.Paths.body",
+          fir = SnapshotExpectation("shared"), location = InlineSnapshotLocation(file, 2),
+        )
+      }
+      val recorded = Files.readString(file)
+      assertContains(recorded, org.jetbrains.kotlin.config.KotlinCompilerVersion.VERSION)
+      assertContains(recorded, "Note.Paths.body")
+      assertFailsWith<IllegalStateException> {
+        assertCompiler(
+          source = "import dev.kpaths.annotations.Pathable\n@Pathable data class Note(val body: String)\nval body = Note.Paths.body",
+          fir = snapshot(), record = SnapshotRecording.NONE, location = InlineSnapshotLocation(file, 2),
+        )
+      }
+      assertEquals(recorded, Files.readString(file))
+    } finally {
+      if (oldRecord == null) System.clearProperty("knapshots.compiler.record") else System.setProperty("knapshots.compiler.record", oldRecord)
+      if (oldVersion == null) System.clearProperty("knapshots.compiler.recordVersion") else System.setProperty("knapshots.compiler.recordVersion", oldVersion)
     }
   }
 

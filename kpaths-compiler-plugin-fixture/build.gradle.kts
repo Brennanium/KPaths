@@ -96,6 +96,8 @@ tasks.named<Test>("jvmTest") {
       systemProperty("knapshots.compiler.pluginId", "dev.kpaths.compiler-plugin")
       systemProperty("knapshots.compiler.firOption", "firSnapshot")
       systemProperty("knapshots.compiler.irOption", "irSnapshot")
+      systemProperty("knapshots.compiler.record", snapshotRecording.get())
+      systemProperty("knapshots.compiler.recordVersion", providers.gradleProperty("kpaths.snapshotRecordVersion").orElse("false").get())
       systemProperty("knapshots.compiler.classpath", files(artifact("kpaths-core"), artifact("kpaths-annotations")).asPath)
     }
   }

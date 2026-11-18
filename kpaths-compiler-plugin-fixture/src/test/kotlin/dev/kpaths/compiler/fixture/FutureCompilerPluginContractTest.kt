@@ -958,7 +958,7 @@ class FutureCompilerPluginContractTest {
     assertCompilerSnapshots(source, compilerVersion, expected) { _, _, _ -> captures }
   }
 
-  private fun compileSuccessfully(
+  internal fun compileSuccessfully(
     directory: Path,
     source: String,
     irSnapshot: Path? = null,
