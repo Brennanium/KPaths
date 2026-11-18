@@ -1,9 +1,9 @@
 package dev.kpaths.ide
 
-import dev.kpaths.testing.editor.DiagnosticSeverity
-import dev.kpaths.testing.editor.EditorDiagnostic
-import dev.kpaths.testing.editor.EditorObservations
-import dev.kpaths.testing.editor.ReferenceObservation
+import dev.knapshots.testing.editor.DiagnosticSeverity
+import dev.knapshots.testing.editor.EditorDiagnostic
+import dev.knapshots.testing.editor.EditorObservations
+import dev.knapshots.testing.editor.ReferenceObservation
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 

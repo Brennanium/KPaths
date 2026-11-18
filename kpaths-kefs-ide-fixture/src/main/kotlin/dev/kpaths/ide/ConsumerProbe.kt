@@ -12,10 +12,10 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.startup.ProjectActivity
 import com.intellij.openapi.vfs.LocalFileSystem
 import com.intellij.psi.PsiManager
-import dev.kpaths.testing.editor.DiagnosticSeverity
-import dev.kpaths.testing.editor.EditorDiagnostic
-import dev.kpaths.testing.editor.EditorObservations
-import dev.kpaths.testing.editor.ReferenceObservation
+import dev.knapshots.testing.editor.DiagnosticSeverity
+import dev.knapshots.testing.editor.EditorDiagnostic
+import dev.knapshots.testing.editor.EditorObservations
+import dev.knapshots.testing.editor.ReferenceObservation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.CancellationException
 import java.nio.file.Files

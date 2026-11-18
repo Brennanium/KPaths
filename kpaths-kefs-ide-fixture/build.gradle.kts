@@ -14,7 +14,7 @@ repositories {
 }
 
 dependencies {
-  implementation("dev.kpaths.testing:editor-testing:0.0.0-dev")
+  implementation("dev.knapshots:knapshots-editor:0.1.0-SNAPSHOT")
   intellijPlatform {
     local(providers.gradleProperty("kpaths.idePath").orElse("/Applications/Android Studio.app"))
     bundledPlugin("org.jetbrains.kotlin")

@@ -1,7 +1,7 @@
 package dev.kpaths.ide
 
-import dev.kpaths.testing.editor.EditorObservations
-import dev.kpaths.testing.editor.assertEditor
+import dev.knapshots.testing.editor.EditorObservations
+import dev.knapshots.testing.editor.assertEditor
 
 internal val importedControls = listOf("Person annotation", "Direct property", "Hosted support")
 internal val importedGenerated = listOf(

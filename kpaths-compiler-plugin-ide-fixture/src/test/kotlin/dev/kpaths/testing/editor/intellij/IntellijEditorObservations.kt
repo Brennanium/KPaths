@@ -2,10 +2,10 @@ package dev.kpaths.testing.editor.intellij
 
 import com.intellij.lang.annotation.HighlightSeverity
 import com.intellij.testFramework.fixtures.CodeInsightTestFixture
-import dev.kpaths.testing.editor.DiagnosticSeverity
-import dev.kpaths.testing.editor.EditorDiagnostic
-import dev.kpaths.testing.editor.EditorObservations
-import dev.kpaths.testing.editor.ReferenceObservation
+import dev.knapshots.testing.editor.DiagnosticSeverity
+import dev.knapshots.testing.editor.EditorDiagnostic
+import dev.knapshots.testing.editor.EditorObservations
+import dev.knapshots.testing.editor.ReferenceObservation
 
 /** Adapts IntelliJ's focused test fixture to the editor assertion layer. */
 internal class IntellijEditorObservations(

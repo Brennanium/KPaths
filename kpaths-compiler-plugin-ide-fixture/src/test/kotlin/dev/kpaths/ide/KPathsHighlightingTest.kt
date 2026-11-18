@@ -3,7 +3,7 @@ package dev.kpaths.ide
 import com.intellij.testFramework.PsiTestUtil
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinCommonCompilerArgumentsHolder
 import dev.kpaths.testing.editor.intellij.EditorFixtureTestCase
-import dev.kpaths.testing.editor.ReferenceObservation
+import dev.knapshots.testing.editor.ReferenceObservation
 import dev.kpaths.testing.editor.intellij.IntellijEditorObservations
 
 class KPathsHighlightingTest : EditorFixtureTestCase() {
