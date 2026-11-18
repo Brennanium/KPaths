@@ -59,7 +59,10 @@ kotlin {
       kotlin.srcDir("src/test/kotlin")
       if (providers.gradleProperty("knapshots.checkout").isPresent) {
         kotlin.srcDir("src/knapshotsTest/kotlin")
+        kotlin.srcDir("src/knapshotsHarness/kotlin")
         dependencies { implementation("dev.knapshots:knapshots-ksp:0.1.0-SNAPSHOT") }
+      } else {
+        kotlin.srcDir("src/legacyHarness/kotlin")
       }
       dependencies {
         implementation(kotlin("test"))
