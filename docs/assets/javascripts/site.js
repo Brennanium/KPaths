@@ -73,8 +73,14 @@
         select.append(option);
       });
       wrapper.append(label, select);
-      if (header) target.insertBefore(wrapper, header.querySelector('.md-header__source'));
-      else target.prepend(wrapper);
+      if (header) {
+        const title = header.querySelector('.md-header__title');
+        header.insertBefore(wrapper, title ? title.nextSibling : header.querySelector('.md-header__source'));
+      } else {
+        const originalVersion = document.querySelector('#library-version');
+        if (originalVersion) originalVersion.after(wrapper);
+        else target.prepend(wrapper);
+      }
 
       select.addEventListener('change', async () => {
         const versionRoot = new URL(select.value, siteRoot);

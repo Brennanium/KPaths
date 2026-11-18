@@ -13,7 +13,7 @@
 
 .md-header, .md-tabs { border-bottom: 1px solid var(--kpaths-border); }
 .md-header__button.md-logo img { width: 1.8rem; height: 1.8rem; }
-.md-header__title { font-weight: 700; letter-spacing: -.015em; }
+.md-header__title { flex: 0 0 4.25rem; min-width: 0; font-weight: 700; letter-spacing: -.015em; }
 .md-tabs__link { font-weight: 500; }
 .md-content h1 { color: var(--md-default-fg-color); font-weight: 750; letter-spacing: -.035em; }
 .md-content h2 { font-weight: 700; letter-spacing: -.025em; }
@@ -29,30 +29,54 @@
 .md-typeset pre > code { border-radius: .5rem; }
 .md-typeset a { text-underline-offset: .15em; }
 
+/* Match the compact version control to the header rather than presenting a form field. */
 .kpaths-version {
+  position: relative;
   display: inline-flex;
   align-items: center;
-  gap: .3rem;
-  margin: 0 .35rem;
+  margin: 0 auto 0 .2rem;
   color: inherit;
-  font-size: .68rem;
+  font-size: .72rem;
   white-space: nowrap;
 }
+.kpaths-version::after {
+  content: "";
+  position: absolute;
+  right: .45rem;
+  top: 50%;
+  width: .28rem;
+  height: .28rem;
+  border-right: .08rem solid currentColor;
+  border-bottom: .08rem solid currentColor;
+  transform: translateY(-70%) rotate(45deg);
+  pointer-events: none;
+}
+.kpaths-version__label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+}
 .kpaths-version select {
+  appearance: none;
   max-width: 7rem;
-  padding: .24rem 1.3rem .24rem .45rem;
-  border: 1px solid var(--kpaths-border);
-  border-radius: .35rem;
-  background-color: transparent;
+  padding: .3rem 1.15rem .3rem .35rem;
+  border: 0;
+  border-radius: .3rem;
+  background: transparent;
   color: inherit;
   font: inherit;
   cursor: pointer;
 }
+.kpaths-version select:hover { background: var(--md-default-fg-color--lightest); }
+.kpaths-version select:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
 .kpaths-version select option { color: #20232a; background: #fff; }
+[data-md-color-scheme="slate"] .kpaths-version select option { color: #f3f4f8; background: #20242c; }
 .kpaths-api-home { font-size: .78rem; margin: 0 .65rem; color: inherit; }
 @media screen and (max-width: 44.984375em) {
-  .kpaths-version { margin: 0 .15rem; }
-  .kpaths-version__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+  .md-header__title { flex-basis: 4rem; }
+  .kpaths-version { margin-left: 0; }
   .kpaths-version select { max-width: 5.5rem; }
 }
 .kpaths-theme-toggle {
@@ -62,4 +86,29 @@
   background: transparent;
   font-size: 1rem;
   cursor: pointer;
+}
+
+/* Keep the closed desktop search compact; Material still controls the open search panel. */
+@media screen and (min-width: 60em) {
+  [data-md-toggle="search"]:not(:checked) ~ .md-header .md-search__inner {
+    width: 8.9rem;
+  }
+  [data-md-toggle="search"]:not(:checked) ~ .md-header .md-search__form {
+    height: 1.6rem;
+    border-radius: .4rem;
+    background: rgba(0, 0, 0, .06);
+  }
+  [data-md-color-scheme="slate"] [data-md-toggle="search"]:not(:checked) ~ .md-header .md-search__form {
+    background: rgba(226, 228, 233, .12);
+  }
+  [data-md-toggle="search"]:not(:checked) ~ .md-header .md-search__input {
+    font-size: .7rem;
+    padding-left: 1.9rem;
+  }
+  [data-md-toggle="search"]:not(:checked) ~ .md-header .md-search__input ~ .md-search__icon {
+    width: 1rem;
+    height: 1rem;
+    top: .3rem;
+    left: .55rem;
+  }
 }
