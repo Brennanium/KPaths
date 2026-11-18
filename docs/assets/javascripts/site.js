@@ -58,21 +58,40 @@
       const target = header || apiHeader;
       if (!target || target.querySelector('.kpaths-version')) return;
 
-      const wrapper = document.createElement('label');
+      const wrapper = document.createElement('div');
       wrapper.className = 'kpaths-version';
-      const label = document.createElement('span');
-      label.className = 'kpaths-version__label';
-      label.textContent = 'Version';
-      const select = document.createElement('select');
-      select.setAttribute('aria-label', 'Documentation version');
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'kpaths-version__current';
+      button.setAttribute('aria-label', 'Select documentation version');
+      button.setAttribute('aria-expanded', 'false');
+      button.textContent = current.label;
+      const list = document.createElement('ul');
+      list.className = 'kpaths-version__list';
+      list.hidden = true;
       versions.forEach(version => {
-        const option = document.createElement('option');
-        option.value = version.path;
-        option.textContent = version.label;
-        option.selected = version.path === current.path;
-        select.append(option);
+        const item = document.createElement('li');
+        const link = document.createElement('a');
+        const versionRoot = new URL(version.path, siteRoot);
+        const destination = new URL(page + location.search + location.hash, versionRoot);
+        link.className = 'kpaths-version__link';
+        link.href = destination.href;
+        link.textContent = version.label;
+        if (version.path === current.path) link.setAttribute('aria-current', 'page');
+        link.addEventListener('click', async event => {
+          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+          event.preventDefault();
+          try {
+            const response = await fetch(destination, { method: 'HEAD' });
+            location.assign(response.ok ? destination.href : versionRoot.href);
+          } catch (_) {
+            location.assign(versionRoot.href);
+          }
+        });
+        item.append(link);
+        list.append(item);
       });
-      wrapper.append(label, select);
+      wrapper.append(button, list);
       if (header) {
         const title = header.querySelector('.md-header__title');
         header.insertBefore(wrapper, title ? title.nextSibling : header.querySelector('.md-header__source'));
@@ -82,15 +101,22 @@
         else target.prepend(wrapper);
       }
 
-      select.addEventListener('change', async () => {
-        const versionRoot = new URL(select.value, siteRoot);
-        const destination = new URL(page + location.search + location.hash, versionRoot);
-        try {
-          const response = await fetch(destination, { method: 'HEAD' });
-          location.assign(response.ok ? destination.href : versionRoot.href);
-        } catch (_) {
-          location.assign(versionRoot.href);
+      const setOpen = open => {
+        list.hidden = !open;
+        button.setAttribute('aria-expanded', String(open));
+      };
+      button.addEventListener('click', () => setOpen(list.hidden));
+      wrapper.addEventListener('keydown', event => {
+        if (event.key === 'Escape' && !list.hidden) {
+          setOpen(false);
+          button.focus();
         }
+      });
+      document.addEventListener('click', event => {
+        if (!wrapper.contains(event.target)) setOpen(false);
+      });
+      wrapper.addEventListener('focusout', event => {
+        if (!wrapper.contains(event.relatedTarget)) setOpen(false);
       });
 
       if (isApi && apiHeader) {

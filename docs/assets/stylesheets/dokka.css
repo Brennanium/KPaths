@@ -19,11 +19,14 @@ body { font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-s
 .navigation .library-name--link { font-weight: 700; letter-spacing: -.015em; }
 /* The same compact version control used in the guide header. */
 .kpaths-version { position: relative; display: inline-flex; align-items: center; margin: 0 .35rem; color: inherit; font-size: .8rem; white-space: nowrap; }
-.kpaths-version::after { content: ""; position: absolute; right: .45rem; top: 50%; width: .3rem; height: .3rem; border-right: .08rem solid currentColor; border-bottom: .08rem solid currentColor; transform: translateY(-70%) rotate(45deg); pointer-events: none; }
-.kpaths-version__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-.kpaths-version select { appearance: none; max-width: 7rem; padding: .3rem 1.2rem .3rem .35rem; border: 0; border-radius: .3rem; background: transparent; color: inherit; font: inherit; cursor: pointer; }
-.kpaths-version select:hover { background: rgba(128, 128, 128, .15); }
-.kpaths-version select:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
-.kpaths-version select option { color: #20232a; background: #fff; }
-html.theme-dark .kpaths-version select option { color: #f3f4f8; background: #20242c; }
+.kpaths-version__current::after { content: ""; position: absolute; right: .45rem; top: 50%; width: .3rem; height: .3rem; border-right: .08rem solid currentColor; border-bottom: .08rem solid currentColor; transform: translateY(-70%) rotate(45deg); pointer-events: none; }
+.kpaths-version__current { position: relative; max-width: 7rem; padding: .3rem 1.2rem .3rem .35rem; border: 0; border-radius: .3rem; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.kpaths-version__current:hover { background: rgba(128, 128, 128, .15); }
+.kpaths-version__current:focus-visible, .kpaths-version__link:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.kpaths-version__list { position: absolute; z-index: 20; top: 100%; left: 0; min-width: 7rem; max-height: 12rem; margin: .2rem 0 0; padding: .25rem 0; overflow-y: auto; list-style: none; color: #20232a; background: #fff; border-radius: .25rem; box-shadow: 0 4px 14px rgba(0, 0, 0, .2); }
+html.theme-dark .kpaths-version__list { color: #e2e4e9; background: #20242c; }
+.kpaths-version__list[hidden] { display: none; }
+.kpaths-version__link { display: block; padding: .4rem .8rem; color: inherit; white-space: nowrap; }
+.kpaths-version__link:hover, .kpaths-version__link:focus-visible { color: #526fea; background: rgba(128, 128, 128, .15); }
+.kpaths-version__link[aria-current] { font-weight: 700; }
 .kpaths-api-home { margin: 0 .65rem; color: inherit; font-size: .8rem; white-space: nowrap; }

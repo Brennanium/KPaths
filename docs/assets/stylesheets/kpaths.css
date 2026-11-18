@@ -39,7 +39,7 @@
   font-size: .72rem;
   white-space: nowrap;
 }
-.kpaths-version::after {
+.kpaths-version__current::after {
   content: "";
   position: absolute;
   right: .45rem;
@@ -51,15 +51,8 @@
   transform: translateY(-70%) rotate(45deg);
   pointer-events: none;
 }
-.kpaths-version__label {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip-path: inset(50%);
-}
-.kpaths-version select {
-  appearance: none;
+.kpaths-version__current {
+  position: relative;
   max-width: 7rem;
   padding: .3rem 1.15rem .3rem .35rem;
   border: 0;
@@ -69,15 +62,33 @@
   font: inherit;
   cursor: pointer;
 }
-.kpaths-version select:hover { background: var(--md-default-fg-color--lightest); }
-.kpaths-version select:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
-.kpaths-version select option { color: #20232a; background: #fff; }
-[data-md-color-scheme="slate"] .kpaths-version select option { color: #f3f4f8; background: #20242c; }
+.kpaths-version__current:hover { background: var(--md-default-fg-color--lightest); }
+.kpaths-version__current:focus-visible, .kpaths-version__link:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
+.kpaths-version__list {
+  position: absolute;
+  z-index: 10;
+  top: 100%;
+  left: 0;
+  min-width: 7rem;
+  max-height: 12rem;
+  margin: .2rem 0 0;
+  padding: .25rem 0;
+  overflow-y: auto;
+  list-style: none;
+  color: var(--md-default-fg-color);
+  background: var(--md-default-bg-color);
+  border-radius: .25rem;
+  box-shadow: var(--md-shadow-z2);
+}
+.kpaths-version__list[hidden] { display: none; }
+.kpaths-version__link { display: block; padding: .4rem .8rem; color: inherit; white-space: nowrap; }
+.kpaths-version__link:hover, .kpaths-version__link:focus-visible { color: var(--md-accent-fg-color); background: var(--md-default-fg-color--lightest); }
+.kpaths-version__link[aria-current] { font-weight: 700; }
 .kpaths-api-home { font-size: .78rem; margin: 0 .65rem; color: inherit; }
 @media screen and (max-width: 44.984375em) {
   .md-header__title { flex-basis: 4rem; }
   .kpaths-version { margin-left: 0; }
-  .kpaths-version select { max-width: 5.5rem; }
+  .kpaths-version__current { max-width: 5.5rem; }
 }
 .kpaths-theme-toggle {
   padding: .4rem;
