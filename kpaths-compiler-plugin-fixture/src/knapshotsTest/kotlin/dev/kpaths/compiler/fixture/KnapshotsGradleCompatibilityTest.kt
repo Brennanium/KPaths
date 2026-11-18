@@ -1,6 +1,8 @@
 package dev.kpaths.compiler.fixture
 
 import dev.knapshots.testing.compiler.CompilerHost
+import dev.knapshots.testing.compiler.CompilerRequest
+import dev.knapshots.testing.compiler.CompilerSource
 import dev.knapshots.testing.compiler.CompilerResult
 import dev.knapshots.testing.compiler.CompilerSnapshotKind
 import dev.knapshots.testing.compiler.InlineSnapshotLocation
@@ -9,6 +11,7 @@ import dev.knapshots.testing.compiler.SnapshotRecording
 import dev.knapshots.testing.compiler.assertCompiler as assertKnapshotsCompiler
 import dev.knapshots.testing.compiler.assertCompilerSnapshotFiles
 import dev.knapshots.testing.compiler.snapshot
+import dev.knapshots.testing.compiler.temporaryCompilerHost
 import kotlin.test.assertContains
 import kotlin.test.assertFailsWith
 import java.nio.file.Files
@@ -20,9 +23,8 @@ import org.junit.jupiter.api.io.TempDir
 /** Exercises the existing call shape while preserving a real downstream Gradle compilation. */
 @Tag("compiler-plugin-contract")
 class KnapshotsGradleCompatibilityTest {
-  @Test fun `existing Gradle assertion compares FIR and IR`(@TempDir directory: Path) {
+  @Test fun `Gradle assertion compares FIR and IR`() {
     assertCompiler(
-      directory = directory,
       source = """
         package fixture
         import dev.kpaths.annotations.Pathable
@@ -66,7 +68,6 @@ class KnapshotsGradleCompatibilityTest {
       System.setProperty("kpaths.compatibilitySourceRoot", sourceRoot.toString())
       val failure = assertFailsWith<AssertionError> {
         assertCompiler(
-          directory = directory,
           source = "import dev.kpaths.annotations.Pathable\n@Pathable data class Album(val title: String)\nval title = Album.Paths.title",
           fir = snapshot(), record = SnapshotRecording.MISSING,
         )
@@ -80,8 +81,8 @@ class KnapshotsGradleCompatibilityTest {
     }
   }
 
-  @Test fun `existing file snapshot assertion uses Knapshots`(@TempDir directory: Path) {
-    assertRecordedCompiler(directory, "generic-writable", """
+  @Test fun `file snapshot assertion uses Knapshots`() {
+    assertRecordedCompiler("generic-writable", """
       package fixture
       import dev.kpaths.annotations.Pathable
       @Pathable data class Box<T>(var value: T)
@@ -90,7 +91,7 @@ class KnapshotsGradleCompatibilityTest {
     """)
   }
 
-  private fun assertRecordedCompiler(directory: Path, name: String, source: String) {
+  private fun assertRecordedCompiler(name: String, source: String) {
     val project = Path.of(checkNotNull(System.getProperty("kpaths.projectDir")))
     val version = checkNotNull(System.getProperty("kpaths.testKotlinVersion"))
     val recording = SnapshotRecording.valueOf(System.getProperty("kpaths.snapshotRecording", "none").uppercase())
@@ -98,28 +99,13 @@ class KnapshotsGradleCompatibilityTest {
       source, version, project.resolve("kpaths-compiler-plugin-fixture/src/test/snapshots"), name,
       setOf(CompilerSnapshotKind.FIR, CompilerSnapshotKind.IR), recording,
       System.getProperty("kpaths.snapshotRecordVersion", "false").toBooleanStrict(),
-    ) { input, compilerVersion, _ ->
-      val firPath = directory.resolve("kpaths.fir.txt")
-      val irPath = directory.resolve("kpaths.ir.txt")
-      FutureCompilerPluginContractTest().compileSuccessfully(
-        directory = directory, source = input, irSnapshot = irPath, firSnapshot = firPath,
-        compilerVersion = compilerVersion,
-      )
-      mapOf(CompilerSnapshotKind.FIR to Files.readString(firPath), CompilerSnapshotKind.IR to Files.readString(irPath))
+    ) { input, compilerVersion, captures ->
+      gradleCompilerHost().compile(CompilerRequest(listOf(CompilerSource("Main.kt", input)), compilerVersion, captures)).captures
     }
   }
 
-  // The temporary wrapper maintains the existing KPaths signature and Gradle-consumer coverage.
-  private fun assertCompiler(
-    directory: Path,
-    source: String,
-    fir: SnapshotExpectation? = null,
-    ir: SnapshotExpectation? = null,
-    compilerVersion: String = checkNotNull(System.getProperty("kpaths.testKotlinVersion")),
-    record: SnapshotRecording = SnapshotRecording.valueOf(System.getProperty("kpaths.snapshotRecording", "none").uppercase()),
-    recordVersion: Boolean = System.getProperty("kpaths.snapshotRecordVersion", "false").toBooleanStrict(),
-  ) {
-    val host = CompilerHost { request ->
+  private fun gradleCompilerHost(): CompilerHost = temporaryCompilerHost { directory ->
+    CompilerHost { request ->
       val firPath = directory.resolve("kpaths.fir.txt").takeIf { CompilerSnapshotKind.FIR in request.captures }
       val irPath = directory.resolve("kpaths.ir.txt").takeIf { CompilerSnapshotKind.IR in request.captures }
       FutureCompilerPluginContractTest().compileSuccessfully(
@@ -131,6 +117,17 @@ class KnapshotsGradleCompatibilityTest {
         irPath?.let { put(CompilerSnapshotKind.IR, Files.readString(it)) }
       })
     }
+  }
+
+  // The temporary wrapper preserves the Gradle-consumer coverage and recording defaults.
+  private fun assertCompiler(
+    source: String,
+    fir: SnapshotExpectation? = null,
+    ir: SnapshotExpectation? = null,
+    compilerVersion: String = checkNotNull(System.getProperty("kpaths.testKotlinVersion")),
+    record: SnapshotRecording = SnapshotRecording.valueOf(System.getProperty("kpaths.snapshotRecording", "none").uppercase()),
+    recordVersion: Boolean = System.getProperty("kpaths.snapshotRecordVersion", "false").toBooleanStrict(),
+  ) {
     val location = if (record != SnapshotRecording.NONE) {
       val caller = Throwable().stackTrace.first { it.className == javaClass.name && !it.methodName.startsWith("assertCompiler") }
       val root = Path.of(checkNotNull(System.getProperty("kpaths.projectDir")))
@@ -139,6 +136,6 @@ class KnapshotsGradleCompatibilityTest {
       InlineSnapshotLocation(sourceRoot.resolve(caller.className.substringBeforeLast('.').replace('.', '/'))
         .resolve(caller.fileName), caller.lineNumber)
     } else null
-    assertKnapshotsCompiler(source, compilerVersion, host, fir, ir, record, recordVersion, location)
+    assertKnapshotsCompiler(source, compilerVersion, gradleCompilerHost(), fir, ir, record, recordVersion, location)
   }
 }

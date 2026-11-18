@@ -221,7 +221,7 @@ The JVM fixture also has an opt-in integration with a local Knapshots checkout. 
 
 This is an integration fixture for the in-development Knapshots library; the existing KPaths compiler tests remain in place.
 
-To verify the existing `directory`-based assertion shape against a real Gradle consumer, including inline and file-backed snapshots, run:
+To verify Knapshots-managed compilation directories against a real Gradle consumer, including inline and file-backed snapshots, run:
 
 ```shell
 ./gradlew :kpaths-compiler-plugin-fixture:compilerPluginContractTest -Pknapshots.checkout=/path/to/Knapshots --tests '*KnapshotsGradleCompatibilityTest'
