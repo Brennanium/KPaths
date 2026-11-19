@@ -13,9 +13,10 @@ import dev.kpaths.core.KeyPathBase
 import dev.kpaths.core.ReferenceWritableKeyPathBase
 import dev.kpaths.core.PathId
 import dev.kpaths.core.PathSegment
-import org.objectweb.asm.ClassReader
-import org.objectweb.asm.ClassVisitor
-import org.objectweb.asm.MethodVisitor
+import dev.knapshots.testing.bytecode.ClassBytecode
+import dev.knapshots.testing.bytecode.MethodCall
+import dev.knapshots.testing.bytecode.TypeInstruction
+import dev.knapshots.testing.bytecode.FieldAccess
 import org.objectweb.asm.Opcodes
 
 class GeneratedPathsRuntimeTest {
@@ -361,78 +362,4 @@ class GeneratedPathsRuntimeTest {
     return classFile
   }
 
-  private data class ClassBytecode(
-    val superName: String?,
-    val methods: Map<Pair<String, String>, MethodBytecode>,
-    val references: Set<String>,
-  ) {
-    fun method(name: String, descriptor: String): MethodBytecode =
-      checkNotNull(methods[name to descriptor]) { "Expected bytecode method $name$descriptor." }
-
-    companion object {
-      fun read(bytes: ByteArray): ClassBytecode {
-        var superName: String? = null
-        val methods = mutableMapOf<Pair<String, String>, MethodBytecode>()
-        val references = mutableSetOf<String>()
-        ClassReader(bytes).accept(object : ClassVisitor(Opcodes.ASM9) {
-          override fun visit(
-            version: Int,
-            access: Int,
-            name: String,
-            signature: String?,
-            superNameValue: String?,
-            interfaces: Array<out String>?,
-          ) {
-            superName = superNameValue
-            superNameValue?.let(references::add)
-            interfaces?.forEach(references::add)
-          }
-
-          override fun visitMethod(
-            access: Int,
-            name: String,
-            descriptor: String,
-            signature: String?,
-            exceptions: Array<out String>?,
-          ): MethodVisitor {
-            val method = MethodBytecode()
-            methods[name to descriptor] = method
-            return object : MethodVisitor(Opcodes.ASM9) {
-              override fun visitTypeInsn(opcode: Int, type: String) {
-                references += type
-                method.typeInstructions += TypeInstruction(opcode, type)
-              }
-
-              override fun visitMethodInsn(
-                opcode: Int,
-                owner: String,
-                name: String,
-                descriptor: String,
-                isInterface: Boolean,
-              ) {
-                references += owner
-                method.methodCalls += MethodCall(owner, name)
-              }
-
-              override fun visitFieldInsn(opcode: Int, owner: String, name: String, descriptor: String) {
-                references += owner
-                method.fieldAccesses += FieldAccess(opcode, owner, name)
-              }
-            }
-          }
-        }, ClassReader.SKIP_DEBUG or ClassReader.SKIP_FRAMES)
-        return ClassBytecode(superName, methods, references)
-      }
-    }
-  }
-
-  private data class MethodBytecode(
-    val typeInstructions: MutableSet<TypeInstruction> = mutableSetOf(),
-    val methodCalls: MutableSet<MethodCall> = mutableSetOf(),
-    val fieldAccesses: MutableSet<FieldAccess> = mutableSetOf(),
-  )
-
-  private data class TypeInstruction(val opcode: Int, val type: String)
-  private data class MethodCall(val owner: String, val name: String)
-  private data class FieldAccess(val opcode: Int, val owner: String, val name: String)
 }

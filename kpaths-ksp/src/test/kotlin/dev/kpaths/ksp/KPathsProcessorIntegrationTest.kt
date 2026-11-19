@@ -9,14 +9,14 @@ import kotlin.test.assertContains
 class KPathsProcessorIntegrationTest {
   @Test
   fun `copy writable values accept a constant annotation argument`() {
-    compileFixture("CopyWritableConstant.kt", """
+    assertKsp(fileName = "CopyWritableConstant.kt", source = """
       package fixture
       import dev.kpaths.annotations.Pathable
       import dev.kpaths.core.WritableKeyPath
       const val ENABLE_COPY_WRITES = true
       @Pathable(copyWritableVals = ENABLE_COPY_WRITES) data class Note(val body: String)
       val body: WritableKeyPath<Note, String> = NotePaths.body
-    """.trimIndent(), expectFailure = false)
+    """)
   }
 
   @Test
@@ -36,7 +36,7 @@ class KPathsProcessorIntegrationTest {
 
   @Test
   fun `declarative adapter diagnoses a storage type alias`() {
-    val output = compileFailure("AdapterAlias.kt", """
+    assertKsp(fileName = "AdapterAlias.kt", source = """
       package fixture
       import dev.kpaths.annotations.*
       import dev.kpaths.core.*
@@ -47,9 +47,10 @@ class KPathsProcessorIntegrationTest {
       typealias AliasedCell<T> = Cell<T>
       typealias NestedAlias<T> = AliasedCell<T>
       @Pathable data class Document(val title: AliasedCell<String>, val nested: NestedAlias<String>)
-    """.trimIndent())
-    assertContains(output, "Invalid @PathsAdapter on 'title': type aliases of adapted storage types are not yet supported.")
-    assertContains(output, "Invalid @PathsAdapter on 'nested': type aliases of adapted storage types are not yet supported.")
+    """, succeeds = false, diagnostics = listOf(
+      "Invalid @PathsAdapter on 'title': type aliases of adapted storage types are not yet supported.",
+      "Invalid @PathsAdapter on 'nested': type aliases of adapted storage types are not yet supported.",
+    ))
   }
 
   @Test
