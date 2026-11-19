@@ -7,23 +7,29 @@ import dev.knapshots.testing.compiler.CompilerSnapshotKind
 import dev.knapshots.testing.compiler.InlineSnapshotLocation
 import dev.knapshots.testing.compiler.assertCompiler as assertKnapshotsCompiler
 import dev.knapshots.testing.compiler.assertCompilerSnapshotFiles
-import dev.knapshots.testing.compiler.temporaryCompilerHost
-import java.nio.file.Files
+import dev.knapshots.testing.compiler.gradle.GradleCompilerHost
 import java.nio.file.Path
 
 internal typealias SnapshotExpectation = dev.knapshots.testing.compiler.SnapshotExpectation
 internal typealias SnapshotRecording = dev.knapshots.testing.compiler.SnapshotRecording
 
-private fun FutureCompilerPluginContractTest.gradleHost(): CompilerHost = temporaryCompilerHost { directory ->
-  CompilerHost { request ->
-    val firPath = directory.resolve("kpaths.fir.txt").takeIf { CompilerSnapshotKind.FIR in request.captures }
-    val irPath = directory.resolve("kpaths.ir.txt").takeIf { CompilerSnapshotKind.IR in request.captures }
-    compileSuccessfully(directory, request.sources.single().text, firSnapshot = firPath, irSnapshot = irPath, compilerVersion = request.compilerVersion)
-    CompilerResult(true, captures = buildMap {
-      firPath?.let { put(CompilerSnapshotKind.FIR, Files.readString(it)) }
-      irPath?.let { put(CompilerSnapshotKind.IR, Files.readString(it)) }
-    })
-  }
+private fun FutureCompilerPluginContractTest.gradleHost(): CompilerHost {
+  val project = Path.of(checkNotNull(System.getProperty("kpaths.projectDir")))
+  val version = java.util.Properties().apply { java.nio.file.Files.newInputStream(project.resolve("gradle.properties")).use(::load) }
+    .getProperty("VERSION_NAME")
+  fun artifact(module: String) = project.resolve("$module/build/libs/$module-jvm-$version.jar")
+  return GradleCompilerHost(
+    classpath = listOf(artifact("kpaths-core"), artifact("kpaths-annotations")),
+    compilerArguments = listOf("-Xplugin=${artifact("kpaths-compiler-plugin")}"),
+    captureArguments = { captures -> captures.flatMap { (kind, path) ->
+      val option = when (kind) {
+        CompilerSnapshotKind.FIR -> "firSnapshot"
+        CompilerSnapshotKind.IR -> "irSnapshot"
+        else -> error("Unsupported KPaths capture: ${kind.name}")
+      }
+      listOf("-P", "plugin:dev.kpaths.compiler-plugin:$option=$path")
+    } },
+  )
 }
 
 internal fun FutureCompilerPluginContractTest.assertRecordedCompiler(name: String, source: String) {

@@ -41,6 +41,7 @@ kotlin {
       resources.srcDir("src/knapshotsTest/resources")
       dependencies {
         implementation("dev.knapshots:knapshots-compiler:0.1.0-SNAPSHOT")
+        implementation("dev.knapshots:knapshots-compiler-gradle:0.1.0-SNAPSHOT")
         implementation("dev.knapshots:knapshots-bytecode:0.1.0-SNAPSHOT")
       }
       dependencies {
