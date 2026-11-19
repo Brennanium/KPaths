@@ -10,9 +10,7 @@ import org.gradle.testkit.runner.TaskOutcome
 import org.junit.jupiter.api.Disabled
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.io.TempDir
-import org.objectweb.asm.ClassReader
-import org.objectweb.asm.ClassVisitor
-import org.objectweb.asm.Opcodes
+import dev.knapshots.testing.bytecode.ClassBytecode
 
 /**
  * Acceptance contracts for compiler-plugin capabilities that have deliberately not landed yet.
@@ -688,50 +686,11 @@ class FutureCompilerPluginContractTest {
     val editorClass = project.resolve(
       "build/classes/kotlin/main/fixture/ParentAction\$Paths\$Editor.class",
     )
-    val references = mutableSetOf<String>()
-    var superName: String? = null
-    var hasActionGetter = false
-    ClassReader(Files.readAllBytes(editorClass)).accept(object : ClassVisitor(Opcodes.ASM9) {
-      override fun visit(
-        version: Int,
-        access: Int,
-        name: String,
-        signature: String?,
-        superNameValue: String?,
-        interfaces: Array<out String>?,
-      ) {
-        superName = superNameValue
-        superNameValue?.let(references::add)
-      }
-
-      override fun visitMethod(
-        access: Int,
-        name: String,
-        descriptor: String,
-        signature: String?,
-        exceptions: Array<out String>?,
-      ) = object : org.objectweb.asm.MethodVisitor(Opcodes.ASM9) {
-        init {
-          if (name == "getAction" && descriptor == "()Ldev/kpaths/core/CaseKeyPath;") {
-            hasActionGetter = true
-          }
-        }
-
-        override fun visitMethodInsn(
-          opcode: Int,
-          owner: String,
-          name: String,
-          descriptor: String,
-          isInterface: Boolean,
-        ) {
-          references += owner
-        }
-      }
-    }, ClassReader.SKIP_DEBUG or ClassReader.SKIP_FRAMES)
-    assertEquals("dev/kpaths/core/CaseKeyPathBase", superName)
-    assertEquals(true, hasActionGetter)
-    assertEquals(false, references.any { it.startsWith("kotlin/reflect/") })
-    assertEquals(false, references.any { it == "dev/kpaths/core/CaseKeyPathKt" })
+    val bytecode = ClassBytecode.read(Files.readAllBytes(editorClass))
+    assertEquals("dev/kpaths/core/CaseKeyPathBase", bytecode.superName)
+    assertEquals(true, bytecode.methods.containsKey("getAction" to "()Ldev/kpaths/core/CaseKeyPath;"))
+    assertEquals(false, bytecode.references.any { it.startsWith("kotlin/reflect/") })
+    assertEquals(false, bytecode.references.any { it == "dev/kpaths/core/CaseKeyPathKt" })
   }
 
   @Test
