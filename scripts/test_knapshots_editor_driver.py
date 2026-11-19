@@ -37,6 +37,9 @@ class KnapshotsEditorDriverTest(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         calls = (self.root / "gradle-calls.txt").read_text()
         self.assertIn(":knapshots-intellij:writeEditorAdapterPath", calls)
+        adapter_call = next(line for line in calls.splitlines() if ":knapshots-intellij:writeEditorAdapterPath" in line)
+        self.assertIn("-Dorg.gradle.jvmargs=-Xmx2g", adapter_call)
+        self.assertIn("-Dorg.gradle.workers.max=2", adapter_call)
         for mode in ("enabled", "disabled", "diagnostic"):
             self.assertIn(f"-Pkpaths.editorMode={mode}", calls)
         self.assertNotIn("--rerun-tasks", calls)

@@ -29,7 +29,10 @@ fi
 "$python" scripts/verify-kefs-compatibility.py --ide-path "$ide" --ide-kotlin-version "$ideKotlin" \
   --kefs-version "$kefs" --allow-untested-combination
 ./gradlew -p kpaths-compiler-plugin-ide-fixture test "-Pkpaths.idePath=$ide" --no-configuration-cache
+# Snapshotting the IDE's large classpath exceeds Gradle's default daemon heap on CI.
+# Limit parallel transforms so the larger heap remains usable on shared runners.
 ./gradlew -p "$checkout" -Pknapshots.enableIntellijAdapter "-Pknapshots.idePath=$ide" \
+  -Dorg.gradle.jvmargs=-Xmx2g -Dorg.gradle.workers.max=2 \
   :knapshots-intellij:writeEditorAdapterPath --no-configuration-cache
 export KNAPSHOTS_IDE_ADAPTER_ARCHIVE
 KNAPSHOTS_IDE_ADAPTER_ARCHIVE=$(cat "$checkout/knapshots-intellij/build/editor-adapter-path.txt")
