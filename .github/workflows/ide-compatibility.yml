@@ -77,6 +77,13 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: gradle/actions/setup-gradle@v4
+      - name: Verify editor model export with included builds
+        env:
+          KPATHS_RUN_EDITOR_MODEL_INTEGRATION: '1'
+        run: >-
+          python3 -m unittest
+          scripts.test_editor_testing_model_integration.EditorTestingModelIntegrationTest.test_export_uses_build_metadata_and_honors_version_override
+          scripts.test_editor_testing_model_integration.EditorTestingModelIntegrationTest.test_export_rejects_an_invalid_main_build_project
       - name: Install virtual display
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y xvfb

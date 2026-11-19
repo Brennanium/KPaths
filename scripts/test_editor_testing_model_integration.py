@@ -51,6 +51,18 @@ class EditorTestingModelIntegrationTest(unittest.TestCase):
             subprocess.run(command, cwd=ROOT, check=True, capture_output=True, text=True)
             self.assertTrue((project / 'build/classes/kotlin/main/ExampleKt.class').exists())
 
+    def test_export_rejects_an_invalid_main_build_project(self):
+        with tempfile.TemporaryDirectory() as directory:
+            command = [str(ROOT / 'gradlew'), '--no-configuration-cache', '-I',
+                       str(ROOT / 'gradle/editor-testing-model.init.gradle'), 'exportEditorTestingModel',
+                       '-PeditorTesting.gradlePluginProject=:missing-plugin',
+                       '-PeditorTesting.runtimeProjects=:kpaths-core,:kpaths-annotations',
+                       '-PeditorTesting.compilerPluginProject=:kpaths-compiler-plugin',
+                       f'-PeditorTesting.modelFile={Path(directory) / "model.json"}']
+            result = subprocess.run(command, cwd=ROOT, capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('missing-plugin', result.stdout + result.stderr)
+
 
 if __name__ == '__main__':
     unittest.main()

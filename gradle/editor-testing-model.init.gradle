@@ -6,6 +6,8 @@ import org.gradle.api.publish.PublishingExtension
 import org.gradle.plugin.devel.GradlePluginDevelopmentExtension
 
 gradle.projectsEvaluated {
+  // Init scripts also run for included builds. Only the invoking build owns these project roles.
+  if (gradle.parent != null) return
   def root = gradle.rootProject
   def required = { String key ->
     def value = root.providers.gradleProperty(key).orNull

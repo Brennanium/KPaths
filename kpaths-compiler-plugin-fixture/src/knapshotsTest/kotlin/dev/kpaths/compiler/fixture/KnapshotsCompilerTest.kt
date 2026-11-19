@@ -32,13 +32,13 @@ class KnapshotsCompilerTest {
         @Pathable(copyWritableVals = true) data class Note(val body: String)
         val body = Note.Paths.body
       """,
-      fir = SnapshotExpectation(default = "This fallback should not be selected", versions = mapOf("2.4.*" to """
+      fir = SnapshotExpectation("""
         KPaths resolved FIR callables
 
         fixture/Note.Paths.body
         public final val body: R|dev/kpaths/core/WritableKeyPath<fixture/Note, kotlin/String>|
             public get(): R|dev/kpaths/core/WritableKeyPath<fixture/Note, kotlin/String>|
-      """)),
+      """),
       ir = SnapshotExpectation("""
         KPaths post-generation IR
 
