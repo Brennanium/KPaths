@@ -37,6 +37,7 @@ jobs:
       entries: ${{ steps.matrix.outputs.entries }}
     steps:
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/checkout-knapshots
       - name: Check release request
         if: inputs.publish
         env:
@@ -91,6 +92,7 @@ jobs:
         ide: ${{ fromJSON(needs.matrix.outputs.entries) }}
     steps:
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/checkout-knapshots
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -159,6 +161,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/checkout-knapshots
       - uses: actions/download-artifact@v6
         with:
           pattern: kefs-maven-*
@@ -212,6 +215,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
+      - uses: ./.github/actions/checkout-knapshots
       - uses: actions/download-artifact@v6
         with:
           name: kefs-assembled-maven

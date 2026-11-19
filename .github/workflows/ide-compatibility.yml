@@ -30,13 +30,12 @@ jobs:
       versions: ${{ steps.select.outputs.versions }}
     steps:
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/checkout-knapshots
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - name: Install Python packaging tools
-        run: python -m pip install setuptools wheel
       - name: Test IDE matrix and runner helpers
-        run: python3 -m unittest scripts/test_matrix_package.py scripts/test_kotlin_plugin_matrix.py scripts/test_ide_sandbox.py scripts/test_ide_compatibility_matrix.py scripts/test_verify_android_studio_version.py scripts/test_verify_kefs_compatibility.py scripts/test_editor_testing_config.py scripts/test_editor_project_model.py scripts/test_prototype_editor_project.py
+        run: python3 -m unittest scripts/test_knapshots_editor_driver.py scripts/test_ide_sandbox.py scripts/test_ide_compatibility_matrix.py scripts/test_verify_kefs_compatibility.py scripts/test_editor_testing_config.py scripts/test_editor_project_model.py scripts/test_prototype_editor_project.py
       - name: Select IDE matrix
         id: select
         env:
@@ -63,6 +62,7 @@ jobs:
         os: [ubuntu-latest, macos-15]
     steps:
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/checkout-knapshots
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
@@ -90,29 +90,22 @@ jobs:
         timeout-minutes: 45
         env:
           IDE_SELECTOR: ${{ matrix.version }}
-          EVENT_NAME: ${{ github.event_name }}
+          KPATHS_USE_XVFB: ${{ runner.os == 'Linux' && 'true' || 'false' }}
         shell: bash
         run: |
           set -euo pipefail
           export GRADLE_OPTS="-Dorg.gradle.java.installations.paths=$KPATHS_JDK25"
           mkdir -p build/ide-compatibility
-          latest_kefs=''
-          if [ "$EVENT_NAME" = schedule ]; then latest_kefs=--latest-kefs; fi
-          set --
-          if [ "$RUNNER_OS" = Linux ]; then set -- xvfb-run -a; fi
-          "$@" python3 scripts/kotlin-plugin-matrix.py ide "$IDE_SELECTOR" \
-            --suite all \
-            --report-json build/ide-compatibility/result.json \
-            ${latest_kefs:+--latest-kefs} \
+          ./gradlew :kpaths-compatibility:editorCompatibility --ide-version "$IDE_SELECTOR" --no-configuration-cache \
             2>&1 | tee build/ide-compatibility/runner.log
       - name: Summarize resolved versions
         if: always()
         shell: bash
         run: |
-          if [ -f build/ide-compatibility/result.json ]; then
+          if [ -f kpaths-compatibility/build/reports/knapshots/editor-compatibility.json ]; then
             echo '### IDE compatibility result' >> "$GITHUB_STEP_SUMMARY"
             echo '```json' >> "$GITHUB_STEP_SUMMARY"
-            cat build/ide-compatibility/result.json >> "$GITHUB_STEP_SUMMARY"
+            cat kpaths-compatibility/build/reports/knapshots/editor-compatibility.json >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           else
             echo 'No IDE result was written; see the job log.' >> "$GITHUB_STEP_SUMMARY"
@@ -124,6 +117,7 @@ jobs:
           name: ide-compatibility-${{ matrix.version }}-${{ matrix.os }}
           path: |
             build/ide-compatibility/
+            kpaths-compatibility/build/reports/knapshots/
             kpaths-kefs-ide-fixture/build/consumer-probe*.txt
             kpaths-kefs-ide-fixture/build/consumer-probe*.log
             kpaths-kefs-ide-fixture/build/ide-probe/**/log/

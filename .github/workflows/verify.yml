@@ -22,13 +22,12 @@ jobs:
       kotlin: ${{ steps.versions.outputs.kotlin }}
     steps:
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/checkout-knapshots
       - uses: actions/setup-python@v6
         with:
           python-version: '3.11'
-      - name: Install Python packaging tools
-        run: python -m pip install setuptools wheel
       - name: Test matrix orchestration
-        run: python3 -m unittest scripts/test_matrix_package.py scripts/test_kotlin_plugin_matrix.py scripts/test_kotlin_version_resolver.py scripts/test_verify_compiler_compatibility.py scripts/test_verify_android_studio_version.py scripts/test_verify_kefs_compatibility.py scripts/test_editor_testing_config.py scripts/test_editor_project_model.py scripts/test_prototype_editor_project.py
+        run: python3 -m unittest scripts/test_knapshots_compiler_driver.py scripts/test_knapshots_editor_driver.py
       - id: versions
         env:
           REQUESTED_VERSIONS: ${{ inputs.versions }}
@@ -36,23 +35,18 @@ jobs:
           python3 - <<'PY' >> "$GITHUB_OUTPUT"
           import json
           import os
-          import sys
           from pathlib import Path
-          sys.path.insert(0, 'scripts')
-          from kotlin_version_resolver import resolve
           selectors = os.environ['REQUESTED_VERSIONS'].replace(',', ' ').split()
           if not selectors:
               selectors = [line.strip() for line in Path('gradle/kpaths-supported-kotlin-versions.txt').read_text().splitlines()
                            if line.strip() and not line.lstrip().startswith('#')]
           if not selectors or len(selectors) != len(set(selectors)):
               raise SystemExit('The compiler compatibility matrix must contain distinct selectors')
-          resolved = resolve(selectors)
-          versions = list(dict.fromkeys(version for _, version in resolved))
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
-              summary.write('### Resolved Kotlin compatibility targets\n\n')
-              for selector, version in resolved:
-                  summary.write(f'- `{selector}` → `{version}`\n')
-          print('kotlin=' + json.dumps(versions, separators=(',', ':')))
+              summary.write('### Kotlin compatibility selectors\n\n')
+              for selector in selectors:
+                  summary.write(f'- `{selector}`\n')
+          print('kotlin=' + json.dumps(selectors, separators=(',', ':')))
           PY
 
   compiler-compatibility:
@@ -65,13 +59,14 @@ jobs:
         kotlin: ${{ fromJSON(needs.compiler-compatibility-matrix.outputs.kotlin) }}
     steps:
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/checkout-knapshots
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
       - name: Verify compiler plugin in downstream consumers
-        run: python3 scripts/kotlin-plugin-matrix.py compiler '${{ matrix.kotlin }}' --jvm-only
+        run: ./gradlew :kpaths-compatibility:compilerCompatibility --kotlin-version '${{ matrix.kotlin }}' --platform jvm --no-configuration-cache
 
   compiler-compatibility-native:
     name: Compiler Native consumer / Kotlin ${{ matrix.kotlin }}
@@ -83,26 +78,14 @@ jobs:
         kotlin: ${{ fromJSON(needs.compiler-compatibility-matrix.outputs.kotlin) }}
     steps:
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/checkout-knapshots
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
-      - name: Publish local test artifacts
-        run: >-
-          ./gradlew --no-configuration-cache -I gradle/local-test-repository.init.gradle
-          :kpaths-gradle-plugin:publishAllPublicationsToConsumerVerificationRepository
-          :kpaths-compiler-plugin:publishJvmPublicationToConsumerVerificationRepository
-          :kpaths-core:publishKotlinMultiplatformPublicationToConsumerVerificationRepository
-          :kpaths-core:publishIosSimulatorArm64PublicationToConsumerVerificationRepository
-          :kpaths-annotations:publishKotlinMultiplatformPublicationToConsumerVerificationRepository
-          :kpaths-annotations:publishIosSimulatorArm64PublicationToConsumerVerificationRepository
-      - name: Verify generated paths on iOS simulator
-        run: >-
-          ./gradlew -p kpaths-compiler-plugin-compatibility-fixture
-          iosSimulatorArm64Test
-          -Pkpaths.testKotlinVersion=${{ matrix.kotlin }}
-          --no-configuration-cache
+      - name: Verify Native compiler compatibility
+        run: ./gradlew :kpaths-compatibility:compilerCompatibility --kotlin-version '${{ matrix.kotlin }}' --platform native --no-configuration-cache
 
   compiler-compatibility-preview:
     name: Experimental Kotlin compiler preview
@@ -110,19 +93,27 @@ jobs:
     continue-on-error: true
     steps:
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/checkout-knapshots
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
       - uses: gradle/actions/setup-gradle@v4
       - name: Probe development compiler versions
-        run: python3 scripts/kotlin-plugin-matrix.py compiler --preview --jvm-only --report-json build/compiler-preview-report.json
+        shell: bash
+        run: |
+          selectors=()
+          while IFS= read -r selector; do
+            [[ -z "$selector" || "$selector" == \#* ]] && continue
+            selectors+=(--kotlin-version "$selector")
+          done < gradle/kpaths-preview-kotlin-versions.txt
+          ./gradlew :kpaths-compatibility:compilerCompatibility "${selectors[@]}" --platform jvm --no-configuration-cache
       - name: Save resolved preview results
         if: always()
         uses: actions/upload-artifact@v6
         with:
           name: compiler-preview-results
-          path: build/compiler-preview-report.json
+          path: kpaths-compatibility/build/reports/knapshots/compiler-compatibility.json
           if-no-files-found: warn
 
   jvm:
@@ -130,6 +121,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/checkout-knapshots
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -146,8 +138,6 @@ jobs:
           :kpaths-ksp:jvmTest
           :kpaths-sample:jvmTest
           :kpaths-compiler-plugin-fixture:jvmTest
-          :editor-testing:test
-          :snapshot-testing:test
           verifyMavenPublications
           docsBuild
 
@@ -156,6 +146,7 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v6
+      - uses: ./.github/actions/checkout-knapshots
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

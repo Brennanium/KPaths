@@ -6,7 +6,9 @@ on:
     tags: ["[0-9]*.[0-9]*.[0-9]*"]
     paths:
       - ".github/workflows/docs.yml"
+      - ".github/actions/checkout-knapshots/**"
       - "build.gradle.kts"
+      - "settings.gradle.kts"
       - "dokka-module.md"
       - "docs/**"
       - "gradle/**"
@@ -46,6 +48,7 @@ jobs:
           # the root, alongside snapshots built from every release tag.
           ref: main
           fetch-depth: 0
+      - uses: ./.github/actions/checkout-knapshots
       - uses: actions/setup-java@v5
         with:
           distribution: temurin

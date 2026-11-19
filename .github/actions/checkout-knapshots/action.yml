@@ -1,0 +1,17 @@
+name: Check out Knapshots
+description: Check out the Knapshots revision used by the KPaths test builds.
+runs:
+  using: composite
+  steps:
+    - id: revision
+      shell: bash
+      run: |
+        set -euo pipefail
+        revision=$(tr -d '\r\n' < "$GITHUB_WORKSPACE/gradle/knapshots-revision.txt")
+        [[ "$revision" =~ ^[0-9a-f]{40}$ ]] || { echo 'Invalid Knapshots revision.' >&2; exit 1; }
+        echo "revision=$revision" >> "$GITHUB_OUTPUT"
+    - uses: actions/checkout@v6
+      with:
+        repository: Brennanium/Knapshots
+        ref: ${{ steps.revision.outputs.revision }}
+        path: .knapshots
