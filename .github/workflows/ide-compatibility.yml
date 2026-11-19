@@ -132,6 +132,8 @@ jobs:
             kpaths-kefs-ide-fixture/build/test-results/
             kpaths-compiler-plugin-ide-fixture/build/reports/tests/
             kpaths-compiler-plugin-ide-fixture/build/test-results/
+            kpaths-editor-fixture/build/reports/tests/
+            kpaths-editor-fixture/build/test-results/
             kpaths-kefs-ide-fixture/.intellijPlatform/sandbox/**/log_runIde/
           if-no-files-found: warn
           include-hidden-files: true
