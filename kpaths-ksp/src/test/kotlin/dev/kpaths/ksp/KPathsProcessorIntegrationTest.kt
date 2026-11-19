@@ -4,7 +4,7 @@ import kotlin.test.Test
 import dev.knapshots.testing.ksp.assertKsp
 import dev.knapshots.testing.ksp.KspProcessorProject
 import dev.knapshots.testing.ksp.KspSource
-import kotlin.test.assertContains
+import dev.knapshots.testing.ksp.KspDependency
 
 class KPathsProcessorIntegrationTest {
   @Test
@@ -21,17 +21,16 @@ class KPathsProcessorIntegrationTest {
 
   @Test
   fun `declarative adapter reports invalid factory from dependency metadata`() {
-    val output = compileFixture("InvalidBinaryAdapter.kt", """
+    assertKsp(fileName = "InvalidBinaryAdapter.kt", source = """
       package fixture
       import dev.kpaths.annotations.Pathable
       @Pathable data class Document(val title: InvalidBinaryCell<String>)
-    """.trimIndent(), expectFailure = true, dependencySource = """
+    """.trimIndent(), succeeds = false, dependencies = listOf(KspDependency("adapters", listOf(KspSource("Reader.kt", """
       package fixture
       import dev.kpaths.annotations.*
       @PathsAdapter(factory = InvalidBinaryFactory::class) class InvalidBinaryCell<T>(val value: T)
       object InvalidBinaryFactory : KPathsAdapterFactory
-    """.trimIndent())
-    assertContains(output, "Invalid @PathsAdapter on 'title': the adapter factory must declare exactly one make function.")
+    """)))), diagnostics = listOf("Invalid @PathsAdapter on 'title': the adapter factory must declare exactly one make function."))
   }
 
   @Test
@@ -55,7 +54,9 @@ class KPathsProcessorIntegrationTest {
 
   @Test
   fun `declarative adapter reports precise factory shape errors`() {
-    val output = compileFailure("AdapterShapes.kt", """
+    assertKsp(
+      fileName = "AdapterShapes.kt",
+      source = """
       package fixture
       import dev.kpaths.annotations.*
       import dev.kpaths.core.*
@@ -72,15 +73,21 @@ class KPathsProcessorIntegrationTest {
         fun <R, V> make(path: KeyPath<R, ProjectedCell<V>>): KeyPath<R, ProjectedCell<V>> = path
       }
       @Pathable data class Document(val first: Cell<String>, val second: TextCell<String>, val third: ProjectedCell<out String>)
-    """.trimIndent())
-    assertContains(output, "Invalid @PathsAdapter on 'first': make must return a KeyPath subtype.")
-    assertContains(output, "Invalid @PathsAdapter on 'second': make type parameters must not have explicit bounds.")
-    assertContains(output, "Invalid @PathsAdapter on 'third': storage type has unsupported projections or nullable type parameters.")
+    """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "Invalid @PathsAdapter on 'first': make must return a KeyPath subtype.",
+        "Invalid @PathsAdapter on 'second': make type parameters must not have explicit bounds.",
+        "Invalid @PathsAdapter on 'third': storage type has unsupported projections or nullable type parameters.",
+      ),
+    )
   }
 
   @Test
   fun `declarative adapter diagnoses a nullable wrapper`() {
-    val output = compileFailure("NullableWrapper.kt", """
+    assertKsp(
+      fileName = "NullableWrapper.kt",
+      source = """
       package fixture
       import dev.kpaths.annotations.*
       import dev.kpaths.core.*
@@ -89,13 +96,19 @@ class KPathsProcessorIntegrationTest {
         fun <R, V> make(path: KeyPath<R, Cell<V>>): KeyPath<R, Cell<V>> = path
       }
       @Pathable data class Document(val title: Cell<String>?)
-    """.trimIndent())
-    assertContains(output, "make's KeyPath parameter does not match the generated root and storage types")
+    """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "make's KeyPath parameter does not match the generated root and storage types",
+      ),
+    )
   }
 
   @Test
   fun `declarative adapter diagnoses an overloaded factory`() {
-    val output = compileFailure("InvalidAdapter.kt", """
+    assertKsp(
+      fileName = "InvalidAdapter.kt",
+      source = """
       package fixture
       import dev.kpaths.annotations.*
       import dev.kpaths.core.*
@@ -105,13 +118,17 @@ class KPathsProcessorIntegrationTest {
         fun make(value: String): String = value
       }
       @Pathable data class Document(val title: Cell<String>)
-    """.trimIndent())
-    assertContains(output, "the adapter factory must declare exactly one make function")
+    """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "the adapter factory must declare exactly one make function",
+      ),
+    )
   }
 
   @Test
   fun `declarative adapter exposes a specialized path through the companion facade`() {
-    compileFixture("DeclarativeAdapter.kt", """
+    assertKsp(fileName = "DeclarativeAdapter.kt", source = """
       package fixture
       import dev.kpaths.annotations.*
       import dev.kpaths.core.*
@@ -158,7 +175,7 @@ class KPathsProcessorIntegrationTest {
         check(reader.storage is WritableKeyPath<*, *>)
         check(caseReader.get(Screen.Showing(Readable(null))) == null)
       }
-    """.trimIndent(), expectFailure = false, runMain = true, dependencySource = """
+    """.trimIndent(), mainClass = "fixture.DeclarativeAdapterKt", dependencies = listOf(KspDependency("adapters", listOf(KspSource("Reader.kt", """
       package fixture
       import dev.kpaths.annotations.*
       import dev.kpaths.core.*
@@ -172,14 +189,14 @@ class KPathsProcessorIntegrationTest {
         override val __kpaths_valueType get() = storage.__kpaths_valueType.requireTypeArgument(0)
         override fun get(root: Root): Value = storage.get(root).value
       }
-    """.trimIndent())
+    """)))))
   }
 
   @Test
   fun `warns when canonical case catalog cannot cover every case`() {
-    val output = compileFixture(
-      "IncompleteCatalog.kt",
-      """
+    assertKsp(
+      fileName = "IncompleteCatalog.kt",
+      source = """
         package fixture
         import dev.kpaths.annotations.Pathable
         @Pathable sealed interface Event {
@@ -188,10 +205,11 @@ class KPathsProcessorIntegrationTest {
           class Reference(val value: Int) : Event
         }
       """.trimIndent(),
-      expectFailure = false,
+      diagnostics = listOf(
+        "[KPaths] The generated case catalog omits 'Many', 'Reference'",
+        "allCasePaths is incomplete",
+      ),
     )
-    assertContains(output, "[KPaths] The generated case catalog omits 'Many', 'Reference'")
-    assertContains(output, "allCasePaths is incomplete")
   }
 
   @Test
@@ -353,7 +371,7 @@ class KPathsProcessorIntegrationTest {
 
   @Test
   fun `reports an unnamed bare companion before later class members`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "AmbiguousBareCompanion.kt",
       source =
       """
@@ -368,16 +386,18 @@ class KPathsProcessorIntegrationTest {
           data object Idle : Event
         }
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "AmbiguousBareCompanion.kt:",
+        "[KPaths] An unnamed `companion object` must be the final member",
+        "Move it to the end of the class body",
+      ),
     )
-
-    assertContains(output, "AmbiguousBareCompanion.kt:")
-    assertContains(output, "[KPaths] An unnamed `companion object` must be the final member")
-    assertContains(output, "Move it to the end of the class body")
   }
 
   @Test
   fun `reports companion Paths member collisions`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "CompanionPathsCollision.kt",
       source =
       """
@@ -392,16 +412,18 @@ class KPathsProcessorIntegrationTest {
           }
         }
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "CompanionPathsCollision.kt:",
+        "[KPaths] Cannot generate Person.Companion.Paths",
+        "already declares a member named 'Paths'",
+      ),
     )
-
-    assertContains(output, "CompanionPathsCollision.kt:")
-    assertContains(output, "[KPaths] Cannot generate Person.Companion.Paths")
-    assertContains(output, "already declares a member named 'Paths'")
   }
 
   @Test
   fun `reports companion Paths extension collisions`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "CompanionPathsExtensionCollision.kt",
       source =
       """
@@ -417,16 +439,18 @@ class KPathsProcessorIntegrationTest {
         val Person.Companion.Paths: String
           get() = "existing"
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "CompanionPathsExtensionCollision.kt:",
+        "[KPaths] Cannot generate Person.Companion.Paths because the top-level extension",
+        "already declares it",
+      ),
     )
-
-    assertContains(output, "CompanionPathsExtensionCollision.kt:")
-    assertContains(output, "[KPaths] Cannot generate Person.Companion.Paths because the top-level extension")
-    assertContains(output, "already declares it")
   }
 
   @Test
   fun `reports generic named Paths factory collisions`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "GenericCompanionPathsFunctionCollision.kt",
       source =
       """
@@ -441,16 +465,18 @@ class KPathsProcessorIntegrationTest {
           }
         }
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "GenericCompanionPathsFunctionCollision.kt:",
+        "[KPaths] Cannot generate Box.Paths.of",
+        "already declares a member named 'of'",
+      ),
     )
-
-    assertContains(output, "GenericCompanionPathsFunctionCollision.kt:")
-    assertContains(output, "[KPaths] Cannot generate Box.Paths.of")
-    assertContains(output, "already declares a member named 'of'")
   }
 
   @Test
   fun `reports invalid generated case and property catalog names`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "InvalidCaseNames.kt",
       source =
       """
@@ -465,16 +491,18 @@ class KPathsProcessorIntegrationTest {
           data object Idle : Event
         }
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "InvalidCaseNames.kt:",
+        "[KPaths] @CaseName value 'not a name'",
+        "must be a single Kotlin identifier",
+      ),
     )
-
-    assertContains(output, "InvalidCaseNames.kt:")
-    assertContains(output, "[KPaths] @CaseName value 'not a name'")
-    assertContains(output, "must be a single Kotlin identifier")
   }
 
   @Test
   fun `reports invalid generated property names`() {
-    val invalidOutput = compileFailure(
+    assertKsp(
       fileName = "InvalidPathName.kt",
       source =
       """
@@ -488,16 +516,17 @@ class KPathsProcessorIntegrationTest {
           @PathName("not a name") val legalName: String,
         )
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "InvalidPathName.kt:",
+        "[KPaths] @PathName value 'not a name'",
+      ),
     )
-
-    assertContains(invalidOutput, "InvalidPathName.kt:")
-    assertContains(invalidOutput, "[KPaths] @PathName value 'not a name'")
-
   }
 
   @Test
   fun `reports colliding generated property names`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "PathNameCollision.kt",
       source =
       """
@@ -512,17 +541,19 @@ class KPathsProcessorIntegrationTest {
           val name: String,
         )
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "PathNameCollision.kt:",
+        "'name' would name both",
+        "property 'legalName'",
+        "property 'name'",
+      ),
     )
-
-    assertContains(output, "PathNameCollision.kt:")
-    assertContains(output, "'name' would name both")
-    assertContains(output, "property 'legalName'")
-    assertContains(output, "property 'name'")
   }
 
   @Test
   fun `reports generated case member and property catalog collisions`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "CaseNameCollision.kt",
       source =
       """
@@ -541,17 +572,19 @@ class KPathsProcessorIntegrationTest {
           data class Message(val text: String) : Event
         }
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "CaseNameCollision.kt:",
+        "[KPaths] Cannot generate paths because 'MessagePaths' would name both",
+        "the case path for 'Idle'",
+        "the property-path namespace for case 'Message'",
+      ),
     )
-
-    assertContains(output, "CaseNameCollision.kt:")
-    assertContains(output, "[KPaths] Cannot generate paths because 'MessagePaths' would name both")
-    assertContains(output, "the case path for 'Idle'")
-    assertContains(output, "the property-path namespace for case 'Message'")
   }
 
   @Test
   fun `reports an actionable error at Pathable for unsupported generic sealed variants`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "InvalidLoadable.kt",
       source =
       """
@@ -564,29 +597,37 @@ class KPathsProcessorIntegrationTest {
           data object Idle : InvalidLoadable<Nothing>
         }
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "InvalidLoadable.kt:",
+        "[KPaths] Cannot generate 'Idle'",
+        "must forward that type parameter, or refine it to Nothing through an `out` parameter",
+      ),
     )
-
-    assertContains(output, "InvalidLoadable.kt:")
-    assertContains(output, "[KPaths] Cannot generate 'Idle'")
-    assertContains(output, "must forward that type parameter, or refine it to Nothing through an `out` parameter")
   }
 
   @Test
   fun `reports data class setter that cannot support copy mutation`() {
-    val output = compileFailure("InaccessibleSetter.kt", """
+    assertKsp(
+      fileName = "InaccessibleSetter.kt",
+      source = """
       package fixture
       import dev.kpaths.annotations.Pathable
       @Pathable data class Item(val id: Int) {
         var count: Int = 0
           private set
       }
-    """.trimIndent())
-    assertContains(output, "[KPaths] Data-class property 'count' must be declared in the primary constructor or have an accessible setter")
+    """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "[KPaths] Data-class property 'count' must be declared in the primary constructor or have an accessible setter",
+      ),
+    )
   }
 
   @Test
   fun `reports use of KPaths reserved internal prefix at Pathable`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "ReservedPrefix.kt",
       source =
       """
@@ -597,16 +638,18 @@ class KPathsProcessorIntegrationTest {
         @Pathable
         data class ReservedPrefix(val __kpaths_rootType: String)
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "ReservedPrefix.kt:",
+        "[KPaths] Cannot generate paths because property '__kpaths_rootType'",
+        "uses the reserved '__kpaths_' prefix",
+      ),
     )
-
-    assertContains(output, "ReservedPrefix.kt:")
-    assertContains(output, "[KPaths] Cannot generate paths because property '__kpaths_rootType'")
-    assertContains(output, "uses the reserved '__kpaths_' prefix")
   }
 
   @Test
   fun `reports property and case path collisions at Pathable`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "PropertyCaseCollision.kt",
       source =
       """
@@ -621,16 +664,18 @@ class KPathsProcessorIntegrationTest {
           data class Connected(override val Connected: String) : Connection()
         }
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "PropertyCaseCollision.kt:",
+        "[KPaths] Cannot generate paths because 'Connected' would name both",
+        "the key path for property 'Connected' and the case path for 'Connected'",
+      ),
     )
-
-    assertContains(output, "PropertyCaseCollision.kt:")
-    assertContains(output, "[KPaths] Cannot generate paths because 'Connected' would name both")
-    assertContains(output, "the key path for property 'Connected' and the case path for 'Connected'")
   }
 
   @Test
   fun `reports generated case catalog collisions at Pathable`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "CaseCatalogCollision.kt",
       source =
       """
@@ -643,16 +688,18 @@ class KPathsProcessorIntegrationTest {
           data object allCasePaths : Event
         }
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "CaseCatalogCollision.kt:",
+        "[KPaths] Cannot generate paths because 'allCasePaths' would name both",
+        "the case path for 'allCasePaths' and the generated catalog of all case paths",
+      ),
     )
-
-    assertContains(output, "CaseCatalogCollision.kt:")
-    assertContains(output, "[KPaths] Cannot generate paths because 'allCasePaths' would name both")
-    assertContains(output, "the case path for 'allCasePaths' and the generated catalog of all case paths")
   }
 
   @Test
   fun `reports top level generated namespace collisions at Pathable`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "TopLevelCollision.kt",
       source =
       """
@@ -665,17 +712,19 @@ class KPathsProcessorIntegrationTest {
 
         object PersonPaths
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "TopLevelCollision.kt:",
+        "[KPaths] Cannot generate 'PersonPaths' because it conflicts with existing top-level",
+        "type 'fixture.PersonPaths'",
+        "@Pathable(\"CustomPersonPaths\")",
+      ),
     )
-
-    assertContains(output, "TopLevelCollision.kt:")
-    assertContains(output, "[KPaths] Cannot generate 'PersonPaths' because it conflicts with existing top-level")
-    assertContains(output, "type 'fixture.PersonPaths'")
-    assertContains(output, "@Pathable(\"CustomPersonPaths\")")
   }
 
   @Test
   fun `reports duplicate custom generated namespaces at Pathable`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "DuplicateCustomNames.kt",
       source =
       """
@@ -689,17 +738,19 @@ class KPathsProcessorIntegrationTest {
         @Pathable("SharedPaths")
         data class Second(val value: Int)
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "DuplicateCustomNames.kt:",
+        "[KPaths] Cannot generate 'SharedPaths' because @Pathable also requests that name",
+        "'fixture.First'",
+        "'fixture.Second'",
+      ),
     )
-
-    assertContains(output, "DuplicateCustomNames.kt:")
-    assertContains(output, "[KPaths] Cannot generate 'SharedPaths' because @Pathable also requests that name")
-    assertContains(output, "'fixture.First'")
-    assertContains(output, "'fixture.Second'")
   }
 
   @Test
   fun `reports top level type alias collisions at Pathable`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "TypeAliasCollision.kt",
       source =
       """
@@ -712,16 +763,18 @@ class KPathsProcessorIntegrationTest {
 
         typealias PersonPaths = String
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "TypeAliasCollision.kt:",
+        "[KPaths] Cannot generate 'PersonPaths' because it conflicts with existing top-level",
+        "type alias 'fixture.PersonPaths'",
+      ),
     )
-
-    assertContains(output, "TypeAliasCollision.kt:")
-    assertContains(output, "[KPaths] Cannot generate 'PersonPaths' because it conflicts with existing top-level")
-    assertContains(output, "type alias 'fixture.PersonPaths'")
   }
 
   @Test
   fun `reports reserved prefixes on sealed cases at Pathable`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "ReservedCasePrefix.kt",
       source =
       """
@@ -734,16 +787,18 @@ class KPathsProcessorIntegrationTest {
           data object __kpaths_rootType : ReservedCasePrefix
         }
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "ReservedCasePrefix.kt:",
+        "[KPaths] Cannot generate paths because case '__kpaths_rootType'",
+        "uses the reserved '__kpaths_' prefix",
+      ),
     )
-
-    assertContains(output, "ReservedCasePrefix.kt:")
-    assertContains(output, "[KPaths] Cannot generate paths because case '__kpaths_rootType'")
-    assertContains(output, "uses the reserved '__kpaths_' prefix")
   }
 
   @Test
   fun `reports generic companion collisions at Pathable`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "CompanionCollision.kt",
       source =
       """
@@ -754,16 +809,18 @@ class KPathsProcessorIntegrationTest {
         @Pathable
         data class Box<Value>(val Companion: Value)
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "CompanionCollision.kt:",
+        "[KPaths] Cannot generate paths because 'Companion' would name both",
+        "the generated generic-path companion and the key path for property 'Companion'",
+      ),
     )
-
-    assertContains(output, "CompanionCollision.kt:")
-    assertContains(output, "[KPaths] Cannot generate paths because 'Companion' would name both")
-    assertContains(output, "the generated generic-path companion and the key path for property 'Companion'")
   }
 
   @Test
   fun `reports generated source file collisions at Pathable`() {
-    val output = compileFailure(
+    assertKsp(
       fileName = "PersonPaths.kt",
       source =
       """
@@ -774,15 +831,13 @@ class KPathsProcessorIntegrationTest {
         @Pathable
         data class Person(val name: String)
       """.trimIndent(),
+      succeeds = false,
+      diagnostics = listOf(
+        "PersonPaths.kt:",
+        "[KPaths] Cannot generate 'PersonPaths.kt' because source file",
+        "@Pathable(\"CustomPersonPaths\")",
+      ),
     )
-
-    assertContains(output, "PersonPaths.kt:")
-    assertContains(output, "[KPaths] Cannot generate 'PersonPaths.kt' because source file")
-    assertContains(output, "@Pathable(\"CustomPersonPaths\")")
   }
 
-  private fun compileFailure(
-    fileName: String,
-    source: String,
-  ): String = compileFixture(fileName, source, expectFailure = true)
 }

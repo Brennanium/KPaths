@@ -58,7 +58,6 @@ kotlin {
     jvmTest {
       kotlin.srcDir("src/test/kotlin")
       kotlin.srcDir("src/knapshotsTest/kotlin")
-      kotlin.srcDir("src/knapshotsHarness/kotlin")
       dependencies { implementation("dev.knapshots:knapshots-ksp:0.1.0-SNAPSHOT") }
       dependencies {
         implementation(kotlin("test"))
