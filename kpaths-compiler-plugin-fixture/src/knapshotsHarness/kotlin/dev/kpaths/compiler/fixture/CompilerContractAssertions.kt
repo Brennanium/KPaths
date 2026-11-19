@@ -4,7 +4,7 @@ import dev.knapshots.testing.compiler.CompilerHost
 import dev.knapshots.testing.compiler.CompilerRequest
 import dev.knapshots.testing.compiler.CompilerResult
 import dev.knapshots.testing.compiler.CompilerSnapshotKind
-import dev.knapshots.testing.compiler.InlineSnapshotLocation
+import dev.knapshots.testing.compiler.discoverInlineSnapshotLocation
 import dev.knapshots.testing.compiler.assertCompiler as assertKnapshotsCompiler
 import dev.knapshots.testing.compiler.assertCompilerSnapshotFiles
 import dev.knapshots.testing.compiler.EmbeddedCompilerHost
@@ -54,12 +54,8 @@ internal fun FutureCompilerPluginContractTest.assertCompiler(
   recordVersion: Boolean = System.getProperty("kpaths.snapshotRecordVersion", "false").toBooleanStrict(),
 ) {
   val location = if (record != SnapshotRecording.NONE) {
-    val caller = Throwable().stackTrace.first {
-      it.className == javaClass.name && it.lineNumber > 0
-    }
     val project = Path.of(checkNotNull(System.getProperty("kpaths.projectDir")))
-    InlineSnapshotLocation(project.resolve("kpaths-compiler-plugin-fixture/src/test/kotlin")
-      .resolve(caller.className.substringBeforeLast('.').replace('.', '/')).resolve(caller.fileName), caller.lineNumber)
+    discoverInlineSnapshotLocation(listOf(project.resolve("kpaths-compiler-plugin-fixture/src/test/kotlin")))
   } else null
   assertKnapshotsCompiler(source, compilerVersion, embeddedHost(), fir, ir, record, recordVersion, location)
 }
