@@ -25,9 +25,8 @@ import org.objectweb.asm.Opcodes
 @Tag("compiler-plugin-contract")
 class FutureCompilerPluginContractTest {
   @Test
-  fun `snapshot copy writable values`(@TempDir directory: Path) {
+  fun `snapshot copy writable values`() {
     assertCompiler(
-      directory = directory,
       source = """
         package fixture
         import dev.kpaths.annotations.Pathable
@@ -60,9 +59,8 @@ class FutureCompilerPluginContractTest {
   }
 
   @Test
-  fun `snapshot generic sealed payload`(@TempDir directory: Path) {
+  fun `snapshot generic sealed payload`() {
     assertCompiler(
-      directory = directory,
       source = """
         package fixture
         import dev.kpaths.annotations.Pathable
@@ -152,9 +150,8 @@ class FutureCompilerPluginContractTest {
   }
 
   @Test
-  fun `snapshot property visibility and writable flavors`(@TempDir directory: Path) {
+  fun `snapshot property visibility and writable flavors`() {
     assertCompiler(
-      directory = directory,
       source = """
         package fixture
         import dev.kpaths.annotations.Pathable
@@ -235,9 +232,8 @@ class FutureCompilerPluginContractTest {
   }
 
   @Test
-  fun `snapshot renamed paths and escaped cases`(@TempDir directory: Path) {
+  fun `snapshot renamed paths and escaped cases`() {
     assertCompiler(
-      directory = directory,
       source = """
         package fixture
         import dev.kpaths.annotations.*
@@ -299,9 +295,8 @@ class FutureCompilerPluginContractTest {
   }
 
   @Test
-  fun `snapshot specialized nullable adapter path`(@TempDir directory: Path) {
+  fun `snapshot specialized nullable adapter path`() {
     assertCompiler(
-      directory = directory,
       source = """
         package fixture
         import dev.kpaths.annotations.*
@@ -356,9 +351,8 @@ class FutureCompilerPluginContractTest {
   }
 
   @Test
-  fun `snapshot property path FIR and IR`(@TempDir directory: Path) {
+  fun `snapshot property path FIR and IR`() {
     assertCompiler(
-      directory = directory,
       source = """
         package fixture
         import dev.kpaths.annotations.Pathable
@@ -390,8 +384,8 @@ class FutureCompilerPluginContractTest {
   }
 
   @Test
-  fun `snapshot generic writable catalog`(@TempDir directory: Path) {
-    assertRecordedCompiler(directory, "generic-writable", """
+  fun `snapshot generic writable catalog`() {
+    assertRecordedCompiler("generic-writable", """
       package fixture
       import dev.kpaths.annotations.Pathable
       @Pathable data class Box<T>(var value: T)
@@ -401,8 +395,8 @@ class FutureCompilerPluginContractTest {
   }
 
   @Test
-  fun `snapshot sealed case and direct payload catalogs`(@TempDir directory: Path) {
-    assertRecordedCompiler(directory, "sealed-payload", """
+  fun `snapshot sealed case and direct payload catalogs`() {
+    assertRecordedCompiler("sealed-payload", """
       package fixture
       import dev.kpaths.annotations.Pathable
       @Pathable sealed interface Event {
@@ -416,8 +410,8 @@ class FutureCompilerPluginContractTest {
   }
 
   @Test
-  fun `snapshot enum case catalog`(@TempDir directory: Path) {
-    assertRecordedCompiler(directory, "enum-cases", """
+  fun `snapshot enum case catalog`() {
+    assertRecordedCompiler("enum-cases", """
       package fixture
       import dev.kpaths.annotations.Pathable
       @Pathable enum class Status { Offline, Online }
@@ -448,9 +442,8 @@ class FutureCompilerPluginContractTest {
   }
 
   @Test
-  fun `FIR snapshots capture referenced generated functions`(@TempDir directory: Path) {
+  fun `FIR snapshots capture referenced generated functions`() {
     assertCompiler(
-      directory = directory,
       source = """
         package fixture
         import dev.kpaths.annotations.Pathable
@@ -475,9 +468,8 @@ class FutureCompilerPluginContractTest {
   }
 
   @Test
-  fun `FIR snapshots omit generated properties that source does not reference`(@TempDir directory: Path) {
+  fun `FIR snapshots omit generated properties that source does not reference`() {
     assertCompiler(
-      directory = directory,
       source = """
         package fixture
         import dev.kpaths.annotations.Pathable
@@ -488,9 +480,8 @@ class FutureCompilerPluginContractTest {
   }
 
   @Test
-  fun `FIR and IR snapshots capture generated properties`(@TempDir directory: Path) {
+  fun `FIR and IR snapshots capture generated properties`() {
     assertCompiler(
-      directory = directory,
       source = """
         package fixture
         import dev.kpaths.annotations.Pathable
@@ -561,11 +552,8 @@ class FutureCompilerPluginContractTest {
   }
 
   @Test
-  fun `IR snapshot records the generated catalog and direct payload implementation`(
-    @TempDir directory: Path,
-  ) {
+  fun `IR snapshot records the generated catalog and direct payload implementation`() {
     assertCompiler(
-      directory = directory,
       source = """
         package fixture
 

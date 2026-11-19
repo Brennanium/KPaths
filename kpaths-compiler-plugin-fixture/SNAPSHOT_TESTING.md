@@ -1,6 +1,6 @@
 # Compiler snapshot assertions
 
-`compiler-testing` supplies `assertCompilerSnapshots`, which compares inline expectations with named outputs from a compilation. Its
+Knapshots supplies `assertCompilerSnapshots`, which compares inline expectations with named outputs from a compilation. Its
 assertion API is independent of KPaths and the compiler driver; the KPaths fixture currently supplies
 compilation and capture. `CompilerSnapshotKind.FIR` and `CompilerSnapshotKind.IR` are predefined,
 and a caller can use another `CompilerSnapshotKind` for a different kind of output.
@@ -9,7 +9,6 @@ Within the KPaths contract tests, `assertCompiler` supplies the compiler setup a
 
 ```kotlin
 assertCompiler(
-  directory = directory,
   source = """/* Kotlin source */""",
   fir = SnapshotExpectation(
     default = """/* shared FIR */""",
@@ -46,8 +45,7 @@ assertCompilerSnapshots(
 
 `compilerCapture` in this illustration is supplied by the integrating test; it is not a built-in
 API. Assertions fail with an expected/actual diff if output differs and fail explicitly when a
-requested capture is missing. These snapshots are inline assertions, not automatically recorded or
-rewritten. The [contract tests](src/test/kotlin/dev/kpaths/compiler/fixture/FutureCompilerPluginContractTest.kt)
+requested capture is missing. Inline snapshots can be recorded and rewritten by Knapshots when recording is enabled. The [contract tests](src/test/kotlin/dev/kpaths/compiler/fixture/FutureCompilerPluginContractTest.kt)
 show the current KPaths-backed compiler invocation and snapshots.
 
 The captures have different scopes:

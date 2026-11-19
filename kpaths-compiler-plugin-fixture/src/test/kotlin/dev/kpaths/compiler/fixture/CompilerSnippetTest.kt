@@ -2,11 +2,11 @@
 
 package dev.kpaths.compiler.fixture
 
-import com.tschuchort.compiletesting.KotlinCompilation
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertContains
 import kotlin.test.assertTrue
+import kotlin.test.assertFalse
 import org.objectweb.asm.ClassReader
 import org.objectweb.asm.ClassVisitor
 import org.objectweb.asm.MethodVisitor
@@ -26,7 +26,7 @@ class CompilerSnippetTest {
         return update(original) == Note("new") && original.body == "old"
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.InferredCopyWritableKt").getMethod("check").invoke(null))
   }
 
@@ -44,7 +44,7 @@ class CompilerSnippetTest {
       fun check(): Boolean = value.set(Box("old"), "new") == Box("new") &&
         readyValue.set(State.Ready("old"), "new") == State.Ready("new")
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.InferredCopyWritableCatalogsKt").getMethod("check").invoke(null))
   }
 
@@ -60,7 +60,7 @@ class CompilerSnippetTest {
       fun check() = positional.set(Positional("old"), "new").value == "new" &&
         parenthesized.set(Parenthesized("old"), "new").value == "new"
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.CopyWritableArgumentsKt").getMethod("check").invoke(null))
   }
 
@@ -75,7 +75,7 @@ class CompilerSnippetTest {
       @Catalogued data class Note(val body: String)
       val path = Note.Paths.body
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "requires a literal true or false for copyWritableVals")
   }
 
@@ -90,7 +90,7 @@ class CompilerSnippetTest {
       val body = Note.Paths.body
       fun check(): Boolean = body.set(Note("old"), "new") == Note("new")
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.InferredMetaCopyWritableKt").getMethod("check").invoke(null))
   }
 
@@ -103,7 +103,7 @@ class CompilerSnippetTest {
       @Pathable(copyWritableVals = ENABLE_COPY_WRITES) data class Note(val body: String)
       val path = Note.Paths.body
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "requires a literal true or false for copyWritableVals")
   }
 
@@ -114,7 +114,7 @@ class CompilerSnippetTest {
       class InvalidSyntheticOwner
       val path = InvalidSyntheticOwner.Snapshot.Paths.title
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "Invalid @PathsAdapter on 'title': the adapter factory must declare exactly one make function.")
   }
 
@@ -125,7 +125,7 @@ class CompilerSnippetTest {
       @Target(AnnotationTarget.CLASS) annotation class ContributedCatalog
       @ContributedCatalog data class InvalidRecipeDocument(val value: String)
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "Invalid KPaths adapter recipe for 'value': the integration recipe must expose a KeyPath subtype.")
   }
 
@@ -137,7 +137,7 @@ class CompilerSnippetTest {
       import dev.kpaths.compiler.integration.InvalidBinaryCell
       @Pathable data class Document(val title: InvalidBinaryCell<String>)
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "Invalid @PathsAdapter on 'title': the adapter factory must declare exactly one make function.")
   }
 
@@ -152,7 +152,7 @@ class CompilerSnippetTest {
       @ContributedCatalog data class OverrideDocument(val title: Cell<String>)
       fun run(): Boolean = OverrideDocument.GeneratedPaths.title.get(OverrideDocument(Cell("ok"))).value == "ok"
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("dev.kpaths.compiler.fixture.AdapterOverrideKt").getMethod("run").invoke(null))
   }
 
@@ -172,7 +172,7 @@ class CompilerSnippetTest {
         @ContributedCatalog data class Document(val title: Cell<String>)
       """,
     )
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages,
       "[KPaths] Invalid @PathsAdapter on 'title': the adapter factory must declare exactly one make function.")
   }
@@ -197,7 +197,7 @@ class CompilerSnippetTest {
       }
       @Pathable data class Document(val first: Cell<String>, val second: TextCell<String>, val third: ProjectedCell<out String>)
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "Invalid @PathsAdapter on 'first': make must return a KeyPath subtype.")
     assertContains(result.messages, "Invalid @PathsAdapter on 'second': make type parameters must not have explicit bounds.")
     assertContains(result.messages, "Invalid @PathsAdapter on 'third': storage type has unsupported projections or nullable type parameters.")
@@ -215,7 +215,7 @@ class CompilerSnippetTest {
       }
       @Pathable data class Document(val title: Cell<String>?)
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "[KPaths] Invalid @PathsAdapter on 'title': make's KeyPath parameter does not match the generated root and storage types.")
   }
 
@@ -228,7 +228,7 @@ class CompilerSnippetTest {
       object Factory : KPathsAdapterFactory
       @Pathable data class Document(val title: Cell<String>)
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "[KPaths] Invalid @PathsAdapter on 'title': the adapter factory must declare exactly one make function.")
   }
 
@@ -249,7 +249,7 @@ class CompilerSnippetTest {
       }
       @Pathable data class Document(val first: Cell<String>, val second: Other<String>)
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "Invalid @PathsAdapter on 'first': make must return a KeyPath subtype.")
     assertContains(result.messages, "Invalid @PathsAdapter on 'second': the adapter factory must declare exactly one make function.")
   }
@@ -323,7 +323,7 @@ class CompilerSnippetTest {
           caseReader.get(ReadScreen.Showing(Readable(null))) == null
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.DeclarativeFactoryKt").getMethod("run").invoke(null))
   }
 
@@ -342,7 +342,7 @@ class CompilerSnippetTest {
         return path.embed("hi") == Loadable.Loaded("hi") && path.extract(Loadable.Loaded("hi")) == "hi"
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.BoundedGenericCaseKt").getMethod("run").invoke(null))
   }
 
@@ -357,7 +357,7 @@ class CompilerSnippetTest {
       fun run(): Boolean = Box.Paths<String>().content == keyPath(Box<String>::value) &&
         Box.Paths<String>().content.get(Box("hello")) == "hello"
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.GenericRenamedPropertiesKt").getMethod("run").invoke(null))
   }
 
@@ -391,7 +391,7 @@ class CompilerSnippetTest {
           updated == Person("Grace", "Hopper") && box.value == "before" && newBox.value == "after"
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.ComputedDataPropertiesKt").getMethod("run").invoke(null))
   }
 
@@ -414,7 +414,7 @@ class CompilerSnippetTest {
           i.`case` == Loadable.Paths<Int>().Idle.unit && s.`case` != i.`case`
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.TemporaryReifiedPropertyKt").getMethod("run").invoke(null))
   }
 
@@ -429,7 +429,7 @@ class CompilerSnippetTest {
         @PathsName("Fields") data class Second<T>(val value: T) : Event<T>
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "Cannot generate paths because 'Fields' would name both")
   }
 
@@ -457,7 +457,7 @@ class CompilerSnippetTest {
           holder.value == "updated" && wrapped.set(Result.Wrapped("old"), "new") == Result.Wrapped("new")
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.GenericCasePropertyKindsKt").getMethod("run").invoke(null))
   }
 
@@ -483,7 +483,7 @@ class CompilerSnippetTest {
           path.set(original, 2) == Result.Flipped<Int, String?>(2, null) && original.first == 1
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.GenericCasePropertiesKt").getMethod("run").invoke(null))
   }
 
@@ -497,7 +497,7 @@ class CompilerSnippetTest {
         data object ValueCasePath : Event<Nothing>
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "Cannot generate paths because 'ValueCasePath' would name both")
   }
 
@@ -512,7 +512,7 @@ class CompilerSnippetTest {
       }
       fun run(): Boolean = Event.Paths<String>().allCasePaths == listOf(Event.Paths<String>().Idle.unit)
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertContains(result.messages, "The generated case catalog omits 'Many'")
     assertEquals(true, result.classLoader.loadClass("example.IncompleteGenericCatalogKt").getMethod("run").invoke(null))
   }
@@ -571,7 +571,7 @@ class CompilerSnippetTest {
           triple.embed(Triple(2, "hi", false)) == Event.TripleValue(2, "hi", false)
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.GenericCasePayloadKt").getMethod("run").invoke(null))
   }
 
@@ -601,7 +601,7 @@ class CompilerSnippetTest {
           payload.embed(2 to "hello") == Result.Flipped(2, "hello")
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.ReorderedGenericCaseKt").getMethod("run").invoke(null))
   }
 
@@ -637,7 +637,7 @@ class CompilerSnippetTest {
           path.__kpaths_id != Event.Paths<Int>().Waiting.__kpaths_id
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.GenericObjectCaseKt").getMethod("run").invoke(null))
   }
 
@@ -651,7 +651,7 @@ class CompilerSnippetTest {
         data class Value<T>(val value: T) : Event<T>
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
   }
 
   @Test
@@ -666,7 +666,7 @@ class CompilerSnippetTest {
       }
       val attempted = Event.Paths<String>().Fixed
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "where the generic root requires 'T'")
     assertContains(result.messages, "example.Event<kotlin.collections.List<kotlin.String>>")
     assertContains(result.messages, "type parameter(s) U cannot be determined from the sealed root")
@@ -690,7 +690,7 @@ class CompilerSnippetTest {
         Event.Paths.MessageCase.text.embed("world") == Event.Message("world") &&
         Event.Paths.MessageFields.body(Event.Message("world")) == "world"
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.NamedPathAnnotationsKt").getMethod("run").invoke(null))
   }
 
@@ -704,7 +704,7 @@ class CompilerSnippetTest {
       val wrongBound = Bounded.Paths.of(Int::class).value
       val nullableType = Box.Paths.of<String?>(String::class).value
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "Argument type mismatch")
     assertContains(result.messages, "T : Any")
   }
@@ -717,7 +717,7 @@ class CompilerSnippetTest {
       @Pathable data class Box<T : CharSequence>(val value: T)
       val invalid = Box.Paths<Int>().value
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
   }
 
   @Test
@@ -753,7 +753,7 @@ class CompilerSnippetTest {
           ordered.set(Ordered(1), 2) == Ordered(2)
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.BoundedCatalogKt").getMethod("run").invoke(null))
   }
 
@@ -788,7 +788,7 @@ class CompilerSnippetTest {
           text.__kpaths_id != nullable.__kpaths_id && text.__kpaths_id != number.__kpaths_id
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.GenericCatalogKt").getMethod("run").invoke(null))
   }
 
@@ -802,7 +802,7 @@ class CompilerSnippetTest {
         data object Idle : Event
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "[KPaths] Cannot generate 'Item' because this non-generic sealed root has a generic variant.")
   }
 
@@ -817,7 +817,7 @@ class CompilerSnippetTest {
         data object Idle : Event
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "[KPaths] An unnamed `companion object` must be the final member")
   }
 
@@ -842,7 +842,7 @@ class CompilerSnippetTest {
         Braced.Paths.Idle.unit.embed(Unit) == Braced.Idle &&
         Final.Paths.Idle.unit.embed(Unit) == Final.Idle
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.ValidCompanionsKt").getMethod("run").invoke(null))
   }
 
@@ -858,7 +858,7 @@ class CompilerSnippetTest {
         data object Idle : Event
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "[KPaths] Sealed variant 'Child' must be a class or object.")
     assertTrue(!result.messages.contains("Sealed variant 'Unrelated'"), result.messages)
   }
@@ -882,7 +882,7 @@ class CompilerSnippetTest {
           original.text == "old" && Event.Paths.MessageFields.id(original) == 1
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.CasePropertiesKt").getMethod("run").invoke(null))
   }
 
@@ -902,7 +902,7 @@ class CompilerSnippetTest {
         return original.text == "new"
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.ReferenceCaseKt").getMethod("run").invoke(null))
   }
 
@@ -923,7 +923,7 @@ class CompilerSnippetTest {
           text == Event.Paths.Message.textFor(id = 1) && text != Event.Paths.Message.textFor(id = 2)
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.BoundCaseKt").getMethod("run").invoke(null))
   }
 
@@ -956,7 +956,7 @@ class CompilerSnippetTest {
           text.__kpaths_id == expected && text.__kpaths_valueType == TypeId.of<String?>()
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.BoundTripleKt").getMethod("run").invoke(null))
   }
 
@@ -972,7 +972,7 @@ class CompilerSnippetTest {
         @PathsName("bad name") data class C(val value: String) : Event
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "[KPaths] Cannot generate paths because 'Shared' would name both")
     assertContains(result.messages, "[KPaths] @PathsName value 'bad name'")
   }
@@ -994,7 +994,7 @@ class CompilerSnippetTest {
         Event.Message("hello").case == Event.Paths.MessageCase.text &&
         Event.Refresh.case == Event.Paths.RefreshCase.unit
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.RenamedCaseKt").getMethod("run").invoke(null))
   }
 
@@ -1011,7 +1011,7 @@ class CompilerSnippetTest {
         Status.Paths.allCasePaths == listOf(Status.Paths.Available, Status.Paths.Offline) &&
         Status.Online.case == Status.Paths.Available
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.RenamedEnumKt").getMethod("run").invoke(null))
   }
 
@@ -1027,7 +1027,7 @@ class CompilerSnippetTest {
         @CaseName("Same") data object Second : Event
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "[KPaths] @CaseName value 'bad name' must be a single Kotlin identifier")
     assertContains(result.messages, "[KPaths] Cannot generate paths because 'Same' would name both")
   }
@@ -1045,7 +1045,7 @@ class CompilerSnippetTest {
       fun run(): Boolean = Event.Paths.`when` == caseKeyPath<Event, Event.Refresh>() &&
         Event.Refresh.case == Event.Paths.`when`.unit
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.KeywordCaseKt").getMethod("run").invoke(null))
   }
 
@@ -1061,7 +1061,7 @@ class CompilerSnippetTest {
       fun run(): Boolean = Person.Paths.display == keyPath(Person::name) &&
         Person("before").setting(Person.Paths.display, "after") == Person("after")
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.RenamedPropertyKt").getMethod("run").invoke(null))
     val bytes = checkNotNull(result.classLoader.getResourceAsStream("example/Person\$Paths\$__KPaths_name_Path.class"))
       .use { it.readBytes() }
@@ -1089,7 +1089,7 @@ class CompilerSnippetTest {
         val name: String,
       )
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "[KPaths] @PathName value 'not a name' must be a single Kotlin identifier")
     assertContains(result.messages, "[KPaths] Cannot generate paths because 'name' would name both")
   }
@@ -1104,7 +1104,7 @@ class CompilerSnippetTest {
       @Pathable data class Person(@PathName("when") val name: String)
       fun run(): Boolean = Person.Paths.`when` == keyPath(Person::name)
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.KeywordPathNameKt").getMethod("run").invoke(null))
   }
 
@@ -1117,7 +1117,7 @@ class CompilerSnippetTest {
         object Paths
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "[KPaths] Cannot generate 'Person.Paths'")
     assertContains(result.messages, "already declares a nested type named 'Paths'")
   }
@@ -1131,7 +1131,7 @@ class CompilerSnippetTest {
         companion object Paths
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "[KPaths] Cannot generate 'Person.Paths'")
   }
 
@@ -1146,7 +1146,7 @@ class CompilerSnippetTest {
       }
       val name = Person.Paths.name
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
   }
 
   @Test
@@ -1160,7 +1160,7 @@ class CompilerSnippetTest {
       }
       fun run(): Boolean = Event.Paths.allCasePaths == listOf(Event.Paths.Idle.unit)
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.UnrelatedKt").getMethod("run").invoke(null))
   }
 
@@ -1177,7 +1177,7 @@ class CompilerSnippetTest {
       }
       fun run(): Boolean = Feature.Event.Paths.allCasePaths == listOf(Feature.Event.Paths.Idle.unit)
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.NestedKt").getMethod("run").invoke(null))
   }
 
@@ -1193,7 +1193,7 @@ class CompilerSnippetTest {
       }
       fun run(): Boolean = Event.Paths.allCasePaths == listOf(Event.Paths.Aliased.unit, Event.Paths.Qualified.unit)
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.AliasedKt").getMethod("run").invoke(null))
   }
 
@@ -1208,7 +1208,7 @@ class CompilerSnippetTest {
       }
       fun run(): Boolean = Event.Paths.allCasePaths == listOf(Event.Paths.Idle.unit)
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
   }
 
   @Test
@@ -1228,7 +1228,7 @@ class CompilerSnippetTest {
         fun run(): Boolean = Feature.Event.Paths.allCasePaths == listOf(Feature.Event.Paths.Idle.unit)
       """,
     )
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
   }
 
   @Test
@@ -1245,7 +1245,7 @@ class CompilerSnippetTest {
       """,
       "Alias.kt" to "package example.aliases\ntypealias EventAlias = example.Event",
     )
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
   }
 
   @Test
@@ -1259,7 +1259,7 @@ class CompilerSnippetTest {
       }
       fun run(): Boolean = Event.Paths.allCasePaths == listOf(Event.Paths.Idle.unit)
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
   }
 
   @Test
@@ -1280,7 +1280,7 @@ class CompilerSnippetTest {
         typealias EventAlias<T> = Event
       """,
     )
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
   }
 
   @Test
@@ -1301,7 +1301,7 @@ class CompilerSnippetTest {
         }
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "[KPaths] Data-class property 'count' must be declared in the primary constructor or have an accessible setter")
     assertContains(result.messages, "[KPaths] Cannot generate paths because property '__kpaths_rootType' uses the reserved '__kpaths_' prefix")
     assertContains(result.messages, "[KPaths] Cannot generate paths because case '__kpaths_Changed' uses the reserved '__kpaths_' prefix")
@@ -1324,7 +1324,7 @@ class CompilerSnippetTest {
         return path !is ReferenceWritableKeyPath<*, *>
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.PrivateSetterKt").getMethod("run").invoke(null))
   }
 
@@ -1338,7 +1338,7 @@ class CompilerSnippetTest {
         data class Connected(override val Connected: String) : Connection()
       }
     """)
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertContains(result.messages, "[KPaths] Cannot generate paths because 'Connected' would name both")
     assertContains(result.messages, "the key path for property 'Connected' and the case path for 'Connected'")
   }
@@ -1368,7 +1368,7 @@ class CompilerSnippetTest {
       }
       """,
     )
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertContains(result.messages, "[KPaths] The generated case catalog omits 'Many', 'Reference'")
     assertContains(result.messages, "allCasePaths is incomplete")
     assertEquals(true, result.classLoader.loadClass("example.CatalogPolicyKt").getMethod("run").invoke(null))
@@ -1404,7 +1404,7 @@ class CompilerSnippetTest {
         Request.Paths.allCasePaths == listOf(Request.Paths.Cancel.unit, open, edit)
       """,
     )
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.PayloadsKt").getMethod("run").invoke(null))
     val bytes = checkNotNull(
       result.classLoader.getResourceAsStream("example/Request\$Paths\$Open\$__KPaths_payload_CasePath.class"),
@@ -1437,7 +1437,7 @@ class CompilerSnippetTest {
       }
       """,
     )
-    assertEquals(KotlinCompilation.ExitCode.OK, result.exitCode, result.messages)
+    assertTrue(result.succeeded, result.messages)
     assertEquals(true, result.classLoader.loadClass("example.SnippetKt").getMethod("run").invoke(null))
     assertTrue(result.classLoader.loadClass("example.Signal").interfaces.any { it.name == "dev.kpaths.core.CasePathable" })
   }
@@ -1445,7 +1445,7 @@ class CompilerSnippetTest {
   @Test
   fun `snippet helper reports compiler errors`() {
     val result = compileSnippet("Broken.kt" to "val number: Int = \"wrong\"")
-    assertEquals(KotlinCompilation.ExitCode.COMPILATION_ERROR, result.exitCode, result.messages)
+    assertFalse(result.succeeded, result.messages)
     assertTrue(result.messages.contains("type mismatch", ignoreCase = true), result.messages)
   }
 }

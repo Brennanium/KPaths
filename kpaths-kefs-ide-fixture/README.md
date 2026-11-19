@@ -29,66 +29,23 @@ compiler version is `2.4.20-ij262-52`. Other versions must be tested separately.
 
 The tested IDE, compiler, and KEFS versions are listed in
 [`ide-compatibility.json`](ide-compatibility.json). Like the compiler matrix, this is a record of
-tested combinations, not a restriction on other IDEs. To build and verify the local IDE artifact
-and a standalone Gradle consumer, run from the repository root:
+tested combinations, not a restriction on other IDEs. Run the Knapshots compatibility task from the repository root:
 
 ```sh
-python3 scripts/verify-android-studio-version.py 2026.2.2.8
+./gradlew :kpaths-compatibility:editorCompatibility --ide-version 2026.2.2.8
 ```
 
-On Apple Silicon macOS or x86-64 Linux, this resolves the full release version or build using JetBrains' Android
-Studio release feed. `latest-stable` selects the latest stable release or patch. The runner uses a
-matching `/Applications/Android Studio.app` when available; otherwise it downloads the official
-disk image or Linux archive and verifies its SHA-256 checksum. On macOS the image is mounted read-only;
-on Linux the archive is extracted into a temporary directory. `--ide-path` selects a different
-installed copy and verifies that it matches the requested release. It selects a compatible stable
-KEFS Marketplace release and reads KEFS's bundled mapping to resolve Android Studio's Kotlin
-compiler. The fixture independently checks that KEFS reports the same compiler version.
-For a recorded IDE build, the runner uses the tested KEFS version; `--latest-kefs` instead probes
-the newest compatible Marketplace version. Unlisted builds use the newest compatible version.
+The task resolves the Android Studio release, checks its download against the official SHA-256, and selects a compatible KEFS version and bundled Kotlin compiler. The KPaths driver verifies the IDE-specific compiler artifact, runs the focused highlighting fixture, and checks an imported project with KEFS enabled, disabled, and an intentional diagnostic. Its report is written to `kpaths-compatibility/build/reports/knapshots/editor-compatibility.json`; scenario inspection reports are under `build/ide-compatibility/`.
 
-The default run includes the imported consumer probe with KEFS enabled and disabled; use
-`--skip-ide-probe` for the faster highlighting fixture only. Use `--report-json <file>` to save
-the resolved versions and outcome. A missing KEFS release or compiler mapping is reported as an
-error; a successful test does not automatically add the IDE to the supported matrix. The runner
-needs network access, JDK 17 and a JDK 25 toolchain, and an Android Studio environment capable of
-importing the test project. The isolated IDE may prompt for SDK configuration on a new machine.
-Linux also needs a graphical display; on headless CI, run the command with `xvfb-run -a`.
-The runner reads the local Gradle project roles from `editor-testing.toml`, obtains versions and
-publication coordinates from Gradle, and generates its disposable Gradle project. It supplies Kotlin
-source strings including a supporting source file. `--config` selects another TOML file and
-`--kotlin-version` overrides the generated project's Kotlin version. The latter does not rebuild the
-compiler plugin for that version or establish compatibility by itself. It uses `assertEditor` to check reference resolution and unexpected errors
-after IDE highlighting. A second enabled run introduces a type error and verifies both the default
-failure and an explicit diagnostic expectation. The disabled-plugin control deliberately has
-unresolved references and checks those separately. The source preparation is reusable scaffolding;
-the probe's expectations are currently specific to this KPaths fixture. Use the CLI's `--suite all` option to run both this probe
-and the separate focused highlighting fixture.
-Each probe attempt uses its own IDE configuration, system cache, and log directory under
-`build/ide-probe/`, so restarting the IDE cannot reuse another attempt's state.
-The runner reports a fatal Android Studio startup dialog as a failed check and records its log at
-`build/consumer-probe-enabled.log` or `build/consumer-probe-disabled.log` in this fixture. In local
-tests, Rabbit 2 Patch 1 sometimes failed during Android Studio's analytics initialization before
-the project opened; the highlighting fixture still passed. The runner retries that specific
-startup failure once and saves the first attempt's log. It does not retry failed path assertions or
-other errors. A failed imported-project check is not
-evidence that the IDE is supported.
+The task supports Apple Silicon macOS and x86-64 Linux. A JDK 17 Gradle runtime, a JDK 25 toolchain, and a usable Android SDK are required. For headless Linux, install Xvfb and set `KPATHS_USE_XVFB=true`. A passing compiler compatibility check does not by itself establish IDE compatibility.
 
-If IntelliJ's Gradle plugin hits its [known layout-index filesystem race](https://youtrack.jetbrains.com/projects/MP/issues/MP-8217/ClosedFileSystemException-in-IdeLayoutIndexService-when-resolving-bundled-com.intellij.java),
-the runner preserves the affected generated index and retries its construction once. Other Gradle
-failures are not retried.
-
-Alternatively, to select a known installation and versions directly:
+The specialized artifact-preparation script `scripts/verify-kefs-compatibility.py` remains in use by release-artifact workflows and the KPaths editor driver. It tests the KEFS provider and publishes only to a local repository. For a direct artifact check against an existing IDE, run:
 
 ```sh
 python3 scripts/verify-kefs-compatibility.py --ide-path "/path/to/Android Studio.app"
 ```
 
-For an unlisted IDE build, also pass `--ide-kotlin-version` (from **KEFS: Copy Kotlin IDE Version**)
-and `--kefs-version`. Add `--ide-probe` to launch an isolated IDE twice and check the imported
-consumer with KEFS enabled and disabled. The script restores the fixture's KEFS settings afterward.
-It writes only to local build repositories; it does not publish a release. It needs a JDK 17 Gradle
-runtime and a JDK 25 toolchain for the currently tested IDE fixture.
+For an unlisted IDE, supply `--ide-kotlin-version` and `--kefs-version`. The script retries the known IntelliJ layout-index filesystem race once; other failures are not retried.
 
 The local publication task runs the fixture's KEFS integration test first. The test compares the
 requested artifact version to the compiler version reported by KEFS, so an artifact is not published

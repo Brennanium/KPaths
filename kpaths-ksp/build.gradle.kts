@@ -57,13 +57,9 @@ kotlin {
     }
     jvmTest {
       kotlin.srcDir("src/test/kotlin")
-      if (providers.gradleProperty("knapshots.checkout").isPresent) {
-        kotlin.srcDir("src/knapshotsTest/kotlin")
-        kotlin.srcDir("src/knapshotsHarness/kotlin")
-        dependencies { implementation("dev.knapshots:knapshots-ksp:0.1.0-SNAPSHOT") }
-      } else {
-        kotlin.srcDir("src/legacyHarness/kotlin")
-      }
+      kotlin.srcDir("src/knapshotsTest/kotlin")
+      kotlin.srcDir("src/knapshotsHarness/kotlin")
+      dependencies { implementation("dev.knapshots:knapshots-ksp:0.1.0-SNAPSHOT") }
       dependencies {
         implementation(kotlin("test"))
         implementation(libs.junit.jupiter)
@@ -71,10 +67,6 @@ kotlin {
       }
     }
   }
-}
-
-dependencies {
-  add("jvmTestImplementation", gradleTestKit())
 }
 
 tasks.named<Test>("jvmTest") {
@@ -86,7 +78,7 @@ tasks.named<Test>("jvmTest") {
     ":kpaths-ksp:jvmJar",
   )
   systemProperty("kpaths.projectDir", rootProject.projectDir.absolutePath)
-  if (providers.gradleProperty("knapshots.checkout").isPresent) {
+  run {
     fun artifact(module: String) = rootProject.file("$module/build/libs/$module-jvm-${project.version}.jar")
     systemProperty("knapshots.ksp.version", libs.versions.ksp.get())
     systemProperty("knapshots.ksp.kotlinVersion", libs.versions.kotlin.get())

@@ -1,4 +1,5 @@
 pluginManagement {
+  includeBuild(providers.gradleProperty("knapshots.checkout").orElse(if (settingsDir.resolve(".knapshots/settings.gradle.kts").isFile) ".knapshots" else "../Knapshots").get())
   repositories {
     gradlePluginPortal()
     mavenCentral()
@@ -21,8 +22,8 @@ dependencyResolutionManagement {
 
 rootProject.name = "KPaths"
 
-// Opt-in integration with the in-development Knapshots build.
-providers.gradleProperty("knapshots.checkout").orNull?.let { includeBuild(it) }
+// Use a local Knapshots checkout while the testing toolkit is in development.
+includeBuild(providers.gradleProperty("knapshots.checkout").orElse(if (settingsDir.resolve(".knapshots/settings.gradle.kts").isFile) ".knapshots" else "../Knapshots").get())
 
 include(
   ":kpaths-annotations",
@@ -40,7 +41,6 @@ include(
   ":kpaths-compiler-plugin-integration-fixture",
   ":kpaths-compiler-plugin-fixture",
   ":kpaths-compiler-plugin-consumer",
-  ":compiler-testing",
-  ":editor-testing",
-  ":snapshot-testing",
+  ":kpaths-editor-fixture",
+  ":kpaths-compatibility",
 )

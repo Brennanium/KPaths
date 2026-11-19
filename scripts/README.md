@@ -1,95 +1,22 @@
-# Kotlin Plugin Matrix
+# Compatibility testing
 
-Kotlin Plugin Matrix is the working name for compatibility tooling that exercises compiler plugins
-against Kotlin compiler and IDE versions. These scripts currently exercise KPaths specifically;
-extracting reusable compatibility tools is future work.
-The compiler snapshot assertions are a separate test facility: they compare captured compiler
-output for a source snippet, while these scripts run a project's tests across versions and IDEs.
-The current snapshot adapter captures FIR and IR; first-class diagnostic snapshots remain future work.
-The command-line tools should remain usable without GitHub Actions; CI workflows are consumers of
-the tools and provide matrix scheduling, summaries, and artifact uploads.
-
-For the future Knapshots extraction, the intended primary interface is a Gradle/Kotlin integration
-with a shared JVM runner; a standalone CLI could be a thin optional interface. The current Python
-CLI remains the working implementation and neither integration is published yet. See the
-[Knapshots handoff](../KNAPSHOTS_EXTRACTION.md).
-
-The CLI currently lives in this repository and delegates to the existing runners:
+KPaths uses Knapshots' Gradle tasks to test Kotlin compiler and Android Studio compatibility. The tasks resolve toolchain versions and invoke KPaths-specific drivers in this directory; they run locally as well as in CI.
 
 ```sh
-python3 scripts/kotlin-plugin-matrix.py compiler 2.4.21 '2.5.0-dev*'
-python3 scripts/kotlin-plugin-matrix.py ide 2026.2.2.8
-python3 scripts/kotlin-plugin-matrix.py ide 2026.2.2.8 --suite all
-python3 scripts/kotlin-plugin-matrix.py ide --help
+./gradlew :kpaths-compatibility:compilerCompatibility --kotlin-version 2.4.21 --platform jvm
+./gradlew :kpaths-compatibility:compilerCompatibility --kotlin-version '2.5.0-dev*' --platform jvm,native
+./gradlew :kpaths-compatibility:editorCompatibility --ide-version 2026.2.2.8
 ```
 
-On headless Linux, prefix the IDE command with `xvfb-run -a`. The compiler and IDE subcommands
-also accept `--report-json <file>` for machine-readable results. See `compiler --help` and
-`ide --help` for their options.
+Native verification requires an Apple Silicon Mac and an available iOS simulator. Android Studio verification uses an isolated IDE installation; on headless Linux set `KPATHS_USE_XVFB=true` and install Xvfb. The IDE driver builds and tests the KPaths IDE artifact and runs the enabled, disabled, and diagnostic editor scenarios. Reports are written under `kpaths-compatibility/build/reports/knapshots`.
 
-The CLI also has an unpublished Python package, currently at the development-only version
-`0.0.0.dev0`. To try a pinned installation in a virtual environment without publishing anything:
+A sibling Knapshots checkout is used by default. Pass `-Pknapshots.checkout=/path/to/Knapshots` to select another checkout; CI checks out a pinned Knapshots revision into `.knapshots`.
 
-```sh
-python3 -m venv .venv-matrix
-.venv-matrix/bin/python -m pip install build
-.venv-matrix/bin/python -m build --wheel --outdir dist
-.venv-matrix/bin/python -m pip install --no-index --find-links dist 'kotlin-plugin-matrix==0.0.0.dev0'
-.venv-matrix/bin/kotlin-plugin-matrix --help
-```
-
-With `uv` installed, the same unpublished, versioned wheel can be run without installing it into
-the project environment:
-
-```sh
-uvx --from dist/kotlin_plugin_matrix-0.0.0.dev0-py3-none-any.whl kotlin-plugin-matrix --help
-```
-
-The built-in KPaths checks require a KPaths checkout; run the installed command in that checkout or
-set `KPATHS_PROJECT_ROOT`. Other projects can use their own drivers without a KPaths checkout.
-The version and packaging are for local development and are not a published release or stable API.
-
-`verify-compiler-compatibility.py` runs compiler-plugin and downstream consumer tests for selected
-Kotlin versions. `verify-android-studio-version.py` selects an Android Studio release and runs the
-KEFS fixture and imported-consumer checks. See the [IDE fixture README](../kpaths-kefs-ide-fixture/README.md)
-for requirements and options. The IDE checks currently support Apple Silicon macOS and x86-64 Linux;
-The IDE CI matrix has passed on both platforms for the currently recorded Android Studio version.
-The macOS jobs for iOS simulator tests are separate.
-
-For KPaths, `ide --suite all` runs both the KEFS/imported-project checks and the focused provider
-fixture against the same prepared IDE. `--suite focused` selects only the focused fixture; the
-default `--suite kefs` preserves the existing KEFS checks. A JSON report includes each completed
-suite's status. The IDE CI workflow runs both suites.
-
-The Android Studio selector also accepts `--driver /path/to/executable`. After preparing the
-selected IDE it invokes that executable from its parent directory with `--ide-path <path>`; the
-driver's exit status determines the result. A project can use this to build and test its own IDE
-plugin instead of using the default KPaths KEFS fixture. The driver is responsible for its plugin
-installation, consumer fixture, and assertions. This is an experimental integration boundary; it has
-not yet been verified against a separately built IDE plugin. The example
-`scripts/verify-local-ide-provider.sh` runs KPaths' existing non-KEFS IDE fixture through this
-boundary. That fixture uses a test-only provider; it does not install or test a packaged IDE plugin.
-
-For a different compiler plugin project, `compiler <versions...> --driver /path/to/executable`
-invokes its driver once per resolved version with `--kotlin-version <version>`. The driver owns the
-project's build and behavioral tests. The runner records each exit status and continues through the
-remaining versions after a failure; `--report-json` saves the results. Without `--driver`, the
-compiler command runs the KPaths-specific compatibility checks described below.
+The earlier Python Kotlin Plugin Matrix scripts remain as migration references and for the specialized KEFS artifact preparation used by the editor driver. KPaths-specific publishing and documentation scripts also remain here.
 
 ## Inspiration
 
-- [Metro](https://github.com/ZacSweers/metro) demonstrates compiler and IDE compatibility matrices,
-  including Android Studio tests on Ubuntu, SDK setup, isolated test projects, and log collection.
-- [Kotlin External FIR Support](https://github.com/Mr3zee/Kotlin-External-FIR-Support) provides the
-  IDE integration that the KEFS fixture exercises and informed its compiler-version discovery.
-- The [Kotlin compiler plugin template](https://github.com/Kotlin/compiler-plugin-template) and
-  [kotlin-structural-typing](https://github.com/obabichev/kotlin-structural-typing) informed the
-  compiler plugin's test and fixture organization.
-- Point-Free's [Macro Testing](https://github.com/pointfreeco/swift-macro-testing) inspired the
-  compiler snapshot assertions and inline recording workflow used by KPaths' compiler tests.
-- The compiler snippet tests use [KCTFork](https://github.com/ZacSweers/kotlin-compile-testing),
-  a fork of Kotlin Compile Testing, to compile snippets in process. The separate `assertCompiler`
-  snapshot helper currently compiles its test projects with Gradle.
-
-These projects have different APIs and test strategies; the KPaths scripts do not depend on all of
-them.
+- [Metro](https://github.com/ZacSweers/metro) informed the compiler and IDE compatibility matrices and Linux editor testing.
+- [Kotlin External FIR Support](https://github.com/Mr3zee/Kotlin-External-FIR-Support) provides the KEFS IDE integration and informed compiler-version discovery.
+- The [Kotlin compiler plugin template](https://github.com/Kotlin/compiler-plugin-template) and [kotlin-structural-typing](https://github.com/obabichev/kotlin-structural-typing) informed compiler plugin fixture organization.
+- Point-Free's [Macro Testing](https://github.com/pointfreeco/swift-macro-testing) inspired the inline compiler and KSP snapshot workflow.

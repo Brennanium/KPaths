@@ -36,21 +36,14 @@ kotlin {
 
     jvmTest {
       kotlin.srcDir("src/test/kotlin")
-      if (providers.gradleProperty("knapshots.checkout").isPresent) {
-        kotlin.srcDir("src/knapshotsHarness/kotlin")
-        kotlin.exclude("dev/kpaths/compiler/testing/**")
-        kotlin.srcDir("src/knapshotsTest/kotlin")
-        resources.srcDir("src/knapshotsTest/resources")
-        dependencies { implementation("dev.knapshots:knapshots-compiler:0.1.0-SNAPSHOT") }
-      } else {
-        kotlin.srcDir("src/legacyHarness/kotlin")
-        dependencies { implementation(project(":compiler-testing")) }
-      }
+      kotlin.srcDir("src/knapshotsHarness/kotlin")
+      kotlin.srcDir("src/knapshotsTest/kotlin")
+      resources.srcDir("src/knapshotsTest/resources")
+      dependencies { implementation("dev.knapshots:knapshots-compiler:0.1.0-SNAPSHOT") }
       dependencies {
         implementation(kotlin("test"))
         implementation(libs.junit.jupiter)
         implementation(libs.asm)
-        implementation("dev.zacsweers.kctfork:core:0.14.0")
         implementation("org.jetbrains.kotlin:kotlin-compiler-embeddable:${libs.versions.kotlin.get()}")
         implementation(project(":kpaths-compiler-plugin"))
         implementation(project(":kpaths-compiler-plugin-contributor"))
@@ -65,16 +58,13 @@ dependencies {
 }
 
 // Compile the plugin and tests with the project compiler, but load the selected compiler in the
-// snippet-test JVM. kctfork loads KAPT classes even though these tests do not run annotation
-// processors; keep that harness-only dependency on the build version because some Kotlin dev
-// builds publish no matching KAPT artifact.
+// snippet-test JVM.
 providers.gradleProperty("kpaths.testKotlinVersion").orNull?.let { targetVersion ->
   configurations.named("jvmTestRuntimeClasspath") {
     resolutionStrategy.eachDependency {
       if (requested.group == "org.jetbrains.kotlin") {
         when (requested.name) {
           "kotlin-compiler-embeddable" -> useVersion(targetVersion)
-          "kotlin-annotation-processing-embeddable" -> useVersion(libs.versions.kotlin.get())
         }
       }
     }
@@ -86,25 +76,25 @@ val snapshotRecording = providers.gradleProperty("kpaths.snapshotRecording")
   .orElse("missing")
 
 tasks.named<Test>("jvmTest") {
-  if (!providers.gradleProperty("knapshots.checkout").isPresent) dependsOn(":compiler-testing:test")
   systemProperty("idea.home.path", rootProject.projectDir.absolutePath)
   useJUnitPlatform {
     excludeTags("compiler-plugin-contract")
   }
   systemProperty("kpaths.projectDir", rootProject.projectDir.absolutePath)
-  if (providers.gradleProperty("knapshots.checkout").isPresent) {
-    dependsOn(":kpaths-core:jvmJar", ":kpaths-annotations:jvmJar", ":kpaths-compiler-plugin:jvmJar")
-    if (!providers.gradleProperty("knapshots.gradleIntegration").isPresent) {
-      fun artifact(module: String) = rootProject.file("$module/build/libs/$module-jvm-${project.version}.jar")
-      systemProperty("knapshots.compiler.pluginJar", artifact("kpaths-compiler-plugin").absolutePath)
-      systemProperty("knapshots.compiler.pluginId", "dev.kpaths.compiler-plugin")
-      systemProperty("knapshots.compiler.firOption", "firSnapshot")
-      systemProperty("knapshots.compiler.irOption", "irSnapshot")
-      systemProperty("knapshots.compiler.record", snapshotRecording.get())
-      systemProperty("knapshots.compiler.recordVersion", providers.gradleProperty("kpaths.snapshotRecordVersion").orElse("false").get())
-      systemProperty("knapshots.compiler.classpath", files(artifact("kpaths-core"), artifact("kpaths-annotations")).asPath)
-    }
-  }
+  fun snippetArtifact(module: String) = rootProject.file("$module/build/libs/$module-jvm-${project.version}.jar")
+  dependsOn(":kpaths-core:jvmJar", ":kpaths-annotations:jvmJar", ":kpaths-compiler-plugin:jvmJar",
+    ":kpaths-compiler-plugin-contributor:jvmJar", ":kpaths-compiler-plugin-integration-fixture:jvmJar", "jvmJar")
+  systemProperty("kpaths.snippet.pluginJar", snippetArtifact("kpaths-compiler-plugin").absolutePath)
+  systemProperty("kpaths.snippet.contributorJar", snippetArtifact("kpaths-compiler-plugin-contributor").absolutePath)
+  systemProperty("kpaths.snippet.classpath", files(snippetArtifact("kpaths-core"), snippetArtifact("kpaths-annotations"),
+    snippetArtifact("kpaths-compiler-plugin-fixture"), snippetArtifact("kpaths-compiler-plugin-integration-fixture")).asPath)
+  systemProperty("knapshots.compiler.pluginJar", snippetArtifact("kpaths-compiler-plugin").absolutePath)
+  systemProperty("knapshots.compiler.pluginId", "dev.kpaths.compiler-plugin")
+  systemProperty("knapshots.compiler.firOption", "firSnapshot")
+  systemProperty("knapshots.compiler.irOption", "irSnapshot")
+  systemProperty("knapshots.compiler.record", snapshotRecording.get())
+  systemProperty("knapshots.compiler.recordVersion", providers.gradleProperty("kpaths.snapshotRecordVersion").orElse("false").get())
+  systemProperty("knapshots.compiler.classpath", files(snippetArtifact("kpaths-core"), snippetArtifact("kpaths-annotations")).asPath)
   systemProperty("kpaths.testKotlinVersion", providers.gradleProperty("kpaths.testKotlinVersion").orElse(libs.versions.kotlin).get())
   systemProperty("kpaths.snapshotRecording", snapshotRecording.get())
   systemProperty("kpaths.snapshotRecordVersion", providers.gradleProperty("kpaths.snapshotRecordVersion").orElse("false").get())

@@ -1,5 +1,7 @@
 # Knapshots extraction handoff
 
+> Historical handoff: Knapshots has since been extracted, and KPaths now uses it for testing. The descriptions and instructions below document the original migration plan; see [compatibility testing](scripts/README.md) for the current setup.
+
 This is the handoff for a future agent creating **Knapshots**, a Kotlin testing project inspired by
 Point-Free's SnapshotTesting, MacroTesting, and CompilationTesting. It also includes real IDE
 assertions and compiler/IDE compatibility tooling. The source currently lives in KPaths. **Copy the

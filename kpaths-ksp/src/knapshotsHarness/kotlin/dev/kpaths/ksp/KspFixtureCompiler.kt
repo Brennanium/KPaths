@@ -8,9 +8,7 @@ import java.io.File
 import java.nio.file.Path
 
 /** Bridges the existing processor contracts to Knapshots while preserving their call sites. */
-@Suppress("UNUSED_PARAMETER")
 internal fun compileFixture(
-  fixtureDirectory: Path,
   fileName: String,
   source: String,
   expectFailure: Boolean,

@@ -1,34 +1,29 @@
-@file:OptIn(org.jetbrains.kotlin.compiler.plugin.ExperimentalCompilerApi::class)
-
 package dev.kpaths.compiler.fixture
 
-import com.tschuchort.compiletesting.KotlinCompilation
-import com.tschuchort.compiletesting.SourceFile
-import dev.kpaths.compiler.PathsPluginRegistrar
-import dev.kpaths.compiler.contributor.ContributedPathsPluginRegistrar
-import org.jetbrains.kotlin.config.KotlinCompilerVersion
+import dev.knapshots.testing.compiler.CompilerRequest
+import dev.knapshots.testing.compiler.CompilerSource
+import dev.knapshots.testing.compiler.EmbeddedCompilerHost
+import java.io.File
+import java.nio.file.Path
 
-private fun assertRequestedCompiler() {
-  val requested = checkNotNull(System.getProperty("kpaths.testKotlinVersion"))
-  check(KotlinCompilerVersion.VERSION == requested) {
-    "Snippet tests requested Kotlin $requested but loaded ${KotlinCompilerVersion.VERSION}."
-  }
+internal data class SnippetResult(val succeeded: Boolean, val messages: String, val classLoader: ClassLoader)
+
+/** Compile source using the same Knapshots host as the compiler assertions. */
+internal fun compileSnippet(vararg sources: Pair<String, String>): SnippetResult = compile(false, *sources)
+
+/** Include the independently registered contributor compiler plugin. */
+internal fun compileSnippetWithContributor(vararg sources: Pair<String, String>): SnippetResult = compile(true, *sources)
+
+private fun compile(contributor: Boolean, vararg sources: Pair<String, String>): SnippetResult {
+  val version = checkNotNull(System.getProperty("kpaths.testKotlinVersion"))
+  val plugin = checkNotNull(System.getProperty("kpaths.snippet.pluginJar"))
+  val contributorJar = checkNotNull(System.getProperty("kpaths.snippet.contributorJar"))
+  val classpath = checkNotNull(System.getProperty("kpaths.snippet.classpath"))
+    .split(File.pathSeparator).filter(String::isNotBlank).map(Path::of)
+  val arguments = listOf("-jvm-target", "11") +
+    (if (contributor) listOf("-Xplugin=$contributorJar") else emptyList()) + listOf("-Xplugin=$plugin")
+  val result = EmbeddedCompilerHost(classpath, arguments).compile(CompilerRequest(
+    sources.map { (name, text) -> CompilerSource(name, text.trimIndent()) }, version, emptySet(),
+  ))
+  return SnippetResult(result.succeeded, result.diagnostics.joinToString("\n") { it.message }, result.classLoader())
 }
-
-/** Compile one or more source snippets with the KPaths plugin in process. */
-internal fun compileSnippet(vararg sources: Pair<String, String>) = KotlinCompilation().apply {
-  assertRequestedCompiler()
-  this.sources = sources.map { (name, text) -> SourceFile.kotlin(name, text.trimIndent()) }
-  compilerPluginRegistrars = listOf(PathsPluginRegistrar())
-  inheritClassPath = true
-  jvmTarget = "11"
-}.compile()
-
-/** Compile with an independently registered integration plugin as well as KPaths. */
-internal fun compileSnippetWithContributor(vararg sources: Pair<String, String>) = KotlinCompilation().apply {
-  assertRequestedCompiler()
-  this.sources = sources.map { (name, text) -> SourceFile.kotlin(name, text.trimIndent()) }
-  compilerPluginRegistrars = listOf(ContributedPathsPluginRegistrar(), PathsPluginRegistrar())
-  inheritClassPath = true
-  jvmTarget = "11"
-}.compile()

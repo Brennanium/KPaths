@@ -1,16 +1,15 @@
 package dev.kpaths.ksp
 
-import java.nio.file.Files
-import java.nio.file.Path
 import kotlin.test.Test
+import dev.knapshots.testing.ksp.assertKsp
+import dev.knapshots.testing.ksp.KspProcessorProject
+import dev.knapshots.testing.ksp.KspSource
 import kotlin.test.assertContains
-import org.gradle.testkit.runner.GradleRunner
-import org.junit.jupiter.api.io.TempDir
 
 class KPathsProcessorIntegrationTest {
   @Test
-  fun `copy writable values accept a constant annotation argument`(@TempDir fixtureDirectory: Path) {
-    compileFixture(fixtureDirectory, "CopyWritableConstant.kt", """
+  fun `copy writable values accept a constant annotation argument`() {
+    compileFixture("CopyWritableConstant.kt", """
       package fixture
       import dev.kpaths.annotations.Pathable
       import dev.kpaths.core.WritableKeyPath
@@ -21,8 +20,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `declarative adapter reports invalid factory from dependency metadata`(@TempDir fixtureDirectory: Path) {
-    val output = compileFixture(fixtureDirectory, "InvalidBinaryAdapter.kt", """
+  fun `declarative adapter reports invalid factory from dependency metadata`() {
+    val output = compileFixture("InvalidBinaryAdapter.kt", """
       package fixture
       import dev.kpaths.annotations.Pathable
       @Pathable data class Document(val title: InvalidBinaryCell<String>)
@@ -36,8 +35,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `declarative adapter diagnoses a storage type alias`(@TempDir fixtureDirectory: Path) {
-    val output = compileFailure(fixtureDirectory, "AdapterAlias.kt", """
+  fun `declarative adapter diagnoses a storage type alias`() {
+    val output = compileFailure("AdapterAlias.kt", """
       package fixture
       import dev.kpaths.annotations.*
       import dev.kpaths.core.*
@@ -54,8 +53,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `declarative adapter reports precise factory shape errors`(@TempDir fixtureDirectory: Path) {
-    val output = compileFailure(fixtureDirectory, "AdapterShapes.kt", """
+  fun `declarative adapter reports precise factory shape errors`() {
+    val output = compileFailure("AdapterShapes.kt", """
       package fixture
       import dev.kpaths.annotations.*
       import dev.kpaths.core.*
@@ -79,8 +78,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `declarative adapter diagnoses a nullable wrapper`(@TempDir fixtureDirectory: Path) {
-    val output = compileFailure(fixtureDirectory, "NullableWrapper.kt", """
+  fun `declarative adapter diagnoses a nullable wrapper`() {
+    val output = compileFailure("NullableWrapper.kt", """
       package fixture
       import dev.kpaths.annotations.*
       import dev.kpaths.core.*
@@ -94,8 +93,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `declarative adapter diagnoses an overloaded factory`(@TempDir fixtureDirectory: Path) {
-    val output = compileFailure(fixtureDirectory, "InvalidAdapter.kt", """
+  fun `declarative adapter diagnoses an overloaded factory`() {
+    val output = compileFailure("InvalidAdapter.kt", """
       package fixture
       import dev.kpaths.annotations.*
       import dev.kpaths.core.*
@@ -110,8 +109,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `declarative adapter exposes a specialized path through the companion facade`(@TempDir fixtureDirectory: Path) {
-    compileFixture(fixtureDirectory, "DeclarativeAdapter.kt", """
+  fun `declarative adapter exposes a specialized path through the companion facade`() {
+    compileFixture("DeclarativeAdapter.kt", """
       package fixture
       import dev.kpaths.annotations.*
       import dev.kpaths.core.*
@@ -176,9 +175,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `warns when canonical case catalog cannot cover every case`(@TempDir fixtureDirectory: Path) {
+  fun `warns when canonical case catalog cannot cover every case`() {
     val output = compileFixture(
-      fixtureDirectory,
       "IncompleteCatalog.kt",
       """
         package fixture
@@ -196,72 +194,81 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `external processor can replace an eligible generated property path implementation`(
-    @TempDir fixtureDirectory: Path,
-  ) {
-    val projectDirectory = Path.of(checkNotNull(System.getProperty("kpaths.projectDir")))
-    val annotationsJar = projectDirectory.jvmArtifact("kpaths-annotations")
-    val codegenModelJar = projectDirectory.jvmArtifact("kpaths-codegen-model")
-    val coreJar = projectDirectory.jvmArtifact("kpaths-core")
-    val codegenJar = projectDirectory.jvmArtifact("kpaths-ksp-codegen")
+  fun `external processor can replace an eligible generated property path implementation`() {
+    assertKsp(
+      source = """
+        package fixture
 
-    Files.writeString(
-      fixtureDirectory.resolve("settings.gradle.kts"),
-      """
-        pluginManagement {
-          repositories {
-            gradlePluginPortal()
-            mavenCentral()
+        import dev.kpaths.annotations.PathsAdapter
+        import dev.kpaths.annotations.KPathsAdapterFactory
+        import dev.kpaths.core.PathId
+        import dev.kpaths.core.TypeId
+        import dev.kpaths.core.WritableKeyPath
+
+        @Target(AnnotationTarget.CLASS)
+        annotation class PathAdapted
+
+        object CellPathFactory : KPathsAdapterFactory
+
+        @PathsAdapter(factory = CellPathFactory::class)
+        class Cell<Value>(var value: Value)
+
+        interface WritableCellValueKeyPath<Root, Value> : WritableKeyPath<Root, Value>
+
+        abstract class WritableCellValueKeyPathBase<Root, Value>(
+          override val __kpaths_id: PathId,
+          override val __kpaths_valueType: TypeId,
+          private val resolveCell: (Root) -> Cell<Value>,
+        ) : WritableCellValueKeyPath<Root, Value> {
+          override fun get(root: Root): Value = resolveCell(root).value
+          override fun set(root: Root, value: Value): Root {
+            resolveCell(root).value = value
+            return root
           }
         }
-        dependencyResolutionManagement {
-          repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
-          repositories {
-            mavenCentral()
-          }
-        }
-        rootProject.name = "adapter-kpaths-fixture"
-        include(":adapter-processor")
-      """.trimIndent(),
-    )
-    Files.writeString(
-      fixtureDirectory.resolve("build.gradle.kts"),
-      """
-        plugins {
-          kotlin("jvm") version "2.4.21"
-          id("com.google.devtools.ksp") version "2.3.12"
+
+        data class Profile(val name: String)
+
+        @PathAdapted
+        data class State(val profile: Cell<Profile>) {
+          companion object
         }
 
-        dependencies {
-          implementation(files("${annotationsJar.gradlePath()}"))
-          implementation(files("${coreJar.gradlePath()}"))
-          ksp(project(":adapter-processor"))
-        }
-      """.trimIndent(),
-    )
-    val processorDirectory = Files.createDirectories(fixtureDirectory.resolve("adapter-processor"))
-    Files.writeString(
-      processorDirectory.resolve("build.gradle.kts"),
-      """
-        plugins {
-          kotlin("jvm") version "2.4.21"
+        @PathAdapted
+        data class Box<Value>(val cell: Cell<Value>) {
+          companion object Paths
         }
 
-        dependencies {
-          implementation("com.google.devtools.ksp:symbol-processing-api:2.3.12")
-          implementation("com.squareup:kotlinpoet:2.2.0")
-          implementation(files("${annotationsJar.gradlePath()}"))
-          implementation(files("${codegenModelJar.gradlePath()}"))
-          implementation(files("${codegenJar.gradlePath()}"))
+        @PathAdapted
+        sealed interface Destination {
+          data class Sheet(val profile: Cell<Profile>) : Destination
+
+          companion object
         }
-      """.trimIndent(),
-    )
-    val processorSourceDirectory = Files.createDirectories(
-      processorDirectory.resolve("src/main/kotlin/fixtureadapter"),
-    )
-    Files.writeString(
-      processorSourceDirectory.resolve("SharedProcessor.kt"),
-      """
+
+        fun verifyAdapter() {
+          val path: WritableCellValueKeyPath<State, Profile> = State.Paths.profile
+          val state = State(Cell(Profile("before")))
+          check(path.get(state) == Profile("before"))
+          check(path.set(state, Profile("after")) === state)
+          check(state.profile.value == Profile("after"))
+
+          val boxPath: WritableCellValueKeyPath<Box<Profile>, Profile> =
+            Box.Paths.of<Profile>().cell
+
+          val sheetPath: WritableCellValueKeyPath<Destination.Sheet, Profile> =
+            Destination.Paths.SheetPaths.profile
+          val sheet = Destination.Sheet(Cell(Profile("before")))
+          check(sheetPath.set(sheet, Profile("after")) === sheet)
+          check(sheet.profile.value == Profile("after"))
+        }
+
+        fun main() = verifyAdapter()
+      """,
+      processorProjects = listOf(KspProcessorProject(
+        name = "adapterProcessor",
+        providers = listOf("fixtureadapter.SharedProcessorProvider"),
+        sources = listOf(KspSource("SharedProcessor.kt", """
         package fixtureadapter
 
         import com.google.devtools.ksp.processing.CodeGenerator
@@ -337,99 +344,15 @@ class KPathsProcessorIntegrationTest {
             )
           }
         }
-      """.trimIndent(),
+      """)),
+      )),
+      mainClass = "fixture.MainKt",
     )
-    val serviceDirectory = Files.createDirectories(
-      processorDirectory.resolve("src/main/resources/META-INF/services"),
-    )
-    Files.writeString(
-      serviceDirectory.resolve("com.google.devtools.ksp.processing.SymbolProcessorProvider"),
-      "fixtureadapter.SharedProcessorProvider\n",
-    )
-    val sourceDirectory = Files.createDirectories(fixtureDirectory.resolve("src/main/kotlin/fixture"))
-    Files.writeString(
-      sourceDirectory.resolve("State.kt"),
-      """
-        package fixture
-
-        import dev.kpaths.annotations.PathsAdapter
-        import dev.kpaths.annotations.KPathsAdapterFactory
-        import dev.kpaths.core.PathId
-        import dev.kpaths.core.TypeId
-        import dev.kpaths.core.WritableKeyPath
-
-        @Target(AnnotationTarget.CLASS)
-        annotation class PathAdapted
-
-        object CellPathFactory : KPathsAdapterFactory
-
-        @PathsAdapter(factory = CellPathFactory::class)
-        class Cell<Value>(var value: Value)
-
-        interface WritableCellValueKeyPath<Root, Value> : WritableKeyPath<Root, Value>
-
-        abstract class WritableCellValueKeyPathBase<Root, Value>(
-          override val __kpaths_id: PathId,
-          override val __kpaths_valueType: TypeId,
-          private val resolveCell: (Root) -> Cell<Value>,
-        ) : WritableCellValueKeyPath<Root, Value> {
-          override fun get(root: Root): Value = resolveCell(root).value
-          override fun set(root: Root, value: Value): Root {
-            resolveCell(root).value = value
-            return root
-          }
-        }
-
-        data class Profile(val name: String)
-
-        @PathAdapted
-        data class State(val profile: Cell<Profile>) {
-          companion object
-        }
-
-        @PathAdapted
-        data class Box<Value>(val cell: Cell<Value>) {
-          companion object Paths
-        }
-
-        @PathAdapted
-        sealed interface Destination {
-          data class Sheet(val profile: Cell<Profile>) : Destination
-
-          companion object
-        }
-
-        fun verifyAdapter() {
-          val path: WritableCellValueKeyPath<State, Profile> = State.Paths.profile
-          val state = State(Cell(Profile("before")))
-          check(path.get(state) == Profile("before"))
-          check(path.set(state, Profile("after")) === state)
-          check(state.profile.value == Profile("after"))
-
-          val boxPath: WritableCellValueKeyPath<Box<Profile>, Profile> =
-            Box.Paths.of<Profile>().cell
-
-          val sheetPath: WritableCellValueKeyPath<Destination.Sheet, Profile> =
-            Destination.Paths.SheetPaths.profile
-          val sheet = Destination.Sheet(Cell(Profile("before")))
-          check(sheetPath.set(sheet, Profile("after")) === sheet)
-          check(sheet.profile.value == Profile("after"))
-        }
-      """.trimIndent(),
-    )
-
-    GradleRunner.create()
-      .withProjectDir(fixtureDirectory.toFile())
-      .withArguments("compileKotlin", "--stacktrace")
-      .build()
   }
 
   @Test
-  fun `reports an unnamed bare companion before later class members`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports an unnamed bare companion before later class members`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "AmbiguousBareCompanion.kt",
       source =
       """
@@ -452,11 +375,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports companion Paths member collisions`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports companion Paths member collisions`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "CompanionPathsCollision.kt",
       source =
       """
@@ -479,11 +399,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports companion Paths extension collisions`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports companion Paths extension collisions`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "CompanionPathsExtensionCollision.kt",
       source =
       """
@@ -507,11 +424,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports generic named Paths factory collisions`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports generic named Paths factory collisions`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "GenericCompanionPathsFunctionCollision.kt",
       source =
       """
@@ -534,11 +448,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports invalid generated case and property catalog names`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports invalid generated case and property catalog names`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "InvalidCaseNames.kt",
       source =
       """
@@ -561,11 +472,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports invalid generated property names`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports invalid generated property names`() {
     val invalidOutput = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "InvalidPathName.kt",
       source =
       """
@@ -587,11 +495,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports colliding generated property names`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports colliding generated property names`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "PathNameCollision.kt",
       source =
       """
@@ -615,11 +520,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports generated case member and property catalog collisions`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports generated case member and property catalog collisions`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "CaseNameCollision.kt",
       source =
       """
@@ -647,11 +549,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports an actionable error at Pathable for unsupported generic sealed variants`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports an actionable error at Pathable for unsupported generic sealed variants`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "InvalidLoadable.kt",
       source =
       """
@@ -672,8 +571,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports data class setter that cannot support copy mutation`(@TempDir fixtureDirectory: Path) {
-    val output = compileFailure(fixtureDirectory, "InaccessibleSetter.kt", """
+  fun `reports data class setter that cannot support copy mutation`() {
+    val output = compileFailure("InaccessibleSetter.kt", """
       package fixture
       import dev.kpaths.annotations.Pathable
       @Pathable data class Item(val id: Int) {
@@ -685,11 +584,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports use of KPaths reserved internal prefix at Pathable`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports use of KPaths reserved internal prefix at Pathable`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "ReservedPrefix.kt",
       source =
       """
@@ -708,11 +604,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports property and case path collisions at Pathable`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports property and case path collisions at Pathable`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "PropertyCaseCollision.kt",
       source =
       """
@@ -735,11 +628,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports generated case catalog collisions at Pathable`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports generated case catalog collisions at Pathable`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "CaseCatalogCollision.kt",
       source =
       """
@@ -760,11 +650,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports top level generated namespace collisions at Pathable`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports top level generated namespace collisions at Pathable`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "TopLevelCollision.kt",
       source =
       """
@@ -786,11 +673,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports duplicate custom generated namespaces at Pathable`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports duplicate custom generated namespaces at Pathable`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "DuplicateCustomNames.kt",
       source =
       """
@@ -813,11 +697,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports top level type alias collisions at Pathable`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports top level type alias collisions at Pathable`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "TypeAliasCollision.kt",
       source =
       """
@@ -838,11 +719,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports reserved prefixes on sealed cases at Pathable`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports reserved prefixes on sealed cases at Pathable`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "ReservedCasePrefix.kt",
       source =
       """
@@ -863,11 +741,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports generic companion collisions at Pathable`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports generic companion collisions at Pathable`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "CompanionCollision.kt",
       source =
       """
@@ -886,11 +761,8 @@ class KPathsProcessorIntegrationTest {
   }
 
   @Test
-  fun `reports generated source file collisions at Pathable`(
-    @TempDir fixtureDirectory: Path,
-  ) {
+  fun `reports generated source file collisions at Pathable`() {
     val output = compileFailure(
-      fixtureDirectory = fixtureDirectory,
       fileName = "PersonPaths.kt",
       source =
       """
@@ -909,27 +781,7 @@ class KPathsProcessorIntegrationTest {
   }
 
   private fun compileFailure(
-    fixtureDirectory: Path,
     fileName: String,
     source: String,
-  ): String = compileFixture(fixtureDirectory, fileName, source, expectFailure = true)
+  ): String = compileFixture(fileName, source, expectFailure = true)
 }
-
-internal fun Path.jvmArtifact(moduleName: String): Path {
-  val librariesDirectory = resolve(moduleName).resolve("build/libs")
-  return Files.list(librariesDirectory).use { artifacts ->
-    artifacts
-      .filter { artifact ->
-        artifact.fileName.toString().let { name ->
-          name.startsWith("$moduleName-jvm-") &&
-            name.endsWith(".jar") &&
-            !name.endsWith("-sources.jar") &&
-            !name.endsWith("-javadoc.jar")
-        }
-      }
-      .findFirst()
-      .orElseThrow { error("Could not find the JVM publication for $moduleName in $librariesDirectory.") }
-  }
-}
-
-internal fun Path.gradlePath(): String = toString().replace("\\", "\\\\")
