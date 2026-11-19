@@ -7,18 +7,18 @@ import dev.knapshots.testing.compiler.CompilerSnapshotKind
 import dev.knapshots.testing.compiler.InlineSnapshotLocation
 import dev.knapshots.testing.compiler.assertCompiler as assertKnapshotsCompiler
 import dev.knapshots.testing.compiler.assertCompilerSnapshotFiles
-import dev.knapshots.testing.compiler.gradle.GradleCompilerHost
+import dev.knapshots.testing.compiler.EmbeddedCompilerHost
 import java.nio.file.Path
 
 internal typealias SnapshotExpectation = dev.knapshots.testing.compiler.SnapshotExpectation
 internal typealias SnapshotRecording = dev.knapshots.testing.compiler.SnapshotRecording
 
-private fun FutureCompilerPluginContractTest.gradleHost(): CompilerHost {
+private fun FutureCompilerPluginContractTest.embeddedHost(): CompilerHost {
   val project = Path.of(checkNotNull(System.getProperty("kpaths.projectDir")))
   val version = java.util.Properties().apply { java.nio.file.Files.newInputStream(project.resolve("gradle.properties")).use(::load) }
     .getProperty("VERSION_NAME")
   fun artifact(module: String) = project.resolve("$module/build/libs/$module-jvm-$version.jar")
-  return GradleCompilerHost(
+  return EmbeddedCompilerHost(
     classpath = listOf(artifact("kpaths-core"), artifact("kpaths-annotations")),
     compilerArguments = listOf("-Xplugin=${artifact("kpaths-compiler-plugin")}"),
     captureArguments = { captures -> captures.flatMap { (kind, path) ->
@@ -41,7 +41,7 @@ internal fun FutureCompilerPluginContractTest.assertRecordedCompiler(name: Strin
     setOf(CompilerSnapshotKind.FIR, CompilerSnapshotKind.IR), recording,
     System.getProperty("kpaths.snapshotRecordVersion", "false").toBooleanStrict(),
   ) { input, compilerVersion, captures ->
-    gradleHost().compile(CompilerRequest(listOf(dev.knapshots.testing.compiler.CompilerSource("Main.kt", input)), compilerVersion, captures)).captures
+    embeddedHost().compile(CompilerRequest(listOf(dev.knapshots.testing.compiler.CompilerSource("Main.kt", input)), compilerVersion, captures)).captures
   }
 }
 
@@ -61,5 +61,5 @@ internal fun FutureCompilerPluginContractTest.assertCompiler(
     InlineSnapshotLocation(project.resolve("kpaths-compiler-plugin-fixture/src/test/kotlin")
       .resolve(caller.className.substringBeforeLast('.').replace('.', '/')).resolve(caller.fileName), caller.lineNumber)
   } else null
-  assertKnapshotsCompiler(source, compilerVersion, gradleHost(), fir, ir, record, recordVersion, location)
+  assertKnapshotsCompiler(source, compilerVersion, embeddedHost(), fir, ir, record, recordVersion, location)
 }
