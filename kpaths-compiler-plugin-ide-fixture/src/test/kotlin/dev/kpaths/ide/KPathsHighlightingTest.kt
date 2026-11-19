@@ -2,9 +2,9 @@ package dev.kpaths.ide
 
 import com.intellij.testFramework.PsiTestUtil
 import org.jetbrains.kotlin.idea.compiler.configuration.KotlinCommonCompilerArgumentsHolder
-import dev.kpaths.testing.editor.intellij.EditorFixtureTestCase
+import dev.knapshots.testing.editor.intellij.EditorFixtureTestCase
 import dev.knapshots.testing.editor.ReferenceObservation
-import dev.kpaths.testing.editor.intellij.IntellijEditorObservations
+import dev.knapshots.testing.editor.intellij.IntellijEditorObservations
 
 class KPathsHighlightingTest : EditorFixtureTestCase() {
   override val ignoreMissingDependency: Boolean = true

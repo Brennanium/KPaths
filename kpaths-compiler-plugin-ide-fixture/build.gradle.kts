@@ -18,7 +18,7 @@ dependencies {
     testFramework(org.jetbrains.intellij.platform.gradle.TestFrameworkType.Platform)
   }
   testImplementation(kotlin("test"))
-  testImplementation("dev.knapshots:knapshots-editor:0.1.0-SNAPSHOT")
+  testImplementation("dev.knapshots:knapshots-intellij-fixture:0.1.0-SNAPSHOT")
   testImplementation("junit:junit:4.13.2")
 }
 
