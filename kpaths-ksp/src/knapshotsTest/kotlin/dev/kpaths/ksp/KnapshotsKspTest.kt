@@ -4,8 +4,6 @@ import dev.knapshots.testing.ksp.assertKsp
 import dev.knapshots.testing.ksp.KspDependency
 import dev.knapshots.testing.ksp.KspSource
 import dev.knapshots.testing.ksp.KspProcessorProject
-import dev.knapshots.testing.ksp.KspDiagnosticExpectation
-import dev.knapshots.testing.ksp.KspDiagnosticSeverity
 import dev.knapshots.testing.compiler.SnapshotExpectation
 import kotlin.test.Test
 
@@ -44,12 +42,24 @@ class KnapshotsKspTest {
         import dev.kpaths.annotations.PathName
         @Pathable data class Person(@PathName("not a name") val name: String)
       """,
-      succeeds = false,
-      expectedDiagnostics = listOf(KspDiagnosticExpectation(
-        KspDiagnosticSeverity.ERROR, "@PathName value 'not a name' must be a single Kotlin identifier",
-        file = "src/main/kotlin/Main.kt", line = 4,
-      )),
-    )
+    ) {
+      generated("""
+        // FILE: kotlin/fixture/PersonPaths.kt
+        package fixture
+
+        /** Generated paths for fixture.Person. */
+        public object PersonPaths {
+          private val __kpaths_rootType: dev.kpaths.core.TypeId = dev.kpaths.core.TypeId("fixture.Person")
+        }
+      """)
+      diagnostics { snapshot("""
+        package fixture
+        import dev.kpaths.annotations.Pathable
+        import dev.kpaths.annotations.PathName
+        @Pathable data class Person(@PathName("not a name") val name: String)
+        error: [KPaths] @PathName value 'not a name' must be a single Kotlin identifier, without a package or dot.
+      """) }
+    }
   }
 
   @Test fun `reports invalid adapters in a compiled dependency`() {

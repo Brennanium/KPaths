@@ -46,7 +46,7 @@ class KPathsRuntimeHighlightingTest : EditorFixtureTestCase() {
 
   fun testInlineSourceRejectsUnexpectedErrors() {
     val failure = assertFailsWith<AssertionError> {
-      assertEditor(source = "val count: Int = \"not a number\"") {}
+      assertEditor(source = "val count: Int = \"not a number\"") { diagnostics {} }
     }
     assertContains(failure.message.orEmpty(), "Unexpected ERROR")
   }

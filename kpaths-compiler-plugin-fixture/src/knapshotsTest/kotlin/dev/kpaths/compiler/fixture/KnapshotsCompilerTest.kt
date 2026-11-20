@@ -19,8 +19,16 @@ class KnapshotsCompilerTest {
       import dev.kpaths.annotations.Pathable
       @Pathable data class Person(@PathName("not a name") val name: String)
     """) {
-      fails()
-      diagnostics { error("@PathName value 'not a name' must be a single Kotlin identifier") }
+      fir("""
+        KPaths resolved FIR callables
+      """)
+      diagnostics { snapshot("""
+        import dev.kpaths.annotations.PathName
+        import dev.kpaths.annotations.Pathable
+        @Pathable data class Person(@PathName("not a name") val name: String)
+                                                                ^~~~
+        error: [KPaths] @PathName value 'not a name' must be a single Kotlin identifier, without a package or dot.
+      """) }
     }
   }
 
