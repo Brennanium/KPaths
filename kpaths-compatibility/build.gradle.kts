@@ -3,6 +3,7 @@ plugins {
 }
 
 val knapshotsCheckout = providers.gradleProperty("knapshots.checkout")
+  .orElse(providers.environmentVariable("KNAPSHOTS_CHECKOUT"))
   .map { rootProject.file(it).absolutePath }
   .orElse(providers.provider {
     val checkout = rootProject.file(".knapshots")

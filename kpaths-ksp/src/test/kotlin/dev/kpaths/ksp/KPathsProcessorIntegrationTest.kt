@@ -16,7 +16,7 @@ class KPathsProcessorIntegrationTest {
       const val ENABLE_COPY_WRITES = true
       @Pathable(copyWritableVals = ENABLE_COPY_WRITES) data class Note(val body: String)
       val body: WritableKeyPath<Note, String> = NotePaths.body
-    """)
+    """) { succeeds() }
   }
 
   @Test

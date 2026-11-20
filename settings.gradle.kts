@@ -1,5 +1,5 @@
 pluginManagement {
-  includeBuild(providers.gradleProperty("knapshots.checkout").orElse(if (settingsDir.resolve(".knapshots/settings.gradle.kts").isFile) ".knapshots" else "../Knapshots").get())
+  includeBuild(providers.gradleProperty("knapshots.checkout").orElse(providers.environmentVariable("KNAPSHOTS_CHECKOUT")).orElse(if (settingsDir.resolve(".knapshots/settings.gradle.kts").isFile) ".knapshots" else "../Knapshots").get())
   repositories {
     gradlePluginPortal()
     mavenCentral()
@@ -23,7 +23,7 @@ dependencyResolutionManagement {
 rootProject.name = "KPaths"
 
 // Use a local Knapshots checkout while the testing toolkit is in development.
-includeBuild(providers.gradleProperty("knapshots.checkout").orElse(if (settingsDir.resolve(".knapshots/settings.gradle.kts").isFile) ".knapshots" else "../Knapshots").get())
+includeBuild(providers.gradleProperty("knapshots.checkout").orElse(providers.environmentVariable("KNAPSHOTS_CHECKOUT")).orElse(if (settingsDir.resolve(".knapshots/settings.gradle.kts").isFile) ".knapshots" else "../Knapshots").get())
 
 include(
   ":kpaths-annotations",
